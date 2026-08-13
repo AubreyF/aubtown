@@ -9,11 +9,26 @@ import type { HostLane } from "./domain/types.js";
 import { verifyCodexCompatibility } from "./drivers/codex/compatibility.js";
 import { HostExecutionJournal } from "./execution/journal.js";
 import { HostExecutionSupervisor } from "./execution/supervisor.js";
+import { ProcessCommandRunner } from "./adapters/command-runner.js";
+import { FileCheckpointKeyProvider } from "./checkpoints/file-key-provider.js";
+import { XChaChaCheckpointCipher } from "./checkpoints/cipher.js";
+import { LocalCheckpointStore } from "./checkpoints/local-store.js";
+import { GitCustodyCheckpointService } from "./checkpoints/git-custody.js";
+import { CheckpointTransferClient } from "./clients/checkpoint-transfer.js";
+import { RemoteExecutionCheckpointManager } from "./execution/checkpoint-manager.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
   if (value === undefined || value.length === 0) {
     throw new Error(`${name} is required.`);
+  }
+  return value;
+}
+
+function requiredAbsoluteEnvironment(name: string): string {
+  const value = requiredEnvironment(name);
+  if (!value.startsWith("/")) {
+    throw new Error(`${name} must be an absolute path.`);
   }
   return value;
 }
@@ -73,6 +88,34 @@ const monitor = new QuotaMonitor(usage, worker, governor);
 const executionJournal = new HostExecutionJournal(
   requiredEnvironment("FREEDWORKS_EXECUTION_JOURNAL_FILE"),
 );
+const checkpointKeyReference = requiredEnvironment(
+  "FREEDWORKS_CHECKPOINT_KEY_REFERENCE",
+);
+const checkpointStore = new LocalCheckpointStore(
+  requiredEnvironment("FREEDWORKS_CHECKPOINT_LOCAL_STORE_ROOT"),
+);
+const checkpointCipher = new XChaChaCheckpointCipher(
+  new FileCheckpointKeyProvider(
+    requiredEnvironment("FREEDWORKS_CHECKPOINT_KEY_FILE"),
+    checkpointKeyReference,
+  ),
+);
+const checkpointManager = new RemoteExecutionCheckpointManager(
+  new GitCustodyCheckpointService(
+    new ProcessCommandRunner(),
+    checkpointCipher,
+    checkpointStore,
+    requiredAbsoluteEnvironment("FREEDWORKS_GIT_EXECUTABLE"),
+  ),
+  checkpointStore,
+  new CheckpointTransferClient(
+    requiredEnvironment("FREEDWORKS_CHECKPOINT_EDGE_URL"),
+    hostId,
+    privateKey,
+  ),
+  governor,
+  checkpointKeyReference,
+);
 const execution = new HostExecutionSupervisor(
   accountId,
   worker,
@@ -80,6 +123,8 @@ const execution = new HostExecutionSupervisor(
   governor,
   monitor,
   (event) => process.stdout.write(`${JSON.stringify(event)}\n`),
+  () => new Date(),
+  checkpointManager,
 );
 await execution.recover();
 

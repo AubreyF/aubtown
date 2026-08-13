@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_ID="$(date +%s)-$$"
+CHECKPOINT_REFERENCE="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' "$RUN_ID")"
 SOURCE_HOST_ID="dry-run-linux-source-${RUN_ID}"
 DESTINATION_HOST_ID="dry-run-linux-destination-${RUN_ID}"
 ADMITTED_KEY="dry-run-admitted-${RUN_ID}"
@@ -280,13 +281,15 @@ jq -n \
 
 jq -n \
   --arg source "$SOURCE_HOST_ID" \
+  --arg reference "$CHECKPOINT_REFERENCE" \
   --slurpfile claim "${TMP_DIR}/workflow-custody-claim.json" \
-  '{schemaVersion: 1, reference: ("d" * 64), contentLength: 1024, hostId: $source, grantNonce: "33333333-3333-4333-8333-333333333333", manifest: {schemaVersion: 2, repository: $claim[0].repository, issueNumber: $claim[0].issueNumber, claimId: $claim[0].claimId, custodyEpoch: $claim[0].custodyEpoch, sourceHostId: $claim[0].hostId, repositoryHead: ("a" * 40), baseHead: ("b" * 40), patchDigest: ("c" * 64), includedUntrackedPaths: [], validationReceipts: ["focused-test:passed"], createdAt: "2026-08-13T07:30:00.000Z"}, storedAt: "2026-08-13T07:30:01.000Z", signatureBase64: "integration-harness-only"}' \
+  '{schemaVersion: 1, reference: $reference, contentLength: 1024, hostId: $source, grantNonce: "33333333-3333-4333-8333-333333333333", manifest: {schemaVersion: 2, repository: $claim[0].repository, issueNumber: $claim[0].issueNumber, claimId: $claim[0].claimId, custodyEpoch: $claim[0].custodyEpoch, sourceHostId: $claim[0].hostId, repositoryHead: ("a" * 40), baseHead: ("b" * 40), patchDigest: ("c" * 64), includedUntrackedPaths: [], validationReceipts: ["focused-test:passed"], createdAt: "2026-08-13T07:30:00.000Z"}, storedAt: "2026-08-13T07:30:01.000Z", signatureBase64: "integration-harness-only"}' \
   > "${TMP_DIR}/workflow-checkpoint-receipt.json"
 
 jq -n \
   --arg source "$SOURCE_HOST_ID" \
   --arg destination "$DESTINATION_HOST_ID" \
+  --arg checkpointReference "$CHECKPOINT_REFERENCE" \
   --slurpfile claim "${TMP_DIR}/workflow-custody-claim.json" \
   '{
     claim: $claim[0],
@@ -317,7 +320,7 @@ jq -n \
       }
     ],
     requiredLane: "linux",
-    checkpointReference: ("d" * 64),
+    checkpointReference: $checkpointReference,
     destinations: {
       ($destination): {
         workerId: "worker-linux-1",
@@ -346,7 +349,7 @@ fi
 
 harness_file \
   recordCheckpointReceipt \
-  "$(printf 'd%.0s' {1..64})" \
+  "$CHECKPOINT_REFERENCE" \
   receipt \
   "${TMP_DIR}/workflow-checkpoint-receipt.json" \
   /dev/null

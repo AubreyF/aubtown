@@ -12,6 +12,10 @@ import {
   HostExecutionJournal,
   type HostExecutionRecord,
 } from "./journal.js";
+import type {
+  ExecutionCheckpointManager,
+  TerminalExecutionStatus,
+} from "./checkpoint-manager.js";
 
 export interface ExecutorReceiptGateway {
   reportExecutor(
@@ -42,6 +46,7 @@ export class HostExecutionSupervisor {
     private readonly turns: ExecutionTurnTracker,
     private readonly eventSink: (event: ExecutionEvent) => void,
     private readonly now: () => Date = () => new Date(),
+    private readonly checkpoints?: ExecutionCheckpointManager,
   ) {}
 
   async recover(): Promise<void> {
@@ -180,7 +185,7 @@ export class HostExecutionSupervisor {
   async #finish(
     command: ExecutorStartCommand,
     handle: WorkerTurnHandle,
-    status: "completed" | "interrupted" | "failed",
+    status: TerminalExecutionStatus,
   ): Promise<void> {
     const finished = await this.journal.finish(
       command.commandId,
@@ -201,17 +206,73 @@ export class HostExecutionSupervisor {
     if (record.reportedAt !== undefined || record.stage === "accepted") {
       return;
     }
-    const handle = this.#requiredHandle(record);
+    const ready = await this.#checkpointIfNeeded(record);
+    if (ready.stage === "accepted") {
+      throw new Error("An unstarted execution cannot be reported.");
+    }
+    const handle = this.#requiredHandle(ready);
     await this.gateway.reportExecutor({
-      commandId: record.command.commandId,
-      claimId: record.command.claim.claimId,
-      custodyEpoch: record.command.claim.custodyEpoch,
-      accountId: record.command.accountId,
-      stage: record.stage,
+      commandId: ready.command.commandId,
+      claimId: ready.command.claim.claimId,
+      custodyEpoch: ready.command.claim.custodyEpoch,
+      accountId: ready.command.accountId,
+      stage: ready.stage,
       threadId: handle.threadId,
       turnId: handle.turnId,
     });
-    await this.journal.reported(record.command.commandId, this.now().toISOString());
+    await this.journal.reported(ready.command.commandId, this.now().toISOString());
+  }
+
+  async #checkpointIfNeeded(record: HostExecutionRecord): Promise<HostExecutionRecord> {
+    if (this.checkpoints === undefined || record.stage === "started") {
+      return record;
+    }
+    if (record.stage === "accepted" || record.finishedAt === undefined) {
+      throw new Error("Only a terminal execution can create a custody checkpoint.");
+    }
+    const terminalStatus = record.stage;
+    const finishedAt = record.finishedAt;
+    let current = record;
+    if (current.checkpoint === undefined) {
+      const captured = await this.checkpoints.capture({
+        command: current.command,
+        status: terminalStatus,
+        createdAt: finishedAt,
+      });
+      current = await this.journal.checkpointCaptured(
+        current.command.commandId,
+        captured,
+      );
+    }
+    let checkpoint = current.checkpoint;
+    if (checkpoint === undefined) {
+      throw new Error("Terminal execution has no captured checkpoint.");
+    }
+    if (checkpoint.storageReceipt === undefined) {
+      const stored = await this.checkpoints.upload({
+        command: current.command,
+        checkpoint,
+      });
+      current = await this.journal.checkpointStored(
+        current.command.commandId,
+        stored,
+      );
+      checkpoint = current.checkpoint;
+      if (checkpoint === undefined) {
+        throw new Error("Terminal execution lost its captured checkpoint.");
+      }
+    }
+    if (checkpoint.storageReceipt === undefined) {
+      throw new Error("Terminal execution has no checkpoint storage receipt.");
+    }
+    if (checkpoint.catalogedAt === undefined) {
+      await this.checkpoints.catalog(checkpoint.storageReceipt);
+      current = await this.journal.checkpointCataloged(
+        current.command.commandId,
+        this.now().toISOString(),
+      );
+    }
+    return current;
   }
 
   #requiredHandle(record: HostExecutionRecord): WorkerTurnHandle {

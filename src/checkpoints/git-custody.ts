@@ -37,6 +37,7 @@ export class GitCustodyCheckpointService {
     private readonly runner: CommandRunner,
     private readonly cipher: CheckpointCipher,
     private readonly store: CheckpointStore,
+    private readonly gitExecutable = "git",
   ) {}
 
   async capture(input: {
@@ -55,7 +56,7 @@ export class GitCustodyCheckpointService {
     ]);
     const patch = (
       await this.runner.run({
-        executable: "git",
+        executable: this.gitExecutable,
         args: ["diff", "--binary", "--full-index", baseHead, "--", "."],
         cwd: input.repositoryRoot,
         maxBufferBytes: MAX_ARCHIVE_BYTES,
@@ -63,7 +64,7 @@ export class GitCustodyCheckpointService {
     ).stdout;
     const untrackedOutput = (
       await this.runner.run({
-        executable: "git",
+        executable: this.gitExecutable,
         args: ["ls-files", "--others", "--exclude-standard", "-z"],
         cwd: input.repositoryRoot,
         maxBufferBytes: 16 * 1_024 * 1_024,
@@ -152,7 +153,7 @@ export class GitCustodyCheckpointService {
     }
     const status = (
       await this.runner.run({
-        executable: "git",
+        executable: this.gitExecutable,
         args: ["status", "--porcelain=v1", "--untracked-files=all"],
         cwd: input.destinationRoot,
       })
@@ -166,7 +167,7 @@ export class GitCustodyCheckpointService {
         const patchPath = path.join(temporaryRoot, "custody.patch");
         await writeFile(patchPath, archive.patch, { flag: "wx", mode: 0o600 });
         await this.runner.run({
-          executable: "git",
+          executable: this.gitExecutable,
           args: ["apply", "--binary", "--index", patchPath],
           cwd: input.destinationRoot,
           timeoutMs: 60_000,
@@ -203,7 +204,7 @@ export class GitCustodyCheckpointService {
 
   async #gitLine(root: string, args: readonly string[]): Promise<string> {
     const value = (
-      await this.runner.run({ executable: "git", args, cwd: root })
+      await this.runner.run({ executable: this.gitExecutable, args, cwd: root })
     ).stdout.trim();
     if (!/^[0-9a-f]{40}$/u.test(value)) {
       throw new Error(`Git did not return one SHA for ${args.join(" ")}.`);

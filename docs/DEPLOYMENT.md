@@ -32,10 +32,11 @@ The baseline Compose file enables `IntegrationHarness` for black-box tests on lo
 9. Generate one Ed25519 host key on each executor. Keep the private key mode at `0600`. Add only its public key, fixed lane, and allowed account IDs to the Linux enrollment file.
 10. Generate a separate Ed25519 checkpoint-grant key on Linux. Mount its private key only into the control plane and its public key only into the checkpoint edge.
 11. Generate a different Ed25519 checkpoint-receipt key. Mount its private key only into the checkpoint edge and its public key only into the control plane.
-12. Configure each executor with private host-edge and checkpoint-edge URLs, a private-key path, and a host-local durable sequence file. Never copy either the host key or sequence state to another host.
-13. Start the Compose `checkpoint-transfer` profile. Its one-shot initializers give each unprivileged service only its own private key and give the checkpoint edge sole access to the `0700` persistent volume.
-14. Run read-only reconciliation and the shadow fixture.
-15. Keep all writers disabled until the dry-run and authority-extension receipts pass.
+12. Generate one random 32-byte pilot checkpoint-encryption key through the selected secret manager. Provision it independently as a mode `0600` file to each executor authorized to receive pilot custody. Never put it in an environment value, repository, prompt, checkpoint, or transfer response.
+13. Configure each executor with private host-edge and checkpoint-edge URLs, its host private-key path, a host-local durable sequence file, execution journal, local encrypted checkpoint directory, checkpoint key file, and key reference. Never copy either the host key or sequence state to another host.
+14. Start the Compose `checkpoint-transfer` profile. Its one-shot initializers give each unprivileged service only its own private key and give the checkpoint edge sole access to the `0700` persistent volume.
+15. Run read-only reconciliation and the shadow fixture.
+16. Keep all writers disabled until the dry-run and authority-extension receipts pass.
 
 Configure separate private-key references for the Coordinator and Draft Publisher GitHub Apps. The broker mints one-repository installation tokens with operation-specific permissions. Read-only qualification receives `issues: read`. Lifecycle projection receives `issues: write` only after its phase gate. Draft publication receives `contents: write` and `pull_requests: write` only after an admitted exact-head publication plan. Workers receive none of these credentials.
 
@@ -46,6 +47,10 @@ Run the built `dist/host-agent.js` under systemd on Linux and launchd on macOS. 
 The host agent starts Codex app-server inside that host's isolated `CODEX_HOME`, sends a signed heartbeat, samples the actual rolling weekly window every 60 seconds, and submits the signed observation to the durable account governor. The coordinator time-stamps acceptance. Telemetry failures stop admission. When workers are enabled in the same host agent, the monitor also tracks their turn handles and sends targeted interrupts at the approved ceiling.
 
 Set `FREEDWORKS_EXECUTION_JOURNAL_FILE` to an absolute path in the executor's private state directory. The journal records the command, claim epoch, thread, turn, local result, and coordinator-report state before advancing each lifecycle step. A restarted host resumes a recorded app-server thread and never starts a second turn for the same command. If a crash lands between command acceptance and durable turn-handle storage, the executor fails closed for operator reconciliation because the start outcome is unknowable. The journal contains unpublished task metadata, so its parent is mode `0700` and its file is mode `0600`.
+
+Set `FREEDWORKS_CHECKPOINT_LOCAL_STORE_ROOT`, `FREEDWORKS_CHECKPOINT_KEY_FILE`, `FREEDWORKS_CHECKPOINT_KEY_REFERENCE`, and `FREEDWORKS_CHECKPOINT_EDGE_URL` before starting an executor. The key file must be an absolute, physical, exactly 32-byte file inaccessible to group and other users. A terminal worker result remains unreported while capture, upload, or catalog admission is incomplete. The journal retries only the missing stage after restart.
+
+Set `FREEDWORKS_GIT_EXECUTABLE` to the reviewed absolute Git binary used for custody capture and restore. The service never resolves Git from its ambient `PATH`.
 
 Set `FREEDWORKS_CODEX_EXECUTABLE` to the reviewed absolute binary path and `FREEDWORKS_CODEX_VERSION` to the exact output of that binary's `--version` command. Startup resolves the physical binary, rejects group-writable or non-executable files, generates its version-specific app-server schema, and verifies the governed protocol surface before starting app-server. Review and update the pin after every Codex upgrade. Do not point a service at an unpinned executable found through `PATH`.
 

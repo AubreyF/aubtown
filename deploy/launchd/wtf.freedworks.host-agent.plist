@@ -27,8 +27,18 @@
     <string>replace-with-exact-codex-version-output</string>
     <key>FREEDWORKS_HOST_GATEWAY_URL</key>
     <string>https://replace-private-linux-host-name</string>
+    <key>FREEDWORKS_GIT_EXECUTABLE</key>
+    <string>/usr/bin/git</string>
     <key>FREEDWORKS_EXECUTION_JOURNAL_FILE</key>
     <string>/Users/freedworks/Library/Application Support/Freedworks/state/execution.json</string>
+    <key>FREEDWORKS_CHECKPOINT_EDGE_URL</key>
+    <string>https://replace-private-linux-checkpoint-edge</string>
+    <key>FREEDWORKS_CHECKPOINT_KEY_FILE</key>
+    <string>/Users/freedworks/Library/Application Support/Freedworks/identity/checkpoint-key.bin</string>
+    <key>FREEDWORKS_CHECKPOINT_KEY_REFERENCE</key>
+    <string>pilot:checkpoint-v1</string>
+    <key>FREEDWORKS_CHECKPOINT_LOCAL_STORE_ROOT</key>
+    <string>/Users/freedworks/Library/Application Support/Freedworks/checkpoints</string>
     <key>FREEDWORKS_HOST_ID</key>
     <string>macos-executor-1</string>
     <key>FREEDWORKS_HOST_LANE</key>

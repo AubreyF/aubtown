@@ -15,6 +15,15 @@ import {
   type ExecutorStartCommand,
 } from "./command.js";
 import type { WorkerTurnHandle } from "../drivers/worker.js";
+import { checkpointManifestSchema } from "../checkpoints/codec.js";
+import { signedCheckpointStorageReceiptSchema } from "../checkpoints/receipt.js";
+
+const checkpointStateSchema = z.object({
+  reference: z.string().regex(/^[0-9a-f]{64}$/u),
+  manifest: checkpointManifestSchema,
+  storageReceipt: signedCheckpointStorageReceiptSchema.optional(),
+  catalogedAt: z.iso.datetime().optional(),
+});
 
 const handleSchema: z.ZodType<WorkerTurnHandle> = z.object({
   driverId: z.string().min(1),
@@ -36,6 +45,7 @@ const executionRecordSchema = z.object({
   acceptedAt: z.iso.datetime(),
   handle: handleSchema.optional(),
   finishedAt: z.iso.datetime().optional(),
+  checkpoint: checkpointStateSchema.optional(),
   reportedAt: z.iso.datetime().optional(),
 });
 
@@ -144,6 +154,72 @@ export class HostExecutionJournal {
     });
   }
 
+  checkpointCaptured(
+    commandId: string,
+    checkpoint: Pick<NonNullable<HostExecutionRecord["checkpoint"]>, "reference" | "manifest">,
+  ): Promise<HostExecutionRecord> {
+    return this.#serialize(async () => {
+      const current = await this.#requiredTerminal(commandId);
+      if (current.checkpoint !== undefined) {
+        if (current.checkpoint.reference !== checkpoint.reference) {
+          throw new Error("Host execution journal already records another checkpoint.");
+        }
+        return current;
+      }
+      const next = executionRecordSchema.parse({ ...current, checkpoint });
+      await this.#write(next);
+      return next;
+    });
+  }
+
+  checkpointStored(
+    commandId: string,
+    storageReceipt: NonNullable<HostExecutionRecord["checkpoint"]>["storageReceipt"],
+  ): Promise<HostExecutionRecord> {
+    return this.#serialize(async () => {
+      const current = await this.#requiredTerminal(commandId);
+      if (current.checkpoint === undefined) {
+        throw new Error("Host execution journal has no captured checkpoint.");
+      }
+      if (storageReceipt === undefined) {
+        throw new Error("Checkpoint storage receipt is required.");
+      }
+      if (current.checkpoint.reference !== storageReceipt.reference) {
+        throw new Error("Checkpoint storage receipt does not match the journal reference.");
+      }
+      if (current.checkpoint.storageReceipt !== undefined) {
+        return current;
+      }
+      const next = executionRecordSchema.parse({
+        ...current,
+        checkpoint: { ...current.checkpoint, storageReceipt },
+      });
+      await this.#write(next);
+      return next;
+    });
+  }
+
+  checkpointCataloged(
+    commandId: string,
+    catalogedAt: string,
+  ): Promise<HostExecutionRecord> {
+    return this.#serialize(async () => {
+      const current = await this.#requiredTerminal(commandId);
+      if (current.checkpoint?.storageReceipt === undefined) {
+        throw new Error("Host execution journal has no stored checkpoint receipt.");
+      }
+      if (current.checkpoint.catalogedAt !== undefined) {
+        return current;
+      }
+      const next = executionRecordSchema.parse({
+        ...current,
+        checkpoint: { ...current.checkpoint, catalogedAt },
+      });
+      await this.#write(next);
+      return next;
+    });
+  }
+
   reported(commandId: string, reportedAt: string): Promise<HostExecutionRecord> {
     return this.#serialize(async () => {
       const current = await this.#required(commandId);
@@ -166,6 +242,14 @@ export class HostExecutionJournal {
     const current = await this.#read();
     if (current === null || current.command.commandId !== commandId) {
       throw new Error("Host execution journal does not contain the command.");
+    }
+    return current;
+  }
+
+  async #requiredTerminal(commandId: string): Promise<HostExecutionRecord> {
+    const current = await this.#required(commandId);
+    if (!TERMINAL.has(current.stage)) {
+      throw new Error("Host execution command is not terminal.");
     }
     return current;
   }

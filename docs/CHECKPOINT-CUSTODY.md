@@ -17,6 +17,8 @@ Ignored paths, dependencies, authentication caches, key files, symlinks, absolut
 
 The complete archive is encrypted with XChaCha20-Poly1305. The manifest is authenticated as associated data. Altering its claim, epoch, heads, path list, digest, or receipts makes decryption fail. The content-addressed local pilot store uses private directories, synchronized atomic publication, digest verification, and recoverable retirement instead of deletion.
 
+The host execution journal persists capture, edge storage receipt, and catalog admission separately. A terminal executor receipt is withheld until all three stages succeed. After a restart, the host resumes at the first missing stage and never starts another worker turn for that command.
+
 Manifest schema 2 binds the checkpoint to its repository, issue, claim, custody epoch, and source host. Schema 1 checkpoints were never used for real factory work and are not accepted by the remote transfer path.
 
 ## Transfer
@@ -37,4 +39,4 @@ The Linux pilot uses a private persistent volume behind this edge. An S3-compati
 
 The local store remains useful for one-host tests. The shared adapter uses an S3-compatible object service with the same content-addressed payload format. It performs a conditional create, checks the content digest on every read, copies an authenticated object into a deterministic retired namespace before deleting the active name, and remains portable across storage vendors. Bucket versioning and retention are required in production so retirement stays recoverable.
 
-The encryption key is resolved by an external host key provider and is never stored in the archive, Restate, GitHub, or the repository. Raw object-store credentials remain in the checkpoint edge. They never enter a worker process or prompt. Production key resolution should use distinct host credentials against one external key service, so neither Codex authentication nor a copied long-lived plaintext key moves with work.
+The encryption key is never stored in the archive, Restate, GitHub, or the repository. During the single-factory pilot, a secret manager provisions the same 32-byte checkpoint key as a mode-restricted physical file on each authorized executor. The key is not copied during custody transfer and never enters a worker process or prompt. This pilot choice makes every enrolled executor a confidentiality boundary for all pilot checkpoints. Before adding less-trusted hosts or multiple tenants, replace it with distinct host credentials against an external key service or envelope-encryption service.

@@ -26,6 +26,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
 | Codex update changes the worker or quota protocol | Absolute executable, exact version, generated-schema compatibility check, and advertised model and effort gate before host admission |
 | Poll retry or host restart starts a second turn | One Restate command per host plus a mode-0600 local execution journal and app-server thread resume |
+| Terminal result is accepted before work is recoverable | Host journal requires encrypted capture, edge-signed storage receipt, and catalog admission before the terminal executor receipt |
 | Returning stale host resumes work after failover | Signed startup reconciliation requires the exact current claim epoch, command, thread, turn, enrolled account, and quota headroom before app-server resume |
 | Custody moves while the old host may still write | Per-host transfer fence cancels only unoffered commands and blocks offered, started, or ambiguous commands until terminal adjudication |
 | Caller lies that a host is offline | Failover rereads canonical source and candidate heartbeats from ingress-private Restate state and requires at least 24 hours offline |
@@ -51,6 +52,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Stale host substitutes checkpoint content | Content address, schema 2 manifest identity, custody epoch, exact byte length, and host request proof must all match |
 | Caller invents checkpoint metadata for failover | Storage edge signs the persisted reference, length, grant nonce, source host, and full manifest; Restate verifies current custody and catalogs the receipt before transfer |
 | Compromised control plane invents a stored checkpoint | Receipt private key exists only at the checkpoint edge; the control plane receives only its public key |
+| Pilot executor is compromised | Pilot checkpoint key can decrypt pilot archives, so only equally trusted executors receive it; external per-host key service is required before broadening trust |
 | Grant is stolen or replayed | Grant binds one host and operation, requires that host's signature, and expires after five minutes; upload replay is idempotent and download remains encrypted |
 
 ## Fail-closed invariants
