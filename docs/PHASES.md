@@ -25,6 +25,8 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 
 ## Phase 3: one Freed issue
 
+- [ ] Obtain approval for the task-scoped authority-claim correction.
+- [ ] Implement and verify the Freed factory coordinator and Linux broker contract.
 - [ ] Execute one owner-selected runtime-neutral issue.
 - [ ] Use Freed's supported authority commands and worktree helper.
 - [ ] Publish one draft pull request.

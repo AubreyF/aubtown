@@ -79,7 +79,7 @@ The worker driver and usage source are separate interfaces. A future metered API
 
 The portable admission report is intentionally uniform across repositories. Each repository supplies a stricter authority adapter underneath it. Freed's adapter requires the exact canonical task, trusted launcher, worker lease, global behavior slot, provider gates, installed outcome, and soak contracts. A simpler future repository can implement a smaller authority control plane, but it cannot bypass the common issue, claim, quota, custody, conflict, and publication invariants.
 
-The initial Freed bridge remains fail-closed until worker-specific actor and lease commands exist in Freed. It will not repurpose `nightly-writer`. That extension belongs in Freed because Freed owns its authority contract. The generic scheduler and service deployment remain in this private operations repository.
+The initial Freed bridge remains fail-closed until the authority extension in [FREED-AUTHORITY-BRIDGE.md](FREED-AUTHORITY-BRIDGE.md) is approved and implemented. It will not repurpose `nightly-writer`. Freed owns the task-claim command and receipt schemas. The private operations repository owns the scheduler and host broker implementation.
 
 ## Custody
 
