@@ -1,0 +1,48 @@
+# Threat model
+
+## Protected assets
+
+- repository source and unpublished work
+- GitHub App credentials and installation scope
+- Codex subscription credentials and quota
+- Freed task, lease, event, and outcome integrity
+- claim uniqueness and custody ownership
+- provider and owner approval boundaries
+- checkpoint confidentiality and integrity
+
+## Trust boundaries
+
+The coordinator, worker, GitHub App, Codex profile, repository authority system, checkpoint store, and each host are separate identities. A worker receives a scoped workspace and task prompt. It does not receive raw GitHub tracker credentials, checkpoint encryption roots, other subscriptions, or authority-state write access.
+
+## Primary failures and controls
+
+| Failure | Control |
+| --- | --- |
+| Duplicate dispatch after crash | Restate keyed claim, startup reconciliation, deterministic claim ID |
+| Stale host publishes after transfer | Monotonic custody epoch checked before every write and publication |
+| Label grants accidental authority | Exact active authority task and short-lived repository lease are also required |
+| Nightly runner and factory race | Factory-specific claim and worker lease, existing runner skips claimed task |
+| Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
+| One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
+| Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
+| Provider-visible change runs unattended | Provider lane cap is zero and qualification is blocking |
+| Repository adapter broadens authority | Adapter conformance tests and supported command allowlist |
+| Tracker token reaches worker | Host-side GitHub App broker only |
+| Malicious issue prompt changes policy | Issue text is data, fixed system policy remains outside worker input |
+| Retry burns subscription quota | Retry budget distinguishes transient failure from authority and human blocks |
+| Second queue appears | No ticket database or Markdown work queue in Freedworks |
+| Restate storage is lost | Persistent volume, backups, claim reconciliation against external witnesses |
+| Another process invokes a service directly | Private network plus Restate request-identity verification in production |
+
+## Fail-closed invariants
+
+- One issue, one active claim, one current custody epoch.
+- One claim, one branch, one worktree, one worker owner.
+- No authority mutation through direct filesystem writes.
+- No publication above the repository ceiling.
+- No dispatch with stale GitHub, quota, host, authority, lease, pull request, or worktree evidence.
+- No account selection without an enabled account and a compatible host.
+
+## Deferred risks
+
+The initial code does not provision GitHub Apps, cloud hosts, checkpoint encryption keys, or Freed worker actors. Those operations require separate deployment receipts. The first real writer remains blocked until the Freed worker-specific lease extension is reviewed and installed.

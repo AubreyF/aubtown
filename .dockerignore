@@ -1,0 +1,8 @@
+.git
+.freedworks
+coverage
+dist
+node_modules
+reports
+test
+*.log

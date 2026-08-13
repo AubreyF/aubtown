@@ -1,0 +1,39 @@
+# Delivery phases
+
+Status: Phase 1 complete. Phase 2 control-plane proofs complete except external status projection. Real Freed execution remains blocked by supported authority recovery and the worker-specific lease extension.
+
+## Phase 0: architecture and threat model
+
+- [x] Record the approved authority, host, quota, custody, concurrency, and publication boundaries.
+- [x] Create a private-ops repository structure with no embedded credentials or mutable service state.
+- [x] Keep worker, tracker, authority, storage, and hosting integrations replaceable.
+- [x] Complete the executable domain contracts and threat model tests.
+
+## Phase 1: shadow qualification
+
+- [x] Read Freed issues without mutation.
+- [x] Emit deterministic qualification reports and priority scores.
+- [x] Recommend three low-risk pilot candidates for owner selection.
+- [x] Compare results against a representative issue sample.
+
+## Phase 2: durable dry run
+
+- [x] Run Restate with a fake worker.
+- [x] Prove restart reconciliation and duplicate-dispatch prevention.
+- [x] Prove quota interruption, custody fencing, and conflict locking.
+- [ ] Permit only approved lifecycle status projection.
+
+## Phase 3: one Freed issue
+
+- [ ] Execute one owner-selected runtime-neutral issue.
+- [ ] Use Freed's supported authority commands and worktree helper.
+- [ ] Publish one draft pull request.
+- [ ] Complete independent review, validation, projection, and lease cleanup.
+
+## Phase 4: bounded parallelism
+
+- [ ] Run two disjoint runtime-neutral workers.
+- [ ] Complete a 72 hour soak without duplicate claims or cross-worktree writes.
+- [ ] Demonstrate central subscription governance across Linux and macOS.
+
+Other repositories remain out of scope until the Freed pilot succeeds.

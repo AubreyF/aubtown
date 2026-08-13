@@ -1,0 +1,23 @@
+services:
+  restate:
+    image: docker.restate.dev/restatedev/restate:1.7.3
+    command: ["--node-name=freedworks-restate-1"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:9070:9070"
+    volumes:
+      - restate-data:/restate-data
+
+  control-plane:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      PORT: "9080"
+    restart: unless-stopped
+    depends_on:
+      - restate
+
+volumes:
+  restate-data:

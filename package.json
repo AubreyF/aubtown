@@ -1,0 +1,33 @@
+{
+  "name": "@freedworks/control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A governed, durable software factory with GitHub Issues as its canonical queue.",
+  "type": "module",
+  "engines": {
+    "node": ">=24.14.1"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run typecheck && npm test",
+    "host:monitor": "tsx src/host-agent.ts",
+    "shadow": "tsx src/cli/shadow.ts",
+    "shadow:github": "tsx src/cli/shadow-github.ts",
+    "start": "tsx src/service.ts",
+    "test": "vitest run",
+    "test:dry-run": "scripts/test-dry-run.sh",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@octokit/rest": "22.0.1",
+    "@restatedev/restate-sdk": "1.16.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.13",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

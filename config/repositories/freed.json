@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "freed-project-freed",
+  "repository": {
+    "owner": "freed-project",
+    "name": "freed",
+    "defaultBranch": "dev"
+  },
+  "authorityAdapter": "freed-authority-v1",
+  "eligibleLabels": ["debt", "factory:ready"],
+  "excludedLabels": ["automation-triage"],
+  "lifecycleLabels": [
+    "factory:ready",
+    "factory:running",
+    "factory:blocked",
+    "factory:human-review"
+  ],
+  "publicationCeiling": "draft-pr",
+  "worktree": {
+    "base": "origin/dev",
+    "helper": "scripts/worktree-add.sh",
+    "swarm": true
+  },
+  "unattendedForbiddenLanes": [
+    "provider-visible",
+    "release",
+    "sensitive"
+  ]
+}

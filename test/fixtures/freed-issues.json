@@ -1,0 +1,59 @@
+{
+  "repository": {
+    "owner": "freed-project",
+    "name": "freed",
+    "defaultBranch": "dev"
+  },
+  "issues": [
+    {
+      "issue": {
+        "number": 1234,
+        "url": "https://github.com/freed-project/freed/issues/1234",
+        "title": "Make validation ordering deterministic",
+        "body": "",
+        "labels": ["debt", "factory:ready"],
+        "assignees": [],
+        "state": "open",
+        "updatedAt": "2026-08-13T08:00:00.000Z"
+      },
+      "evidence": {
+        "rootCause": "Validation reads an unordered collection.",
+        "evidence": "A focused test produces two stable orderings.",
+        "scope": "One runtime-neutral tooling module.",
+        "acceptanceCriteria": ["Output is sorted deterministically."],
+        "validation": ["Run the focused tooling test."],
+        "ownedPaths": ["scripts/lib/validation-order.mjs"],
+        "logicalLocks": ["tooling-validation"],
+        "hostLane": "linux",
+        "lane": "runtime-neutral",
+        "behavioral": false,
+        "requiresOwnerReview": false,
+        "releaseOrMigrationRisk": false
+      }
+    },
+    {
+      "issue": {
+        "number": 1235,
+        "url": "https://github.com/freed-project/freed/issues/1235",
+        "title": "Investigate provider authentication incident",
+        "body": "",
+        "labels": ["debt", "automation-triage"],
+        "assignees": [],
+        "state": "open",
+        "updatedAt": "2026-08-13T07:00:00.000Z"
+      },
+      "evidence": {
+        "rootCause": "Provider authentication failed.",
+        "evidence": "An incident report exists.",
+        "scope": "Provider authentication.",
+        "acceptanceCriteria": ["Owner reviews the incident."],
+        "validation": ["Review authenticated evidence."],
+        "ownedPaths": ["packages/desktop/src/providers"],
+        "logicalLocks": ["auth", "provider"],
+        "providerNames": ["facebook"],
+        "requiresOwnerReview": true,
+        "lane": "provider-visible"
+      }
+    }
+  ]
+}
