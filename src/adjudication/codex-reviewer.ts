@@ -129,7 +129,7 @@ export class CodexIndependentReviewer {
     return [
       "Review the current repository worktree without changing it.",
       `The authenticated work product is checkpoint ${input.workProduct.checkpointReference} at Git head ${input.workProduct.head} with patch digest ${input.workProduct.patchDigest}.`,
-      `Compare the complete current change against origin/${input.workProduct.repository.defaultBranch}.`,
+      `Compare the complete current change against immutable base commit ${input.workProduct.baseHead}.`,
       "Judge correctness, regressions, authority boundaries, security, test adequacy, and the qualified acceptance criteria.",
       `Acceptance criteria: ${JSON.stringify(input.qualification.evidence.acceptanceCriteria ?? [])}`,
       `Required validation: ${JSON.stringify(input.qualification.evidence.validation ?? [])}`,

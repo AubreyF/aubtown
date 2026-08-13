@@ -21,10 +21,13 @@ nvm use
 npm install
 npm run check
 npm run shadow -- --issues test/fixtures/freed-issues.json
+npm run test:pilot-readiness
 npm run test:host-ingress
 ```
 
 The shadow command reads issue JSON and prints deterministic qualification reports. It does not contact GitHub or mutate Freed.
+
+`test:pilot-readiness` runs the complete candidate-to-draft contract against a temporary Git repository with fake external edges. It performs no network writes and consumes no subscription quota.
 
 The host-side GitHub shadow reader is also read-only:
 

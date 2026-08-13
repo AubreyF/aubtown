@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:dry-run": "scripts/test-dry-run.sh",
     "test:host-ingress": "scripts/test-host-ingress.sh",
+    "test:pilot-readiness": "vitest run test/pilot-readiness.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

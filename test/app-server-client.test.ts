@@ -266,6 +266,17 @@ describe("Codex app-server integration", () => {
         },
       },
     });
+    expect(turnRequest).toMatchObject({
+      params: {
+        input: [
+          {
+            text: expect.stringContaining(
+              `immutable base commit ${workProduct.baseHead}`,
+            ),
+          },
+        ],
+      },
+    });
     transport.emit({
       method: "item/completed",
       params: {
