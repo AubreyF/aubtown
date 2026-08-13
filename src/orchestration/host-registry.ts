@@ -15,6 +15,7 @@ export interface HostHeartbeat {
 
 export const hostRegistry = restate.object({
   name: "HostRegistry",
+  options: { ingressPrivate: true },
   handlers: {
     heartbeat: async (
       ctx: restate.ObjectContext<HostState>,

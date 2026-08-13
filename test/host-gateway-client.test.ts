@@ -1,0 +1,63 @@
+import { generateKeyPairSync } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { HostGatewayClient } from "../src/clients/host-gateway.js";
+import { parseSignedHostEnvelope, verifyHostEnvelope } from "../src/security/host-envelope.js";
+
+function keyPair() {
+  const pair = generateKeyPairSync("ed25519");
+  return {
+    privateKey: pair.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    publicKey: pair.publicKey.export({ type: "spki", format: "pem" }).toString(),
+  };
+}
+
+describe("HostGatewayClient", () => {
+  it("signs quota observations and uses a stable Restate idempotency key", async () => {
+    const keys = keyPair();
+    let requestedUrl = "";
+    let request: RequestInit | undefined;
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080/",
+      "macos-executor-1",
+      keys.privateKey,
+      { next: async () => 7 },
+      async (input, init) => {
+        requestedUrl = String(input);
+        request = init;
+        return Response.json({
+          kind: "quota-observation",
+          hostId: "macos-executor-1",
+          sequence: 7,
+          acceptedAt: "2026-08-13T18:00:00.000Z",
+          decision: {
+            action: "admit",
+            reason: "headroom-available",
+            weeklyUsedPercent: 40,
+            dailyUsedPercent: 0,
+            observedAt: "2026-08-13T18:00:00.000Z",
+          },
+        });
+      },
+    );
+    await expect(
+      client.observe({
+        observation: {
+          accountId: "codex-pro-1",
+          observedAt: "2026-08-13T18:00:00.000Z",
+          primary: {
+            usedPercent: 40,
+            windowDurationMinutes: 10_080,
+            resetsAt: "2026-08-18T08:00:00.000Z",
+          },
+          activeTurnIds: [],
+        },
+        now: "2026-08-13T18:00:00.000Z",
+      }),
+    ).resolves.toMatchObject({ action: "admit" });
+    expect(requestedUrl).toContain("HostGateway/macos-executor-1/submit");
+    const headers = new Headers(request?.headers);
+    expect(headers.get("idempotency-key")).toMatch(/^host-macos-executor-1-7-/u);
+    const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
+    expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+  });
+});

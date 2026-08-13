@@ -1,11 +1,10 @@
 import type { RawAccountUsageObservation } from "../../domain/types.js";
 import type { UsageSource } from "../worker.js";
+import { ROLLING_WEEKLY_WINDOW_MINUTES } from "../../policy/quota.js";
 import {
   CodexAppServerClient,
   type CodexRateLimits,
 } from "./app-server-client.js";
-
-const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
 
 export function selectRollingWeeklyWindow(limits: CodexRateLimits): {
   readonly usedPercent: number;
@@ -22,7 +21,7 @@ export function selectRollingWeeklyWindow(limits: CodexRateLimits): {
       : [bucket.primary, bucket.secondary],
   );
   const weekly = windows
-    .filter((window) => window.windowDurationMins === WEEKLY_WINDOW_MINUTES)
+    .filter((window) => window.windowDurationMins === ROLLING_WEEKLY_WINDOW_MINUTES)
     .sort(
       (left, right) =>
         right.usedPercent - left.usedPercent || left.resetsAt - right.resetsAt,

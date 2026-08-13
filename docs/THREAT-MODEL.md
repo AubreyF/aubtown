@@ -21,7 +21,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Duplicate dispatch after crash | Restate keyed claim, startup reconciliation, deterministic claim ID |
 | Stale host publishes after transfer | Monotonic custody epoch checked before every write and publication |
 | Label grants accidental authority | Exact active authority task and short-lived repository lease are also required |
-| Nightly runner and factory race | Factory-specific claim and worker lease, existing runner skips claimed task |
+| Nightly runner and factory race | Proposed task-scoped claim must make the existing runner skip claimed work before the first writer is enabled |
 | Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
 | Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
@@ -36,6 +36,10 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Second queue appears | No ticket database or Markdown work queue in Freedworks |
 | Restate storage is lost | Persistent volume, backups, claim reconciliation against external witnesses |
 | Another process invokes a service directly | Private network plus Restate request-identity verification in production |
+| Remote executor reaches scheduler ingress | Loopback-only Restate ports plus a narrow host edge with an exact route allowlist |
+| Host message is forged or changed | Per-host Ed25519 signature over canonical identity, sequence, kind, time, and payload |
+| Accepted host message is replayed | Restate idempotency plus a durable monotonic sequence checked before state mutation |
+| Host key silently broadens authority | Enrollment fixes the host lane and allowed execution account IDs |
 
 ## Fail-closed invariants
 
@@ -48,4 +52,4 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 
 ## Deferred risks
 
-The initial code does not provision GitHub Apps, cloud hosts, checkpoint encryption keys, or Freed worker actors. Those operations require separate deployment receipts. The first real writer remains blocked until the Freed worker-specific lease extension is reviewed and installed.
+The initial code does not provision GitHub Apps, cloud hosts, checkpoint encryption keys, or the Freed factory coordinator. Those operations require separate deployment receipts. The first real writer remains gated until Aubrey explicitly approves the task-scoped authority-claim correction and that extension is reviewed and installed.

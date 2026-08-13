@@ -147,26 +147,6 @@ curl --fail --silent --show-error \
   > /dev/null
 
 curl --fail --silent --show-error \
-  -X POST "${INGRESS}/HostRegistry/linux-control-1/heartbeat" \
-  -H 'content-type: application/json' \
-  --data '{"hostId":"linux-control-1","lane":"linux","observedAt":"2026-08-13T08:00:00.000Z","activeClaims":[],"accountIds":["codex-pro-1"]}' \
-  > /dev/null
-
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/HostRegistry/linux-control-1/read" \
-  -H 'content-type: application/json' \
-  --data '{"now":"2026-08-13T08:00:30.000Z"}' \
-  | jq -e '.online == true and .lane == "linux"' \
-  > /dev/null
-
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/HostRegistry/linux-control-1/read" \
-  -H 'content-type: application/json' \
-  --data '{"now":"2026-08-13T08:03:00.000Z"}' \
-  | jq -e '.online == false' \
-  > /dev/null
-
-curl --fail --silent --show-error \
   -X POST "${INGRESS}/SchedulerRegistry/freed-project%2Ffreed/acquire" \
   -H 'content-type: application/json' \
   --data-binary "@${TMP_DIR}/conflict-first.json" \
@@ -296,4 +276,4 @@ jq -e \
   "${TMP_DIR}/reconciliation-result.json" \
   > /dev/null
 
-echo "Dry-run workflow passed: duplicate rejected, quota blocked, host liveness measured, conflict fenced, custody transferred, restart state reconciled, claims released."
+echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, custody transferred, restart state reconciled, claims released."

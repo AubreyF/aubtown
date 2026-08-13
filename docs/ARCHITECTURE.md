@@ -10,7 +10,7 @@ For Freed, dispatch requires all of these conditions:
 2. The issue is not labeled `automation-triage`.
 3. Qualification contains one root cause, current evidence, bounded scope, acceptance criteria, exact validation, and conflict ownership.
 4. A live Freed control task references the exact issue number and URL.
-5. A worker-specific trusted launcher grants the matching short-lived lease.
+5. Once approved, the trusted factory coordinator grants a task-scoped execution claim through Freed's supported authority commands.
 6. Subscription, host, conflict, provider, owner-review, and publication policies admit the work.
 
 ## Portable kernel
@@ -58,6 +58,10 @@ References:
 
 Each executor has one local Codex profile and one host identity. Credentials never move between hosts. Future subscription scaling assigns each subscription to an isolated executor profile. The scheduler routes claims to published capacity and quota headroom. It never logs one process into a carousel of copied account files.
 
+Linux is the eventual canonical authority and scheduling host. A Mac is an intermittent executor, not an authority replica. Each host signs heartbeats and quota observations with its own Ed25519 key. The Linux coordinator enrolls the corresponding public key, fixed lane, and allowed account IDs. A durable monotonic sequence rejects replay before host or account state changes.
+
+Remote executors never receive general Restate ingress. A narrow host edge accepts only `POST /HostGateway/<host>/submit`, requires an idempotency key, limits request size, and forwards to the signed Restate gateway. Restate ingress and administration remain bound to loopback. Tailscale carries the private network connection to the narrow edge. Internal host and account objects are ingress-private even if another local process reaches Restate.
+
 ## Quota
 
 The governor samples Codex app-server every 60 seconds and listens for rate-limit updates. It searches the primary, secondary, and multi-bucket views for the actual 10,080 minute window. It fails closed if app-server does not expose that rolling weekly window. It never assumes the field named `primary` is weekly.
@@ -69,9 +73,9 @@ The governor samples Codex app-server every 60 seconds and listens for rate-limi
 - Daily interrupt: 10 percentage points
 - Stale telemetry: interrupt after 120 seconds
 
-The daily value is the increase from the Los Angeles day baseline within the same rolling window. A window reset begins a new baseline. Manual usage on the account reduces factory headroom. Earned reset credits are never consumed automatically.
+The daily value is the increase from the Los Angeles day baseline within the same rolling window. A window reset begins a new baseline. Manual usage on the account reduces factory headroom. Earned reset credits are never consumed automatically. The coordinator replaces host observation time with its durable acceptance time, so clock skew between Linux and macOS cannot reorder one subscription's usage state.
 
-Codex telemetry and interruption use the documented `account/rateLimits/read`, `account/usage/read`, and `turn/interrupt` app-server methods. See [Codex app-server](https://developers.openai.com/codex/app-server).
+Codex telemetry and interruption use the documented `account/rateLimits/read`, `account/usage/read`, and `turn/interrupt` app-server methods. The host agent submits the resulting observation through its signed gateway identity. See [Codex app-server](https://developers.openai.com/codex/app-server).
 
 The worker driver and usage source are separate interfaces. A future metered API driver can report a money or token budget through another usage source without changing claims, routing, custody, authority, or publication. Multiple subscriptions remain isolated by host profile. Routing chooses an enabled host and account with measured headroom. Credentials never migrate with work.
 

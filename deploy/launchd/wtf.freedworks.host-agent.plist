@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>wtf.freedworks.host-agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/freedworks/node/bin/node</string>
+    <string>/opt/freedworks/current/dist/host-agent.js</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/opt/freedworks/current</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CODEX_HOME</key>
+    <string>/Users/freedworks/Library/Application Support/Freedworks/codex</string>
+    <key>FREEDWORKS_ACCOUNT_ID</key>
+    <string>replace-account-id</string>
+    <key>FREEDWORKS_CODEX_EFFORT</key>
+    <string>high</string>
+    <key>FREEDWORKS_CODEX_MODEL</key>
+    <string>replace-with-advertised-callable-model</string>
+    <key>FREEDWORKS_HOST_GATEWAY_URL</key>
+    <string>https://replace-private-linux-host-name</string>
+    <key>FREEDWORKS_HOST_ID</key>
+    <string>macos-executor-1</string>
+    <key>FREEDWORKS_HOST_LANE</key>
+    <string>macos</string>
+    <key>FREEDWORKS_HOST_PRIVATE_KEY_FILE</key>
+    <string>/Users/freedworks/Library/Application Support/Freedworks/identity/host-private.pem</string>
+    <key>FREEDWORKS_HOST_SEQUENCE_FILE</key>
+    <string>/Users/freedworks/Library/Application Support/Freedworks/state/host-envelope.sequence</string>
+    <key>FREEDWORKS_QUOTA_SAMPLE_SECONDS</key>
+    <string>60</string>
+  </dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/freedworks/Library/Logs/Freedworks/host-agent.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/freedworks/Library/Logs/Freedworks/host-agent-error.log</string>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+</dict>
+</plist>

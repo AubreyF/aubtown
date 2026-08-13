@@ -1,0 +1,14 @@
+{
+  "linux-control-1": {
+    "enabled": true,
+    "lane": "linux",
+    "accountIds": ["codex-pro-1"],
+    "publicKeyPem": "replace with the host Ed25519 public key PEM"
+  },
+  "macos-executor-1": {
+    "enabled": true,
+    "lane": "macos",
+    "accountIds": ["codex-pro-1"],
+    "publicKeyPem": "replace with the host Ed25519 public key PEM"
+  }
+}

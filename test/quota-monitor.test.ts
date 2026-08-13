@@ -63,4 +63,58 @@ describe("QuotaMonitor", () => {
     expect(receipt.interruptedTurnIds).toEqual(["turn-1"]);
     expect(interrupted).toEqual(["turn-1"]);
   });
+
+  it("interrupts once when coordinator telemetry remains unavailable", async () => {
+    const interrupted: string[] = [];
+    let now = new Date("2026-08-13T18:00:00.000Z");
+    const source: UsageSource = {
+      id: "fake-usage",
+      read: async (accountId, activeTurnIds) => ({
+        accountId,
+        observedAt: now.toISOString(),
+        primary: {
+          usedPercent: 20,
+          windowDurationMinutes: 10_080,
+          resetsAt: "2026-08-18T08:00:00.000Z",
+        },
+        activeTurnIds,
+      }),
+    };
+    const worker = {
+      id: "fake",
+      capabilities: {
+        hostLanes: ["linux"],
+        canInterrupt: true,
+        canReadSubscriptionUsage: true,
+        publicationCeiling: "none",
+      },
+      start: async () => handle,
+      wait: async () => "completed" as const,
+      interrupt: async (turn: WorkerTurnHandle) => {
+        interrupted.push(turn.turnId);
+      },
+    } satisfies WorkerDriver;
+    const monitor = new QuotaMonitor(
+      source,
+      worker,
+      {
+        observe: async ({ observation, now: observedNow }) =>
+          decideQuota({
+            snapshot: mergeUsageObservation({ observation }),
+            now: observedNow,
+          }),
+      },
+      () => now,
+    );
+    monitor.track("codex-pro-1", handle);
+    await monitor.sample("codex-pro-1");
+    now = new Date("2026-08-13T18:01:59.000Z");
+    await expect(monitor.enforceTelemetryFreshness("codex-pro-1", 120)).resolves.toEqual([]);
+    now = new Date("2026-08-13T18:02:01.000Z");
+    await expect(monitor.enforceTelemetryFreshness("codex-pro-1", 120)).resolves.toEqual([
+      "turn-1",
+    ]);
+    await expect(monitor.enforceTelemetryFreshness("codex-pro-1", 120)).resolves.toEqual([]);
+    expect(interrupted).toEqual(["turn-1"]);
+  });
 });

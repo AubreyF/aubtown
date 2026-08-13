@@ -21,6 +21,7 @@ nvm use
 npm install
 npm run check
 npm run shadow -- --issues test/fixtures/freed-issues.json
+npm run test:host-ingress
 ```
 
 The shadow command reads issue JSON and prints deterministic qualification reports. It does not contact GitHub or mutate Freed.
@@ -33,6 +34,8 @@ FREEDWORKS_GITHUB_TOKEN='<installation token>' npm run shadow:github
 
 Use a short-lived Coordinator App installation token in deployment. The token stays in the host process environment and is never passed to a worker.
 
+`test:host-ingress` rebuilds the local Docker stack, enrolls a disposable Ed25519 Mac identity, and restarts Restate. It proves that the narrow host edge accepts the enrolled identity, rejects tampering and replay, and exposes no general Restate route. It leaves only the disposable public key in the running service configuration. The private key is destroyed with the test directory.
+
 ## Repository map
 
 - `src/domain`: portable work, host, authority, quota, and custody contracts
@@ -41,5 +44,7 @@ Use a short-lived Coordinator App installation token in deployment. The token st
 - `src/drivers`: replaceable worker interfaces, beginning with Codex app-server
 - `src/orchestration`: durable Restate services
 - `src/supervision`: host-side quota and worker lifecycle monitors
+- `src/security`: host identity, signed envelopes, and durable replay sequences
+- `src/gateway`: the narrow remote-host edge in front of loopback-only Restate ingress
 - `src/projection`: deterministic lifecycle label and single-comment plans
 - `docs`: architecture, threat model, deployment, and phase gates

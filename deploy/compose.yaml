@@ -14,10 +14,25 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     environment:
-      PORT: "9080"
+      - PORT=9080
+      - FREEDWORKS_HOST_ENROLLMENTS_JSON
     restart: unless-stopped
     depends_on:
       - restate
+
+  host-edge:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["node", "dist/edge-gateway.js"]
+    environment:
+      - PORT=8090
+      - FREEDWORKS_RESTATE_INGRESS=http://restate:8080
+    restart: unless-stopped
+    depends_on:
+      - restate
+    ports:
+      - "127.0.0.1:8090:8090"
 
 volumes:
   restate-data:

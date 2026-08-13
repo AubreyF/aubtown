@@ -1,0 +1,14 @@
+services:
+  restate:
+    environment:
+      - RESTATE_REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=/run/freedworks/restate-identity.pem
+    volumes:
+      - "${FREEDWORKS_RESTATE_IDENTITY_KEY_FILE:?set the absolute Restate identity key path}:/run/freedworks/restate-identity.pem:ro"
+
+  control-plane:
+    environment:
+      - FREEDWORKS_HOST_ENROLLMENTS_FILE=/run/freedworks/host-enrollments.json
+      - FREEDWORKS_RESTATE_IDENTITY_KEYS
+      - FREEDWORKS_HOST_ENROLLMENTS_JSON
+    volumes:
+      - "${FREEDWORKS_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/freedworks/host-enrollments.json:ro"

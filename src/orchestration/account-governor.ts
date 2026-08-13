@@ -6,6 +6,7 @@ import type {
 import {
   decideQuota,
   mergeUsageObservation,
+  ROLLING_WEEKLY_WINDOW_MINUTES,
   type QuotaDecision,
 } from "../policy/quota.js";
 
@@ -16,6 +17,7 @@ interface AccountGovernorState {
 
 export const accountGovernor = restate.object({
   name: "AccountGovernor",
+  options: { ingressPrivate: true },
   handlers: {
     observe: async (
       ctx: restate.ObjectContext<AccountGovernorState>,
@@ -30,6 +32,14 @@ export const accountGovernor = restate.object({
       }
       if (input.observation.accountId !== ctx.key) {
         throw new restate.TerminalError("Quota observation account does not match object key.");
+      }
+      if (
+        input.observation.primary.windowDurationMinutes !==
+        ROLLING_WEEKLY_WINDOW_MINUTES
+      ) {
+        throw new restate.TerminalError(
+          "Quota observation is not the 10,080 minute rolling window.",
+        );
       }
       const snapshot = mergeUsageObservation({
         ...(current === null ? {} : { previous: current }),

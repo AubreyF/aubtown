@@ -1,0 +1,105 @@
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  sign,
+  verify,
+  type KeyObject,
+} from "node:crypto";
+import { z } from "zod";
+import type { HostHeartbeat } from "../orchestration/host-registry.js";
+import type { RawAccountUsageObservation } from "../domain/types.js";
+import { canonicalJson } from "./canonical-json.js";
+
+const HOST_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+
+const heartbeatSchema: z.ZodType<HostHeartbeat> = z.object({
+  hostId: z.string().regex(HOST_ID),
+  lane: z.enum(["linux", "macos"]),
+  observedAt: z.iso.datetime(),
+  activeClaims: z.array(z.string().min(1)),
+  accountIds: z.array(z.string().min(1)),
+});
+
+const usageObservationSchema: z.ZodType<RawAccountUsageObservation> = z.object({
+  accountId: z.string().min(1),
+  observedAt: z.iso.datetime(),
+  primary: z.object({
+    usedPercent: z.number().min(0).max(100),
+    windowDurationMinutes: z.number().positive(),
+    resetsAt: z.iso.datetime(),
+  }),
+  activeTurnIds: z.array(z.string().min(1)),
+});
+
+const unsignedEnvelopeSchema = z.discriminatedUnion("kind", [
+  z.object({
+    schemaVersion: z.literal(1),
+    hostId: z.string().regex(HOST_ID),
+    sequence: z.number().int().positive().safe(),
+    issuedAt: z.iso.datetime(),
+    kind: z.literal("heartbeat"),
+    payload: heartbeatSchema,
+  }),
+  z.object({
+    schemaVersion: z.literal(1),
+    hostId: z.string().regex(HOST_ID),
+    sequence: z.number().int().positive().safe(),
+    issuedAt: z.iso.datetime(),
+    kind: z.literal("quota-observation"),
+    payload: z.object({
+      observation: usageObservationSchema,
+    }),
+  }),
+]);
+
+export type UnsignedHostEnvelope = z.infer<typeof unsignedEnvelopeSchema>;
+export type SignedHostEnvelope = UnsignedHostEnvelope & {
+  readonly signatureBase64: string;
+};
+
+const signedEnvelopeSchema = z.intersection(
+  unsignedEnvelopeSchema,
+  z.object({ signatureBase64: z.string().min(1) }),
+);
+
+function assertEd25519(key: KeyObject, purpose: string): KeyObject {
+  if (key.asymmetricKeyType !== "ed25519") {
+    throw new Error(`${purpose} must be an Ed25519 key.`);
+  }
+  return key;
+}
+
+function unsigned(envelope: SignedHostEnvelope): UnsignedHostEnvelope {
+  const { signatureBase64: _signature, ...body } = envelope;
+  return unsignedEnvelopeSchema.parse(body);
+}
+
+export function parseSignedHostEnvelope(value: unknown): SignedHostEnvelope {
+  return signedEnvelopeSchema.parse(value) as SignedHostEnvelope;
+}
+
+export function signHostEnvelope(
+  envelope: UnsignedHostEnvelope,
+  privateKeyPem: string,
+): SignedHostEnvelope {
+  const parsed = unsignedEnvelopeSchema.parse(envelope);
+  const key = assertEd25519(createPrivateKey(privateKeyPem), "Host private key");
+  return {
+    ...parsed,
+    signatureBase64: sign(null, canonicalJson(parsed), key).toString("base64"),
+  };
+}
+
+export function verifyHostEnvelope(
+  envelope: SignedHostEnvelope,
+  publicKeyPem: string,
+): boolean {
+  const key = assertEd25519(createPublicKey(publicKeyPem), "Host public key");
+  const signature = Buffer.from(envelope.signatureBase64, "base64");
+  return verify(null, canonicalJson(unsigned(envelope)), key, signature);
+}
+
+export function hostEnvelopeDigest(envelope: SignedHostEnvelope): string {
+  return createHash("sha256").update(canonicalJson(envelope)).digest("hex");
+}

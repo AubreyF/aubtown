@@ -99,6 +99,21 @@ describe("quota governance", () => {
     expect(decision).toMatchObject({ action: "interrupt", reason: "telemetry-stale" });
   });
 
+  it("rejects telemetry that is not the exact rolling weekly window", () => {
+    expect(() =>
+      decideQuota({
+        snapshot: usage({
+          primary: {
+            usedPercent: 20,
+            windowDurationMinutes: 300,
+            resetsAt: "2026-08-18T08:00:00.000Z",
+          },
+        }),
+        now: NOW,
+      }),
+    ).toThrow("10,080 minute");
+  });
+
   it("routes future work to the enabled account with most headroom", () => {
     const account = (id: string, usedPercent: number) => ({
       id,

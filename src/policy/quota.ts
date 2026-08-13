@@ -12,6 +12,8 @@ export interface QuotaPolicy {
   readonly telemetryMaxAgeSeconds: number;
 }
 
+export const ROLLING_WEEKLY_WINDOW_MINUTES = 10_080;
+
 export const APPROVED_QUOTA_POLICY: QuotaPolicy = {
   autonomousWeeklyCeilingPercent: 80,
   dailyThrottlePercent: 7,
@@ -99,6 +101,9 @@ export function decideQuota(input: {
   readonly policy?: QuotaPolicy;
 }): QuotaDecision {
   const policy = input.policy ?? APPROVED_QUOTA_POLICY;
+  if (input.snapshot.primary.windowDurationMinutes !== ROLLING_WEEKLY_WINDOW_MINUTES) {
+    throw new RangeError("Quota telemetry must describe the 10,080 minute rolling window.");
+  }
   const observedAtMs = Date.parse(input.snapshot.observedAt);
   const nowMs = Date.parse(input.now);
   if (!Number.isFinite(observedAtMs) || !Number.isFinite(nowMs)) {

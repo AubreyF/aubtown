@@ -16,6 +16,7 @@
     "start": "tsx src/service.ts",
     "test": "vitest run",
     "test:dry-run": "scripts/test-dry-run.sh",
+    "test:host-ingress": "scripts/test-host-ingress.sh",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

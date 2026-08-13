@@ -1,6 +1,6 @@
 # Delivery phases
 
-Status: Phase 1 complete. Phase 2 control-plane proofs complete except external status projection. Real Freed execution remains blocked by supported authority recovery and the worker-specific lease extension.
+Status: Phase 1 complete. Phase 2 control-plane proofs complete except external status projection. Real Freed execution remains gated on explicit approval and implementation of the coordinator plus task-scoped claim authority correction.
 
 ## Phase 0: architecture and threat model
 
@@ -26,6 +26,9 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Prove startup reconciliation against canonical task, issue, branch, and worktree state.
 - [x] Enforce exact-head draft publication planning and scoped GitHub App token minting.
 - [x] Implement approved-only lifecycle status projection, disabled by default until external write authorization.
+- [x] Authenticate Linux and macOS host telemetry with per-host Ed25519 identities and durable replay fencing.
+- [x] Keep general Restate ingress loopback-only and expose only the narrow signed host edge to remote executors.
+- [x] Prove tamper rejection, private internal objects, replay rejection, and replay persistence across a full restart.
 
 ## Phase 3: one Freed issue
 
