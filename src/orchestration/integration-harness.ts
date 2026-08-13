@@ -37,6 +37,10 @@ import {
   schedulerRegistry,
   type SchedulerAcquireInput,
 } from "./scheduler-registry.js";
+import {
+  routePlannerApi,
+  type RoutePlannerRequest,
+} from "./route-planner.js";
 
 interface KeyedInput<T> {
   readonly key: string;
@@ -126,6 +130,8 @@ export const integrationHarness = restate.service({
       await ctx
         .workflowClient(reconciliationWorkflow, request.key)
         .run(request.input),
+    planRoute: async (ctx: restate.Context, request: RoutePlannerRequest) =>
+      await ctx.serviceClient(routePlannerApi).plan(request),
     claim: async (ctx: restate.Context, request: ClaimInput) =>
       await ctx.objectClient(claimRegistry, request.key).claim(request.claim),
     readClaim: async (ctx: restate.Context, request: KeyOnlyInput) =>

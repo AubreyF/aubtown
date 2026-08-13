@@ -8,12 +8,18 @@ import {
   loadPublicKeyPem,
 } from "./security/host-enrollment.js";
 import { CheckpointGrantIssuer } from "./checkpoints/grant.js";
+import { loadExecutionAccountProfiles } from "./config/account-profiles.js";
+import { createRoutePlanner } from "./orchestration/route-planner.js";
 
 const identityKeys = (process.env.FREEDWORKS_RESTATE_IDENTITY_KEYS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
 const hostEnrollments = await loadHostEnrollments(process.env);
+const accountProfiles = await loadExecutionAccountProfiles(
+  process.env,
+  hostEnrollments,
+);
 const checkpointGrantKeyFile = process.env.FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE?.trim();
 const checkpointGrantIssuer =
   checkpointGrantKeyFile === undefined || checkpointGrantKeyFile.length === 0
@@ -38,9 +44,14 @@ const hostGateway = createHostGateway(
 const enableIntegrationHarness = integrationHarnessEnabled(
   process.env.FREEDWORKS_ENABLE_INTEGRATION_HARNESS,
 );
+const routePlanner = createRoutePlanner(hostEnrollments, accountProfiles);
 
 const port = await restate.serve({
-  services: controlPlaneServices(hostGateway, enableIntegrationHarness),
+  services: controlPlaneServices(
+    hostGateway,
+    enableIntegrationHarness,
+    routePlanner,
+  ),
   ...(identityKeys.length === 0 ? {} : { identityKeys }),
 });
 

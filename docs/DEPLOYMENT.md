@@ -17,7 +17,7 @@ The local Compose baseline accepts unsigned Restate-to-service requests because 
 
 Use `deploy/compose.production.yaml` with the baseline Compose file. It mounts the Restate identity private key and host enrollment file read-only from absolute host paths. One root initializer copies the checkpoint-grant private key into a `0400`, control-plane-owned Docker volume. A separate initializer copies the checkpoint-receipt private key into a different `0400`, checkpoint-edge-owned volume. The control plane receives only the receipt public key, and the checkpoint edge receives only the grant public key. Each initializer exits before its unprivileged service starts. The production override explicitly disables the local `IntegrationHarness`. All durable registries and workflows are Restate ingress-private. The systemd template composes both files. Actual keys, enrollments, account profiles, sequence state, and mutable service state stay outside Git.
 
-The baseline Compose file enables `IntegrationHarness` for black-box tests on loopback. Never deploy that baseline alone on a persistent host. An unset harness flag fails closed. Values other than the exact strings `true` and `false` stop startup.
+The baseline Compose file enables `IntegrationHarness` for black-box tests on loopback. Never deploy that baseline alone on a persistent host. An unset harness flag fails closed. Values other than the exact strings `true` and `false` stop startup. `FREEDWORKS_ACCOUNT_PROFILES_FILE` maps each execution account ID to its driver, enabled state, and enrolled host IDs. It contains no credential. Startup rejects a profile that names a disabled host or an account outside that host's enrollment.
 
 ## Bring-up sequence
 

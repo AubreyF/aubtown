@@ -56,7 +56,7 @@ References:
 
 `linux-control-1` owns the durable runtime and generic Linux execution. `macos-executor-1` is an intermittent specialist for native macOS, Tauri, install, and soak work. Its absence does not stop portable work.
 
-Each executor has one local Codex profile and one host identity. Credentials never move between hosts. Future subscription scaling assigns each subscription to an isolated executor profile. The scheduler routes claims to published capacity and quota headroom. It never logs one process into a carousel of copied account files.
+Each executor has one local Codex profile and one host identity. Credentials never move between hosts. Future subscription scaling assigns each subscription to an isolated executor profile. The ingress-private route planner reads only enrolled hosts, canonical heartbeats, configured account-to-host assignments, and durable rolling-week usage. It excludes accounts not advertised by the current host heartbeat, fails closed when telemetry is missing, and selects the compatible account with the most weekly headroom. It never logs one process into a carousel of copied account files.
 
 Linux is the eventual canonical authority and scheduling host. A Mac is an intermittent executor, not an authority replica. Each host signs heartbeats and quota observations with its own Ed25519 key. The Linux coordinator enrolls the corresponding public key, fixed lane, and allowed account IDs. A durable monotonic sequence rejects replay before host or account state changes.
 

@@ -44,6 +44,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Drain active work through the terminal checkpoint path during planned host shutdown.
 - [x] Fence transferred execution until the destination downloads, restores, verifies, and signs the exact prior-epoch checkpoint.
 - [x] Fence first-epoch execution until the selected host prepares and signs the exact clean initial worktree.
+- [x] Route Linux and macOS lanes from durable heartbeats, enrolled account profiles, and rolling-week quota headroom.
 
 ## Phase 3: one Freed issue
 

@@ -25,10 +25,12 @@ services:
       - FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE=/run/freedworks-secrets/checkpoint-grant-private.pem
       - FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE=/run/freedworks/checkpoint-receipt-public.pem
       - FREEDWORKS_HOST_ENROLLMENTS_FILE=/run/freedworks/host-enrollments.json
+      - FREEDWORKS_ACCOUNT_PROFILES_FILE=/run/freedworks/account-profiles.json
       - FREEDWORKS_RESTATE_IDENTITY_KEYS
       - FREEDWORKS_HOST_ENROLLMENTS_JSON
     volumes:
       - "${FREEDWORKS_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/freedworks/host-enrollments.json:ro"
+      - "${FREEDWORKS_ACCOUNT_PROFILES_FILE:?set the absolute account profiles file path}:/run/freedworks/account-profiles.json:ro"
       - "${FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE:?set the absolute checkpoint receipt public key path}:/run/freedworks/checkpoint-receipt-public.pem:ro"
       - control-secrets:/run/freedworks-secrets:ro
     depends_on:

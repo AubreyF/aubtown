@@ -14,10 +14,12 @@ import { integrationHarness } from "./integration-harness.js";
 import { qualificationWorkflow } from "./qualification-workflow.js";
 import { reconciliationWorkflow } from "./reconciliation-workflow.js";
 import { schedulerRegistry } from "./scheduler-registry.js";
+import { createRoutePlanner, routePlannerApi } from "./route-planner.js";
 
 export function controlPlaneServices(
   hostGateway: ReturnType<typeof createHostGateway>,
   enableIntegrationHarness: boolean,
+  routePlanner: ReturnType<typeof createRoutePlanner> = routePlannerApi,
 ): ServeOptions["services"] {
   return [
     accountGovernor,
@@ -33,6 +35,7 @@ export function controlPlaneServices(
     hostWorkspaceRegistry,
     custodyTransferWorkflow,
     reconciliationWorkflow,
+    routePlanner,
     hostGateway,
     ...(enableIntegrationHarness ? [integrationHarness] : []),
   ];

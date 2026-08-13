@@ -15,6 +15,7 @@ import { createHostGateway } from "../src/orchestration/host-gateway.js";
 import { qualificationWorkflow } from "../src/orchestration/qualification-workflow.js";
 import { reconciliationWorkflow } from "../src/orchestration/reconciliation-workflow.js";
 import { schedulerRegistry } from "../src/orchestration/scheduler-registry.js";
+import { createRoutePlanner } from "../src/orchestration/route-planner.js";
 
 describe("Restate ingress boundary", () => {
   it("keeps every durable internal service private to Restate calls", () => {
@@ -31,6 +32,7 @@ describe("Restate ingress boundary", () => {
       hostWorkspaceRegistry,
       qualificationWorkflow,
       reconciliationWorkflow,
+      createRoutePlanner({}, {}),
       schedulerRegistry,
     ];
 

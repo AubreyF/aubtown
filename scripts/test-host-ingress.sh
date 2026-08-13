@@ -135,6 +135,11 @@ FREEDWORKS_HOST_ENROLLMENTS_JSON="$(jq -cn \
   --arg linuxPublicKeyPem "$LINUX_PUBLIC_KEY_VALUE" \
   '{($host): {enabled: true, lane: "macos", accountIds: ["codex-pro-integration"], publicKeyPem: $publicKeyPem}, ($linuxHost): {enabled: true, lane: "linux", accountIds: ["codex-pro-integration"], publicKeyPem: $linuxPublicKeyPem}}')"
 export FREEDWORKS_HOST_ENROLLMENTS_JSON
+FREEDWORKS_ACCOUNT_PROFILES_JSON="$(jq -cn \
+  --arg host "$HOST_ID" \
+  --arg linuxHost "$LINUX_HOST_ID" \
+  '{"codex-pro-integration": {driverId: "codex-app-server-v1", enabled: true, hostIds: [$host, $linuxHost]}}')"
+export FREEDWORKS_ACCOUNT_PROFILES_JSON
 FREEDWORKS_TEST_CHECKPOINT_GRANT_KEY_FILE="$GRANT_PRIVATE_KEY"
 export FREEDWORKS_TEST_CHECKPOINT_GRANT_KEY_FILE
 FREEDWORKS_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE="$GRANT_PUBLIC_KEY"
@@ -252,6 +257,37 @@ curl --fail --silent --show-error \
   -H 'idempotency-key: integration-quota-2' \
   --data-binary "@${TMP_DIR}/quota.json" \
   | jq -e '.kind == "quota-observation" and .sequence == 2 and .decision.action == "admit" and .decision.observedAt == .acceptedAt' \
+  >/dev/null
+
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  '{schemaVersion: 1, hostId: $host, sequence: 1, issuedAt: $now, kind: "heartbeat", payload: {hostId: $host, lane: "linux", observedAt: $now, activeClaims: [], accountIds: ["codex-pro-integration"]}}' \
+  > "${TMP_DIR}/linux-heartbeat-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/linux-heartbeat-unsigned.json" \
+  > "${TMP_DIR}/linux-heartbeat.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-linux-heartbeat-1' \
+  --data-binary "@${TMP_DIR}/linux-heartbeat.json" \
+  | jq -e '.kind == "heartbeat" and .host.lane == "linux"' \
+  >/dev/null
+
+jq -n --arg now "$NOW" '{requiredLane: "linux", now: $now}' \
+  | curl --fail --silent --show-error \
+      -X POST "${HARNESS}/planRoute" \
+      -H 'content-type: application/json' \
+      --data-binary @- \
+  | jq -e --arg host "$LINUX_HOST_ID" '.reason == "selected" and .route.hostId == $host and .route.accountId == "codex-pro-integration"' \
+  >/dev/null
+
+jq -n --arg now "$NOW" '{requiredLane: "macos", now: $now}' \
+  | curl --fail --silent --show-error \
+      -X POST "${HARNESS}/planRoute" \
+      -H 'content-type: application/json' \
+      --data-binary @- \
+  | jq -e --arg host "$HOST_ID" '.reason == "selected" and .route.hostId == $host and .route.accountId == "codex-pro-integration"' \
   >/dev/null
 
 REPLAY_STATUS="$(curl --silent --show-error \
@@ -850,4 +886,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, initial execution stayed fenced until signed workspace receipt, claim-bound executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, Linux and macOS routing used durable quota and heartbeat state, initial execution stayed fenced until signed workspace receipt, claim-bound executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."
