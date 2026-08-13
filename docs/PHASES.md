@@ -30,7 +30,8 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Implement approved-only lifecycle status projection, disabled by default until external write authorization.
 - [x] Authenticate Linux and macOS host telemetry with per-host Ed25519 identities and durable replay fencing.
 - [x] Keep general Restate ingress loopback-only and expose only the narrow signed host edge to remote executors.
-- [x] Prove tamper rejection, private internal objects, replay rejection, and replay persistence across a full restart.
+- [x] Make every durable internal Restate service ingress-private and omit the local integration harness from production.
+- [x] Prove tamper rejection, private internal services, replay rejection, and replay persistence across a full restart.
 - [x] Prove Mac-to-Linux encrypted checkpoint transfer, persistent restart recovery, and post-release grant denial.
 
 ## Phase 3: one Freed issue

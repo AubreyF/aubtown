@@ -15,7 +15,9 @@ The checked-in Compose file is a local and single-node pilot baseline. It binds 
 
 The local Compose baseline accepts unsigned Restate-to-service requests because both containers share a private local network. Production must generate a Restate ED25519 request-identity key, store its private key outside the repository, configure Restate with `RESTATE_REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE`, and pass the resulting public identity through `FREEDWORKS_RESTATE_IDENTITY_KEYS`. The service then rejects invocations not signed by that Restate instance.
 
-Use `deploy/compose.production.yaml` with the baseline Compose file. It mounts the Restate identity private key and host enrollment file read-only from absolute host paths. A one-shot root initializer copies the checkpoint-grant private key into a `0400`, service-owned Docker volume and exits before the unprivileged control plane starts. The systemd template composes both files. Actual keys, enrollments, account profiles, sequence state, and mutable service state stay outside Git.
+Use `deploy/compose.production.yaml` with the baseline Compose file. It mounts the Restate identity private key and host enrollment file read-only from absolute host paths. A one-shot root initializer copies the checkpoint-grant private key into a `0400`, service-owned Docker volume and exits before the unprivileged control plane starts. The production override explicitly disables the local `IntegrationHarness`. All durable registries and workflows are Restate ingress-private. The systemd template composes both files. Actual keys, enrollments, account profiles, sequence state, and mutable service state stay outside Git.
+
+The baseline Compose file enables `IntegrationHarness` for black-box tests on loopback. Never deploy that baseline alone on a persistent host. An unset harness flag fails closed. Values other than the exact strings `true` and `false` stop startup.
 
 ## Bring-up sequence
 

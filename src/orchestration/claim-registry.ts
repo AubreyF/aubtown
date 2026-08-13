@@ -10,6 +10,7 @@ interface ClaimState {
 
 export const claimRegistry = restate.object({
   name: "ClaimRegistry",
+  options: { ingressPrivate: true },
   handlers: {
     claim: async (
       ctx: restate.ObjectContext<ClaimState>,

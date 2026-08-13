@@ -10,14 +10,49 @@ CUSTODY_KEY="dry-run-custody-${RUN_ID}"
 TRANSFER_WORKFLOW_KEY="dry-run-transfer-${RUN_ID}"
 RECONCILE_WORKFLOW_KEY="dry-run-reconcile-${RUN_ID}"
 INGRESS="${FREEDWORKS_RESTATE_INGRESS:-http://127.0.0.1:8080}"
+HARNESS="${INGRESS}/IntegrationHarness"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/DryRunWorkflow/${ADMITTED_KEY}/run" \
-  -H 'content-type: application/json' \
-  --data-binary "@${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
-  > "${TMP_DIR}/admitted.json"
+harness_file() {
+  local handler="$1"
+  local key="$2"
+  local field="$3"
+  local input_file="$4"
+  local output_file="$5"
+  local request_file
+  request_file="$(mktemp "${TMP_DIR}/harness-request.XXXXXX")"
+  jq -n \
+    --arg key "$key" \
+    --arg field "$field" \
+    --slurpfile value "$input_file" \
+    '{key: $key} + {($field): $value[0]}' \
+    > "$request_file"
+  curl --fail --silent --show-error \
+    -X POST "${HARNESS}/${handler}" \
+    -H 'content-type: application/json' \
+    --data-binary "@${request_file}" \
+    > "$output_file"
+  rm -f "$request_file"
+}
+
+harness_key() {
+  local handler="$1"
+  local key="$2"
+  local output_file="$3"
+  curl --fail --silent --show-error \
+    -X POST "${HARNESS}/${handler}" \
+    -H 'content-type: application/json' \
+    --data "$(jq -cn --arg key "$key" '{key: $key}')" \
+    > "$output_file"
+}
+
+harness_file \
+  runDryRun \
+  "$ADMITTED_KEY" \
+  input \
+  "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
+  "${TMP_DIR}/admitted.json"
 
 jq -e '
   .stage == "completed" and
@@ -25,23 +60,29 @@ jq -e '
   .workerReceipt.publication == "none"
 ' "${TMP_DIR}/admitted.json" > /dev/null
 
+jq -n \
+  --arg key "$ADMITTED_KEY" \
+  --slurpfile input "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
+  '{key: $key, input: $input[0]}' \
+  > "${TMP_DIR}/duplicate-input.json"
 DUPLICATE_STATUS="$(curl --silent --show-error \
   -o "${TMP_DIR}/duplicate.json" \
   -w '%{http_code}' \
-  -X POST "${INGRESS}/DryRunWorkflow/${ADMITTED_KEY}/run" \
+  -X POST "${HARNESS}/runDryRun" \
   -H 'content-type: application/json' \
-  --data-binary "@${ROOT_DIR}/test/fixtures/dry-run-admitted.json")"
+  --data-binary "@${TMP_DIR}/duplicate-input.json")"
 
 if [[ "${DUPLICATE_STATUS}" != "409" ]]; then
   echo "Expected duplicate workflow start to return 409, received ${DUPLICATE_STATUS}." >&2
   exit 1
 fi
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/DryRunWorkflow/${BLOCKED_KEY}/run" \
-  -H 'content-type: application/json' \
-  --data-binary "@${ROOT_DIR}/test/fixtures/dry-run-blocked-quota.json" \
-  > "${TMP_DIR}/blocked.json"
+harness_file \
+  runDryRun \
+  "$BLOCKED_KEY" \
+  input \
+  "${ROOT_DIR}/test/fixtures/dry-run-blocked-quota.json" \
+  "${TMP_DIR}/blocked.json"
 
 jq -e '
   .stage == "blocked" and
@@ -50,19 +91,11 @@ jq -e '
   (.workerReceipt == null)
 ' "${TMP_DIR}/blocked.json" > /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/freed-project%2Ffreed%231234/read" \
-  -H 'content-type: application/json' \
-  --data '{}' \
-  > "${TMP_DIR}/claim.json"
+harness_key readClaim "freed-project/freed#1234" "${TMP_DIR}/claim.json"
 
 jq -e '. == null' "${TMP_DIR}/claim.json" > /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/SchedulerRegistry/freed-project%2Ffreed/read" \
-  -H 'content-type: application/json' \
-  --data '{}' \
-  > "${TMP_DIR}/scheduler-after-workflow.json"
+harness_key readScheduler "freed-project/freed" "${TMP_DIR}/scheduler-after-workflow.json"
 
 jq -e '. == []' "${TMP_DIR}/scheduler-after-workflow.json" > /dev/null
 
@@ -83,83 +116,96 @@ jq \
   "${TMP_DIR}/conflict-first.json" \
   > "${TMP_DIR}/conflict-second.json"
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/SchedulerRegistry/${CONFLICT_KEY}/acquire" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/conflict-first.json" \
-  > "${TMP_DIR}/conflict-first-result.json"
+harness_file \
+  acquireScheduler \
+  "$CONFLICT_KEY" \
+  input \
+  "${TMP_DIR}/conflict-first.json" \
+  "${TMP_DIR}/conflict-first-result.json"
 
 jq -e '.admitted == true' "${TMP_DIR}/conflict-first-result.json" > /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/SchedulerRegistry/${CONFLICT_KEY}/acquire" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/conflict-second.json" \
-  > "${TMP_DIR}/conflict-second-result.json"
+harness_file \
+  acquireScheduler \
+  "$CONFLICT_KEY" \
+  input \
+  "${TMP_DIR}/conflict-second.json" \
+  "${TMP_DIR}/conflict-second-result.json"
 
 jq -e \
   '.admitted == false and .decision.reason == "conflict-domain"' \
   "${TMP_DIR}/conflict-second-result.json" \
   > /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/SchedulerRegistry/${CONFLICT_KEY}/release" \
-  -H 'content-type: application/json' \
-  --data '{"claimId":"dry-run-claim-1234","custodyEpoch":1}' \
-  > /dev/null
+jq -n '{claimId: "dry-run-claim-1234", custodyEpoch: 1}' \
+  > "${TMP_DIR}/release-epoch-1.json"
+harness_file \
+  releaseScheduler \
+  "$CONFLICT_KEY" \
+  expected \
+  "${TMP_DIR}/release-epoch-1.json" \
+  /dev/null
 
 jq '.claim' "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
   > "${TMP_DIR}/custody-claim.json"
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/${CUSTODY_KEY}/claim" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/custody-claim.json" \
-  > /dev/null
+harness_file claim "$CUSTODY_KEY" claim "${TMP_DIR}/custody-claim.json" /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/${CUSTODY_KEY}/transfer" \
-  -H 'content-type: application/json' \
-  --data '{"claimId":"dry-run-claim-1234","priorEpoch":1,"nextEpoch":2,"destinationHostId":"linux-control-1","destinationWorkerId":"worker-2","destinationWorktree":"/srv/freedworks/worktrees/freed/1234-epoch-2","transferredAt":"2026-08-14T08:00:00.000Z"}' \
-  > "${TMP_DIR}/custody-transfer.json"
+jq -n '{claimId: "dry-run-claim-1234", priorEpoch: 1, nextEpoch: 2, destinationHostId: "linux-control-1", destinationWorkerId: "worker-2", destinationWorktree: "/srv/freedworks/worktrees/freed/1234-epoch-2", transferredAt: "2026-08-14T08:00:00.000Z"}' \
+  > "${TMP_DIR}/custody-transfer-input.json"
+harness_file \
+  transferClaim \
+  "$CUSTODY_KEY" \
+  request \
+  "${TMP_DIR}/custody-transfer-input.json" \
+  "${TMP_DIR}/custody-transfer.json"
 
 jq -e \
   '.custodyEpoch == 2 and .hostId == "linux-control-1" and .workerId == "worker-2" and .worktree == "/srv/freedworks/worktrees/freed/1234-epoch-2"' \
   "${TMP_DIR}/custody-transfer.json" \
   > /dev/null
 
+jq -n \
+  --arg key "$CUSTODY_KEY" \
+  '{key: $key, expected: {claimId: "dry-run-claim-1234", custodyEpoch: 1}}' \
+  > "${TMP_DIR}/custody-stale-release-input.json"
 STALE_RELEASE_STATUS="$(curl --silent --show-error \
   -o "${TMP_DIR}/custody-stale-release.json" \
   -w '%{http_code}' \
-  -X POST "${INGRESS}/ClaimRegistry/${CUSTODY_KEY}/release" \
+  -X POST "${HARNESS}/releaseClaim" \
   -H 'content-type: application/json' \
-  --data '{"claimId":"dry-run-claim-1234","custodyEpoch":1}')"
+  --data-binary "@${TMP_DIR}/custody-stale-release-input.json")"
 
 if [[ "${STALE_RELEASE_STATUS}" != "500" ]]; then
   echo "Expected stale custody release to return 500, received ${STALE_RELEASE_STATUS}." >&2
   exit 1
 fi
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/${CUSTODY_KEY}/release" \
-  -H 'content-type: application/json' \
-  --data '{"claimId":"dry-run-claim-1234","custodyEpoch":2}' \
-  > /dev/null
+jq -n '{claimId: "dry-run-claim-1234", custodyEpoch: 2}' \
+  > "${TMP_DIR}/release-epoch-2.json"
+harness_file \
+  releaseClaim \
+  "$CUSTODY_KEY" \
+  expected \
+  "${TMP_DIR}/release-epoch-2.json" \
+  /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/SchedulerRegistry/freed-project%2Ffreed/acquire" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/conflict-first.json" \
-  > /dev/null
+harness_file \
+  acquireScheduler \
+  "freed-project/freed" \
+  input \
+  "${TMP_DIR}/conflict-first.json" \
+  /dev/null
 
 jq '.claim' "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
   > "${TMP_DIR}/workflow-custody-claim.json"
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/freed-project%2Ffreed%231234/claim" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/workflow-custody-claim.json" \
-  > /dev/null
+harness_file \
+  claim \
+  "freed-project/freed#1234" \
+  claim \
+  "${TMP_DIR}/workflow-custody-claim.json" \
+  /dev/null
 
 jq -n \
   --slurpfile fixture "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
@@ -216,11 +262,12 @@ jq -n \
   }' \
   > "${TMP_DIR}/workflow-custody-input.json"
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/CustodyTransferWorkflow/${TRANSFER_WORKFLOW_KEY}/run" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/workflow-custody-input.json" \
-  > "${TMP_DIR}/workflow-custody-result.json"
+harness_file \
+  runCustodyTransfer \
+  "$TRANSFER_WORKFLOW_KEY" \
+  input \
+  "${TMP_DIR}/workflow-custody-input.json" \
+  "${TMP_DIR}/workflow-custody-result.json"
 
 jq -e '
   .decision.action == "transfer" and
@@ -229,17 +276,19 @@ jq -e '
   .transferredClaim.worktree == "/srv/freedworks/worktrees/freed/1234-epoch-2"
 ' "${TMP_DIR}/workflow-custody-result.json" > /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/freed-project%2Ffreed%231234/release" \
-  -H 'content-type: application/json' \
-  --data '{"claimId":"dry-run-claim-1234","custodyEpoch":2}' \
-  > /dev/null
+harness_file \
+  releaseClaim \
+  "freed-project/freed#1234" \
+  expected \
+  "${TMP_DIR}/release-epoch-2.json" \
+  /dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/SchedulerRegistry/freed-project%2Ffreed/release" \
-  -H 'content-type: application/json' \
-  --data '{"claimId":"dry-run-claim-1234","custodyEpoch":2}' \
-  > /dev/null
+harness_file \
+  releaseScheduler \
+  "freed-project/freed" \
+  expected \
+  "${TMP_DIR}/release-epoch-2.json" \
+  /dev/null
 
 jq -n \
   --slurpfile fixture "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
@@ -267,11 +316,12 @@ jq -n \
   }' \
   > "${TMP_DIR}/reconciliation-input.json"
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ReconciliationWorkflow/${RECONCILE_WORKFLOW_KEY}/run" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/reconciliation-input.json" \
-  > "${TMP_DIR}/reconciliation-result.json"
+harness_file \
+  runReconciliation \
+  "$RECONCILE_WORKFLOW_KEY" \
+  input \
+  "${TMP_DIR}/reconciliation-input.json" \
+  "${TMP_DIR}/reconciliation-result.json"
 
 jq -e \
   '.dispatchSafe == true and .entries[0].decision.action == "continue"' \

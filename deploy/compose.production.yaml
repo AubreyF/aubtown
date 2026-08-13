@@ -21,6 +21,7 @@ services:
 
   control-plane:
     environment:
+      - FREEDWORKS_ENABLE_INTEGRATION_HARNESS=false
       - FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE=/run/freedworks-secrets/checkpoint-grant-private.pem
       - FREEDWORKS_HOST_ENROLLMENTS_FILE=/run/freedworks/host-enrollments.json
       - FREEDWORKS_RESTATE_IDENTITY_KEYS

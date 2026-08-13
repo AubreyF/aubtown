@@ -16,6 +16,7 @@ services:
     environment:
       - PORT=9080
       - FREEDWORKS_HOST_ENROLLMENTS_JSON
+      - FREEDWORKS_ENABLE_INTEGRATION_HARNESS=true
     restart: unless-stopped
     depends_on:
       - restate

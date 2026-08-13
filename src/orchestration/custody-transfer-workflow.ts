@@ -36,6 +36,7 @@ interface CustodyTransferState {
 
 export const custodyTransferWorkflow = restate.workflow({
   name: "CustodyTransferWorkflow",
+  options: { ingressPrivate: true },
   handlers: {
     run: async (
       ctx: restate.WorkflowContext<CustodyTransferState>,

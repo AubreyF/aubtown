@@ -22,6 +22,7 @@ export interface QualificationWorkflowInput {
 
 export const qualificationWorkflow = restate.workflow({
   name: "QualificationWorkflow",
+  options: { ingressPrivate: true },
   handlers: {
     run: async (
       ctx: restate.WorkflowContext<QualificationWorkflowState>,

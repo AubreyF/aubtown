@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INGRESS="${FREEDWORKS_RESTATE_INGRESS:-http://127.0.0.1:8080}"
 HOST_EDGE="${FREEDWORKS_HOST_EDGE:-http://127.0.0.1:8090}"
 CHECKPOINT_EDGE="${FREEDWORKS_CHECKPOINT_EDGE:-http://127.0.0.1:8091}"
+HARNESS="${INGRESS}/IntegrationHarness"
 TMP_DIR="$(mktemp -d)"
 RUN_ID="$(date +%s)-$$"
 HOST_ID="integration-macos-${RUN_ID}"
@@ -16,6 +17,28 @@ LINUX_PUBLIC_KEY="${TMP_DIR}/linux-host-public.pem"
 GRANT_PRIVATE_KEY="${TMP_DIR}/checkpoint-grant-private.pem"
 GRANT_PUBLIC_KEY="${TMP_DIR}/checkpoint-grant-public.pem"
 trap 'rm -rf "$TMP_DIR"' EXIT
+
+harness_file() {
+  local handler="$1"
+  local key="$2"
+  local field="$3"
+  local input_file="$4"
+  local output_file="$5"
+  local request_file
+  request_file="$(mktemp "${TMP_DIR}/harness-request.XXXXXX")"
+  jq -n \
+    --arg key "$key" \
+    --arg field "$field" \
+    --slurpfile value "$input_file" \
+    '{key: $key} + {($field): $value[0]}' \
+    > "$request_file"
+  curl --fail --silent --show-error \
+    -X POST "${HARNESS}/${handler}" \
+    -H 'content-type: application/json' \
+    --data-binary "@${request_file}" \
+    > "$output_file"
+  rm -f "$request_file"
+}
 
 PINNED_NODE="$(tr -d 'v[:space:]' < "${ROOT_DIR}/.nvmrc")"
 ACTIVE_NODE="$(node -p 'process.versions.node')"
@@ -128,6 +151,17 @@ if [[ "$DIRECT_ACCOUNT_STATUS" == "200" ]]; then
   exit 1
 fi
 
+DIRECT_CLAIM_STATUS="$(curl --silent --show-error \
+  -o "${TMP_DIR}/direct-claim.json" \
+  -w '%{http_code}' \
+  -X POST "${INGRESS}/ClaimRegistry/probe/read" \
+  -H 'content-type: application/json' \
+  --data '{}')"
+if [[ "$DIRECT_CLAIM_STATUS" == "200" ]]; then
+  echo "Private ClaimRegistry accepted a direct ingress invocation." >&2
+  exit 1
+fi
+
 EDGE_INTERNAL_STATUS="$(curl --silent --show-error \
   -o "${TMP_DIR}/edge-internal.json" \
   -w '%{http_code}' \
@@ -181,18 +215,13 @@ if [[ "$REPLAY_STATUS" != "409" ]]; then
 fi
 
 ISSUE_NUMBER="$(date +%s)"
-CLAIM_KEY="freed-project%2Ffreed%23${ISSUE_NUMBER}"
 jq -n \
   --arg host "$HOST_ID" \
   --arg now "$NOW" \
   --argjson issue "$ISSUE_NUMBER" \
   '{repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, hostId: $host, workerId: "integration-worker", branch: ("test/checkpoint-grant-" + ($issue | tostring)), worktree: ("/tmp/freedworks-integration-" + ($issue | tostring)), conflictDomains: ["logical:integration"], claimedAt: $now}' \
   > "${TMP_DIR}/grant-claim.json"
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/${CLAIM_KEY}/claim" \
-  -H 'content-type: application/json' \
-  --data-binary "@${TMP_DIR}/grant-claim.json" \
-  >/dev/null
+harness_file claim "freed-project/freed#${ISSUE_NUMBER}" claim "${TMP_DIR}/grant-claim.json" /dev/null
 
 jq -cn \
   --arg host "$HOST_ID" \
@@ -250,11 +279,19 @@ curl --fail --silent --show-error \
   | jq -e --arg reference "$CHECKPOINT_REFERENCE" '.reference == $reference' \
   >/dev/null
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/${CLAIM_KEY}/transfer" \
-  -H 'content-type: application/json' \
-  --data "{\"claimId\":\"integration-claim-${ISSUE_NUMBER}\",\"priorEpoch\":1,\"nextEpoch\":2,\"destinationHostId\":\"${LINUX_HOST_ID}\",\"destinationWorkerId\":\"integration-linux-worker\",\"destinationWorktree\":\"/tmp/freedworks-linux-${ISSUE_NUMBER}\",\"transferredAt\":\"${NOW}\"}" \
-  >/dev/null
+jq -n \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  --arg destinationHostId "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  '{claimId: $claimId, priorEpoch: 1, nextEpoch: 2, destinationHostId: $destinationHostId, destinationWorkerId: "integration-linux-worker", destinationWorktree: $worktree, transferredAt: $now}' \
+  > "${TMP_DIR}/claim-transfer.json"
+harness_file \
+  transferClaim \
+  "freed-project/freed#${ISSUE_NUMBER}" \
+  request \
+  "${TMP_DIR}/claim-transfer.json" \
+  /dev/null
 
 jq -n \
   --arg host "$LINUX_HOST_ID" \
@@ -304,11 +341,16 @@ curl --fail --silent --show-error \
   -o "${TMP_DIR}/downloaded-after-restart.json"
 cmp "${TMP_DIR}/checkpoint-payload.json" "${TMP_DIR}/downloaded-after-restart.json"
 
-curl --fail --silent --show-error \
-  -X POST "${INGRESS}/ClaimRegistry/${CLAIM_KEY}/release" \
-  -H 'content-type: application/json' \
-  --data "{\"claimId\":\"integration-claim-${ISSUE_NUMBER}\",\"custodyEpoch\":2}" \
-  >/dev/null
+jq -n \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  '{claimId: $claimId, custodyEpoch: 2}' \
+  > "${TMP_DIR}/claim-release.json"
+harness_file \
+  releaseClaim \
+  "freed-project/freed#${ISSUE_NUMBER}" \
+  expected \
+  "${TMP_DIR}/claim-release.json" \
+  /dev/null
 
 jq '.sequence = 2' "${TMP_DIR}/download-grant-unsigned.json" > "${TMP_DIR}/grant-without-claim-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/grant-without-claim-unsigned.json" \

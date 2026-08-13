@@ -35,7 +35,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Retry burns subscription quota | Retry budget distinguishes transient failure from authority and human blocks |
 | Second queue appears | No ticket database or Markdown work queue in Freedworks |
 | Restate storage is lost | Persistent volume, backups, claim reconciliation against external witnesses |
-| Another process invokes a service directly | Private network plus Restate request-identity verification in production |
+| Another process invokes an internal service directly | Every durable internal service is ingress-private, production omits the local integration harness, and Restate request identity authenticates runtime calls |
 | Remote executor reaches scheduler ingress | Loopback-only Restate ports plus a narrow host edge with an exact route allowlist |
 | Host message is forged or changed | Per-host Ed25519 signature over canonical identity, sequence, kind, time, and payload |
 | Accepted host message is replayed | Restate idempotency plus a durable monotonic sequence checked before state mutation |

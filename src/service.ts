@@ -1,13 +1,6 @@
 import * as restate from "@restatedev/restate-sdk";
-import { accountGovernor } from "./orchestration/account-governor.js";
-import { claimRegistry } from "./orchestration/claim-registry.js";
-import { dryRunWorkflow } from "./orchestration/dry-run-workflow.js";
-import { fakeWorker } from "./orchestration/fake-worker.js";
-import { qualificationWorkflow } from "./orchestration/qualification-workflow.js";
-import { schedulerRegistry } from "./orchestration/scheduler-registry.js";
-import { hostRegistry } from "./orchestration/host-registry.js";
-import { custodyTransferWorkflow } from "./orchestration/custody-transfer-workflow.js";
-import { reconciliationWorkflow } from "./orchestration/reconciliation-workflow.js";
+import { integrationHarnessEnabled } from "./config/integration-harness.js";
+import { controlPlaneServices } from "./orchestration/control-plane-services.js";
 import { createHostGateway } from "./orchestration/host-gateway.js";
 import { loadHostEnrollments, loadPrivateKeyPem } from "./security/host-enrollment.js";
 import { CheckpointGrantIssuer } from "./checkpoints/grant.js";
@@ -25,20 +18,12 @@ const checkpointGrantIssuer =
         await loadPrivateKeyPem(checkpointGrantKeyFile, "Checkpoint grant private key"),
       );
 const hostGateway = createHostGateway(hostEnrollments, checkpointGrantIssuer);
+const enableIntegrationHarness = integrationHarnessEnabled(
+  process.env.FREEDWORKS_ENABLE_INTEGRATION_HARNESS,
+);
 
 const port = await restate.serve({
-  services: [
-    accountGovernor,
-    claimRegistry,
-    dryRunWorkflow,
-    fakeWorker,
-    qualificationWorkflow,
-    schedulerRegistry,
-    hostRegistry,
-    custodyTransferWorkflow,
-    reconciliationWorkflow,
-    hostGateway,
-  ],
+  services: controlPlaneServices(hostGateway, enableIntegrationHarness),
   ...(identityKeys.length === 0 ? {} : { identityKeys }),
 });
 

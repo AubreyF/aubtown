@@ -60,7 +60,7 @@ Each executor has one local Codex profile and one host identity. Credentials nev
 
 Linux is the eventual canonical authority and scheduling host. A Mac is an intermittent executor, not an authority replica. Each host signs heartbeats and quota observations with its own Ed25519 key. The Linux coordinator enrolls the corresponding public key, fixed lane, and allowed account IDs. A durable monotonic sequence rejects replay before host or account state changes.
 
-Remote executors never receive general Restate ingress. A narrow host edge accepts only `POST /HostGateway/<host>/submit`, requires an idempotency key, limits request size, and forwards to the signed Restate gateway. Restate ingress and administration remain bound to loopback. Tailscale carries the private network connection to the narrow edge. Internal host and account objects are ingress-private even if another local process reaches Restate.
+Remote executors never receive general Restate ingress. A narrow host edge accepts only `POST /HostGateway/<host>/submit`, requires an idempotency key, limits request size, and forwards to the signed Restate gateway. Restate ingress and administration remain bound to loopback. Tailscale carries the private network connection to the narrow edge. Every durable registry, worker, and workflow behind `HostGateway` is ingress-private even if another local process reaches Restate. A public `IntegrationHarness` is bound only by an exact local-test opt-in and is absent from the production service manifest.
 
 ## Quota
 

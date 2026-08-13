@@ -42,6 +42,7 @@ interface DryRunState {
 
 export const dryRunWorkflow = restate.workflow({
   name: "DryRunWorkflow",
+  options: { ingressPrivate: true },
   handlers: {
     run: async (
       ctx: restate.WorkflowContext<DryRunState>,

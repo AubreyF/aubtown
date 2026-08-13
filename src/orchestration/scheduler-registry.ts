@@ -22,16 +22,19 @@ export interface SchedulerAcquireResult {
   readonly active: readonly ActiveDispatch[];
 }
 
+export interface SchedulerAcquireInput {
+  readonly claim: DispatchClaim;
+  readonly qualification: QualificationReport;
+  readonly concurrency: "pilot" | "bounded";
+}
+
 export const schedulerRegistry = restate.object({
   name: "SchedulerRegistry",
+  options: { ingressPrivate: true },
   handlers: {
     acquire: async (
       ctx: restate.ObjectContext<SchedulerState>,
-      input: {
-        readonly claim: DispatchClaim;
-        readonly qualification: QualificationReport;
-        readonly concurrency: "pilot" | "bounded";
-      },
+      input: SchedulerAcquireInput,
     ): Promise<SchedulerAcquireResult> => {
       if (
         input.claim.issueNumber !== input.qualification.issue.number ||

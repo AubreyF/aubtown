@@ -11,6 +11,7 @@ interface ReconciliationState {
 
 export const reconciliationWorkflow = restate.workflow({
   name: "ReconciliationWorkflow",
+  options: { ingressPrivate: true },
   handlers: {
     run: async (
       ctx: restate.WorkflowContext<ReconciliationState>,

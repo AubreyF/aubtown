@@ -22,6 +22,7 @@ export interface FakeWorkerReceipt {
 
 export const fakeWorker = restate.service({
   name: "FakeWorker",
+  options: { ingressPrivate: true },
   handlers: {
     run: async (
       _ctx: restate.Context,
