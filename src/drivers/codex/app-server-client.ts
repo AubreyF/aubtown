@@ -12,25 +12,44 @@ export interface JsonRpcTransport {
 interface PendingRequest {
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: Error) => void;
+  readonly timer: NodeJS.Timeout;
 }
 
 export class StdioJsonRpcTransport implements JsonRpcTransport {
   readonly #process: ChildProcessWithoutNullStreams;
   readonly #pending = new Map<number, PendingRequest>();
   readonly #notificationListeners = new Set<(message: unknown) => void>();
+  readonly #requestTimeoutMs: number;
+  readonly #closeTimeoutMs: number;
   #nextId = 1;
+  #closed = false;
 
   constructor(options?: {
     readonly command?: string;
     readonly args?: readonly string[];
     readonly env?: NodeJS.ProcessEnv;
+    readonly requestTimeoutMs?: number;
+    readonly closeTimeoutMs?: number;
+    readonly onStderr?: (chunk: string) => void;
   }) {
+    this.#requestTimeoutMs = options?.requestTimeoutMs ?? 30_000;
+    this.#closeTimeoutMs = options?.closeTimeoutMs ?? 5_000;
+    if (!Number.isInteger(this.#requestTimeoutMs) || this.#requestTimeoutMs < 1) {
+      throw new Error("Codex app-server request timeout must be a positive integer.");
+    }
+    if (!Number.isInteger(this.#closeTimeoutMs) || this.#closeTimeoutMs < 1) {
+      throw new Error("Codex app-server close timeout must be a positive integer.");
+    }
     this.#process = spawn(options?.command ?? "codex", options?.args ?? ["app-server"], {
       env: options?.env ?? process.env,
       stdio: ["pipe", "pipe", "pipe"],
     });
     const lines = createInterface({ input: this.#process.stdout });
     lines.on("line", (line) => this.#acceptLine(line));
+    this.#process.stderr.setEncoding("utf8");
+    this.#process.stderr.on("data", (chunk: string) => {
+      options?.onStderr?.(chunk);
+    });
     this.#process.on("error", (error) => this.#rejectAll(error));
     this.#process.on("exit", (code, signal) => {
       this.#rejectAll(
@@ -43,14 +62,33 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
     if (message === null || typeof message !== "object" || Array.isArray(message)) {
       throw new TypeError("JSON-RPC messages must be objects.");
     }
+    if (this.#closed) {
+      throw new Error("Codex app-server transport is closed.");
+    }
     const id = this.#nextId;
     this.#nextId += 1;
-    const envelope = { ...(message as Record<string, unknown>), id };
+    const record = message as Record<string, unknown>;
+    const method = typeof record.method === "string" ? record.method : "unknown";
+    const envelope = { ...record, id };
     return await new Promise<unknown>((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (!this.#pending.delete(id)) {
+          return;
+        }
+        reject(
+          new Error(
+            `Codex app-server request ${method} timed out after ${this.#requestTimeoutMs.toLocaleString()} ms.`,
+          ),
+        );
+      }, this.#requestTimeoutMs);
+      this.#pending.set(id, { resolve, reject, timer });
       this.#process.stdin.write(`${JSON.stringify(envelope)}\n`, (error) => {
         if (error !== null && error !== undefined) {
-          this.#pending.delete(id);
+          const pending = this.#pending.get(id);
+          if (pending !== undefined) {
+            clearTimeout(pending.timer);
+            this.#pending.delete(id);
+          }
           reject(error);
         }
       });
@@ -60,6 +98,9 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
   async notify(message: unknown): Promise<void> {
     if (message === null || typeof message !== "object" || Array.isArray(message)) {
       throw new TypeError("JSON-RPC messages must be objects.");
+    }
+    if (this.#closed) {
+      throw new Error("Codex app-server transport is closed.");
     }
     await new Promise<void>((resolve, reject) => {
       this.#process.stdin.write(`${JSON.stringify(message)}\n`, (error) => {
@@ -78,11 +119,52 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
   }
 
   async close(): Promise<void> {
-    if (this.#process.exitCode !== null) {
+    if (this.#closed) {
       return;
     }
+    this.#closed = true;
+    this.#rejectAll(new Error("Codex app-server transport closed."));
+    if (
+      this.#process.exitCode !== null ||
+      this.#process.signalCode !== null
+    ) {
+      return;
+    }
+    const exited = new Promise<void>((resolve) =>
+      this.#process.once("exit", () => resolve()),
+    );
     this.#process.kill("SIGTERM");
-    await new Promise<void>((resolve) => this.#process.once("exit", () => resolve()));
+    const forced = new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.#process.kill("SIGKILL");
+        resolve();
+      }, this.#closeTimeoutMs);
+      exited.then(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+    await forced;
+    if (
+      this.#process.exitCode === null &&
+      this.#process.signalCode === null
+    ) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Codex app-server did not exit after SIGKILL within ${this.#closeTimeoutMs.toLocaleString()} ms.`,
+              ),
+            ),
+          this.#closeTimeoutMs,
+        );
+        exited.then(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    }
   }
 
   #acceptLine(line: string): void {
@@ -102,11 +184,16 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
       }
       return;
     }
+    if (typeof response.method === "string") {
+      this.#rejectServerRequest(response.id, response.method);
+      return;
+    }
     const pending = this.#pending.get(response.id);
     if (pending === undefined) {
       return;
     }
     this.#pending.delete(response.id);
+    clearTimeout(pending.timer);
     if (response.error !== undefined) {
       pending.reject(new Error(`Codex app-server error: ${JSON.stringify(response.error)}`));
       return;
@@ -116,9 +203,27 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
 
   #rejectAll(error: Error): void {
     for (const pending of this.#pending.values()) {
+      clearTimeout(pending.timer);
       pending.reject(error);
     }
     this.#pending.clear();
+  }
+
+  #rejectServerRequest(id: number, method: string): void {
+    this.#process.stdin.write(
+      `${JSON.stringify({
+        id,
+        error: {
+          code: -32_601,
+          message: `Freedworks does not permit server-initiated method ${method}.`,
+        },
+      })}\n`,
+      (error) => {
+        if (error !== null && error !== undefined) {
+          this.#rejectAll(error);
+        }
+      },
+    );
   }
 }
 
