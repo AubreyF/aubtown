@@ -40,6 +40,7 @@ describe("QuotaMonitor", () => {
         publicationCeiling: "none",
       },
       start: async () => handle,
+      recover: async () => "running" as const,
       wait: async () => "completed" as const,
       interrupt: async (turn: WorkerTurnHandle) => {
         interrupted.push(turn.turnId);
@@ -89,6 +90,7 @@ describe("QuotaMonitor", () => {
         publicationCeiling: "none",
       },
       start: async () => handle,
+      recover: async () => "running" as const,
       wait: async () => "completed" as const,
       interrupt: async (turn: WorkerTurnHandle) => {
         interrupted.push(turn.turnId);

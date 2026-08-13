@@ -40,6 +40,18 @@ harness_file() {
   rm -f "$request_file"
 }
 
+harness_key() {
+  local handler="$1"
+  local key="$2"
+  local output_file="$3"
+  jq -n --arg key "$key" '{key: $key}' \
+    | curl --fail --silent --show-error \
+        -X POST "${HARNESS}/${handler}" \
+        -H 'content-type: application/json' \
+        --data-binary @- \
+    > "$output_file"
+}
+
 PINNED_NODE="$(tr -d 'v[:space:]' < "${ROOT_DIR}/.nvmrc")"
 ACTIVE_NODE="$(node -p 'process.versions.node')"
 if [[ "$ACTIVE_NODE" != "$PINNED_NODE" ]]; then
@@ -162,6 +174,17 @@ if [[ "$DIRECT_CLAIM_STATUS" == "200" ]]; then
   exit 1
 fi
 
+DIRECT_EXECUTOR_STATUS="$(curl --silent --show-error \
+  -o "${TMP_DIR}/direct-executor.json" \
+  -w '%{http_code}' \
+  -X POST "${INGRESS}/ExecutorCommandRegistry/probe/read" \
+  -H 'content-type: application/json' \
+  --data '{}')"
+if [[ "$DIRECT_EXECUTOR_STATUS" == "200" ]]; then
+  echo "Private ExecutorCommandRegistry accepted a direct ingress invocation." >&2
+  exit 1
+fi
+
 EDGE_INTERNAL_STATUS="$(curl --silent --show-error \
   -o "${TMP_DIR}/edge-internal.json" \
   -w '%{http_code}' \
@@ -215,13 +238,100 @@ if [[ "$REPLAY_STATUS" != "409" ]]; then
 fi
 
 ISSUE_NUMBER="$(date +%s)"
+jq \
+  --argjson issue "$ISSUE_NUMBER" \
+  '.issue.number = $issue |
+   .issue.url = ("https://github.com/freed-project/freed/issues/" + ($issue | tostring)) |
+   .authorityTask.id = ("integration-task-" + ($issue | tostring)) |
+   .authorityTask.githubIssue.number = $issue |
+   .authorityTask.githubIssue.url = .issue.url |
+   {repository, issue, evidence, authorityTask}' \
+  "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
+  > "${TMP_DIR}/executor-qualification-input.json"
+harness_file \
+  runQualification \
+  "integration-qualification-${ISSUE_NUMBER}" \
+  input \
+  "${TMP_DIR}/executor-qualification-input.json" \
+  "${TMP_DIR}/executor-qualification.json"
+jq -e '.eligible == true and .hostLane == "linux"' \
+  "${TMP_DIR}/executor-qualification.json" \
+  >/dev/null
 jq -n \
   --arg host "$HOST_ID" \
   --arg now "$NOW" \
   --argjson issue "$ISSUE_NUMBER" \
-  '{repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, hostId: $host, workerId: "integration-worker", branch: ("test/checkpoint-grant-" + ($issue | tostring)), worktree: ("/tmp/freedworks-integration-" + ($issue | tostring)), conflictDomains: ["logical:integration"], claimedAt: $now}' \
+  --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
+  '{repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, hostId: $host, workerId: "integration-worker", branch: ("test/checkpoint-grant-" + ($issue | tostring)), worktree: ("/tmp/freedworks-integration-" + ($issue | tostring)), conflictDomains: $qualification[0].conflictDomains, claimedAt: $now}' \
   > "${TMP_DIR}/grant-claim.json"
 harness_file claim "freed-project/freed#${ISSUE_NUMBER}" claim "${TMP_DIR}/grant-claim.json" /dev/null
+
+COMMAND_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+jq -n \
+  --arg commandId "$COMMAND_ID" \
+  --arg authorityTaskId "integration-task-${ISSUE_NUMBER}" \
+  --arg now "$NOW" \
+  --slurpfile claim "${TMP_DIR}/grant-claim.json" \
+  --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
+  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", issuedAt: $now}' \
+  > "${TMP_DIR}/executor-command-input.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" \
+  "${ROOT_DIR}/src/cli/build-executor-command.ts" \
+  "${TMP_DIR}/executor-command-input.json" \
+  > "${TMP_DIR}/executor-command.json"
+harness_file \
+  enqueueExecutorCommand \
+  "$HOST_ID" \
+  command \
+  "${TMP_DIR}/executor-command.json" \
+  "${TMP_DIR}/executor-command-enqueued.json"
+jq -e '.stage == "pending"' "${TMP_DIR}/executor-command-enqueued.json" >/dev/null
+
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  '{schemaVersion: 1, hostId: $host, sequence: 3, issuedAt: $now, kind: "executor-poll", payload: {accountId: "codex-pro-integration"}}' \
+  > "${TMP_DIR}/executor-poll-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-poll-unsigned.json" \
+  > "${TMP_DIR}/executor-poll.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-executor-poll-3' \
+  --data-binary "@${TMP_DIR}/executor-poll.json" \
+  > "${TMP_DIR}/executor-poll-receipt.json"
+jq -e \
+  --arg commandId "$COMMAND_ID" \
+  '.kind == "executor-poll" and .reason == "offered" and .command.commandId == $commandId' \
+  "${TMP_DIR}/executor-poll-receipt.json" \
+  >/dev/null
+
+for command_stage in started completed; do
+  command_sequence=4
+  if [[ "$command_stage" == "completed" ]]; then
+    command_sequence=5
+  fi
+  jq -n \
+    --arg host "$HOST_ID" \
+    --arg now "$NOW" \
+    --arg commandId "$COMMAND_ID" \
+    --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+    --arg stage "$command_stage" \
+    --argjson sequence "$command_sequence" \
+    '{schemaVersion: 1, hostId: $host, sequence: $sequence, issuedAt: $now, kind: "executor-receipt", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", stage: $stage, threadId: "integration-thread", turnId: "integration-turn", observedAt: $now}}' \
+    > "${TMP_DIR}/executor-${command_stage}-unsigned.json"
+  "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-${command_stage}-unsigned.json" \
+    > "${TMP_DIR}/executor-${command_stage}.json"
+  curl --fail --silent --show-error \
+    -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+    -H 'content-type: application/json' \
+    -H "idempotency-key: integration-executor-${command_stage}-${command_sequence}" \
+    --data-binary "@${TMP_DIR}/executor-${command_stage}.json" \
+    | jq -e --arg stage "$command_stage" '.kind == "executor-receipt" and .stage == $stage' \
+    >/dev/null
+done
+harness_key readExecutorCommand "$HOST_ID" "${TMP_DIR}/executor-command-finished.json"
+jq -e '.stage == "completed"' "${TMP_DIR}/executor-command-finished.json" >/dev/null
 
 jq -cn \
   --arg host "$HOST_ID" \
@@ -238,14 +348,14 @@ jq -n \
   --arg reference "$CHECKPOINT_REFERENCE" \
   --argjson issue "$ISSUE_NUMBER" \
   --argjson contentLength "$CHECKPOINT_LENGTH" \
-  '{schemaVersion: 1, hostId: $host, sequence: 3, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, checkpointEpoch: 1, operation: "upload", reference: $reference, contentLength: $contentLength}}' \
+  '{schemaVersion: 1, hostId: $host, sequence: 6, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, checkpointEpoch: 1, operation: "upload", reference: $reference, contentLength: $contentLength}}' \
   > "${TMP_DIR}/grant-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/grant-unsigned.json" \
   > "${TMP_DIR}/grant-envelope.json"
 curl --fail --silent --show-error \
   -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
   -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-checkpoint-grant-3' \
+  -H 'idempotency-key: integration-checkpoint-grant-6' \
   --data-binary "@${TMP_DIR}/grant-envelope.json" \
   > "${TMP_DIR}/grant-receipt.json"
 jq -e \
@@ -253,7 +363,7 @@ jq -e \
   --arg reference "$CHECKPOINT_REFERENCE" \
   --argjson issue "$ISSUE_NUMBER" \
   --argjson contentLength "$CHECKPOINT_LENGTH" \
-  '.kind == "checkpoint-grant" and .sequence == 3 and .grant.hostId == $host and .grant.issueNumber == $issue and .grant.operation == "upload" and .grant.reference == $reference and .grant.contentLength == $contentLength and (.grant.signatureBase64 | length) > 20' \
+  '.kind == "checkpoint-grant" and .sequence == 6 and .grant.hostId == $host and .grant.issueNumber == $issue and .grant.operation == "upload" and .grant.reference == $reference and .grant.contentLength == $contentLength and (.grant.signatureBase64 | length) > 20' \
   "${TMP_DIR}/grant-receipt.json" \
   >/dev/null
 
@@ -379,4 +489,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal objects private, encrypted checkpoint moved from Mac to Linux custody, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound executor lifecycle completed, encrypted checkpoint moved from Mac to Linux custody, replay and restart fencing passed."

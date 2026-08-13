@@ -18,6 +18,8 @@ import {
   type QualificationWorkflowInput,
 } from "./qualification-workflow.js";
 import { reconciliationWorkflow } from "./reconciliation-workflow.js";
+import { executorCommandRegistry } from "./executor-command-registry.js";
+import type { ExecutorStartCommand } from "../execution/command.js";
 import {
   schedulerRegistry,
   type SchedulerAcquireInput,
@@ -45,6 +47,10 @@ interface ClaimReleaseInput extends KeyOnlyInput {
 
 interface ClaimTransferInput extends KeyOnlyInput {
   readonly request: ClaimTransferRequest;
+}
+
+interface ExecutorCommandInput extends KeyOnlyInput {
+  readonly command: ExecutorStartCommand;
 }
 
 /**
@@ -94,5 +100,14 @@ export const integrationHarness = restate.service({
       await ctx.objectClient(schedulerRegistry, request.key).release(request.expected),
     transferScheduler: async (ctx: restate.Context, request: ClaimTransferInput) =>
       await ctx.objectClient(schedulerRegistry, request.key).transfer(request.request),
+    enqueueExecutorCommand: async (
+      ctx: restate.Context,
+      request: ExecutorCommandInput,
+    ) =>
+      await ctx
+        .objectClient(executorCommandRegistry, request.key)
+        .enqueue(request.command),
+    readExecutorCommand: async (ctx: restate.Context, request: KeyOnlyInput) =>
+      await ctx.objectClient(executorCommandRegistry, request.key).read(),
   },
 });

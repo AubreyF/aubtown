@@ -7,6 +7,8 @@ import { loadHostPrivateKey } from "./security/host-enrollment.js";
 import { DurableSequenceStore } from "./security/sequence-store.js";
 import type { HostLane } from "./domain/types.js";
 import { verifyCodexCompatibility } from "./drivers/codex/compatibility.js";
+import { HostExecutionJournal } from "./execution/journal.js";
+import { HostExecutionSupervisor } from "./execution/supervisor.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -68,6 +70,18 @@ const governor = new HostGatewayClient(
   sequenceStore,
 );
 const monitor = new QuotaMonitor(usage, worker, governor);
+const executionJournal = new HostExecutionJournal(
+  requiredEnvironment("FREEDWORKS_EXECUTION_JOURNAL_FILE"),
+);
+const execution = new HostExecutionSupervisor(
+  accountId,
+  worker,
+  executionJournal,
+  governor,
+  monitor,
+  (event) => process.stdout.write(`${JSON.stringify(event)}\n`),
+);
+await execution.recover();
 
 let stopped = false;
 let timer: NodeJS.Timeout | undefined;
@@ -86,9 +100,19 @@ async function stop(signal: string): Promise<void> {
 
 async function sample(): Promise<void> {
   try {
+    await execution.flush();
+  } catch (error) {
+    process.stderr.write(
+      `${JSON.stringify({
+        event: "executor-receipt-flush-failed",
+        message: error instanceof Error ? error.message : String(error),
+      })}\n`,
+    );
+  }
+  try {
     const heartbeat = await governor.heartbeat({
       lane: hostLane,
-      activeClaims: [],
+      activeClaims: await execution.activeClaimIds(),
       accountIds: [accountId],
     });
     process.stdout.write(`${JSON.stringify({ event: "host-heartbeat", ...heartbeat })}\n`);
@@ -103,6 +127,22 @@ async function sample(): Promise<void> {
   try {
     const receipt = await monitor.sample(accountId);
     process.stdout.write(`${JSON.stringify({ event: "quota-sampled", ...receipt })}\n`);
+    if (
+      receipt.decision.action === "admit" ||
+      receipt.decision.action === "throttle"
+    ) {
+      const poll = await governor.pollExecutor(accountId);
+      process.stdout.write(
+        `${JSON.stringify({
+          event: "executor-polled",
+          reason: poll.reason,
+          commandId: poll.command?.commandId,
+        })}\n`,
+      );
+      if (poll.command !== null) {
+        await execution.accept(poll.command);
+      }
+    }
   } catch (error) {
     const interruptedTurnIds = await monitor.enforceTelemetryFreshness(accountId, 120);
     process.stderr.write(

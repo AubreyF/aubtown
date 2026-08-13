@@ -4,6 +4,7 @@ import {
   hostEnvelopeDigest,
   parseSignedHostEnvelope,
   signHostEnvelope,
+  type SignedHostEnvelope,
   verifyHostEnvelope,
 } from "../src/security/host-envelope.js";
 
@@ -72,5 +73,30 @@ describe("signed host envelopes", () => {
       key.privateKey,
     );
     expect(() => verifyHostEnvelope(signed, publicKey)).toThrow("Ed25519");
+  });
+
+  it("authenticates executor polling account scope", () => {
+    const key = keys();
+    const signed = signHostEnvelope(
+      {
+        schemaVersion: 1,
+        hostId: "linux-control-1",
+        sequence: 9,
+        issuedAt: "2026-08-13T18:00:00.000Z",
+        kind: "executor-poll",
+        payload: { accountId: "codex-pro-1" },
+      },
+      key.privateKey,
+    );
+    expect(verifyHostEnvelope(signed, key.publicKey)).toBe(true);
+    expect(
+      verifyHostEnvelope(
+        {
+          ...signed,
+          payload: { accountId: "codex-pro-2" },
+        } as SignedHostEnvelope,
+        key.publicKey,
+      ),
+    ).toBe(false);
   });
 });

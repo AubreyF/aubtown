@@ -185,6 +185,18 @@ const modelListResponseSchema = z.object({
   nextCursor: z.string().nullable().optional(),
 }).passthrough();
 
+const threadResumeResponseSchema = z.object({
+  thread: z.object({
+    id: z.string().min(1),
+    turns: z.array(
+      z.object({
+        id: z.string().min(1),
+        status: z.enum(["completed", "interrupted", "failed", "inProgress"]),
+      }).passthrough(),
+    ),
+  }).passthrough(),
+}).passthrough();
+
 export type CodexRateLimits = z.infer<typeof rateLimitsResponseSchema>;
 export type CodexUsage = z.infer<typeof usageResponseSchema>;
 export type CodexModel = z.infer<typeof modelListResponseSchema>["data"][number];
@@ -328,6 +340,41 @@ export class CodexAppServerClient {
       }),
     );
     return response.turn.id;
+  }
+
+  async recoverTurn(input: {
+    readonly threadId: string;
+    readonly turnId: string;
+    readonly cwd: string;
+    readonly model: string;
+  }): Promise<"running" | "completed" | "interrupted" | "failed"> {
+    await this.initialize();
+    const response = threadResumeResponseSchema.parse(
+      await this.transport.send({
+        method: "thread/resume",
+        params: {
+          threadId: input.threadId,
+          cwd: input.cwd,
+          model: input.model,
+          approvalPolicy: "never",
+          sandbox: "workspaceWrite",
+        },
+      }),
+    );
+    if (response.thread.id !== input.threadId) {
+      throw new Error("Codex resumed a different thread.");
+    }
+    const turn = response.thread.turns.find(
+      (candidate) => candidate.id === input.turnId,
+    );
+    if (turn === undefined) {
+      throw new Error("Codex resumed thread does not contain the recorded turn.");
+    }
+    if (turn.status === "inProgress") {
+      return "running";
+    }
+    this.#completedTurns.set(turn.id, turn.status);
+    return turn.status;
   }
 
   async waitForTurn(input: {

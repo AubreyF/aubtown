@@ -1,0 +1,209 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it } from "vitest";
+import type { WorkerDriver, WorkerTurnHandle } from "../src/drivers/worker.js";
+import { createExecutorStartCommand } from "../src/execution/command.js";
+import { HostExecutionJournal } from "../src/execution/journal.js";
+import { HostExecutionSupervisor } from "../src/execution/supervisor.js";
+import { claim, report } from "./helpers.js";
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    roots.splice(0).map(async (root) => await rm(root, { recursive: true })),
+  );
+});
+
+const handle: WorkerTurnHandle = {
+  driverId: "fake",
+  threadId: "thread-1",
+  turnId: "turn-1",
+  startedAt: "2026-08-13T18:00:01.000Z",
+};
+
+function command() {
+  return createExecutorStartCommand({
+    commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
+    claim: claim(),
+    qualification: report(),
+    authorityTaskId: "github-issue-1234",
+    accountId: "codex-pro-1",
+    issuedAt: "2026-08-13T18:00:00.000Z",
+  });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolver) => {
+    resolve = resolver;
+  });
+  return { promise, resolve };
+}
+
+describe("HostExecutionSupervisor", () => {
+  it("starts once, records before reporting, and persists completion", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    const completion = deferred<"completed" | "interrupted" | "failed">();
+    let starts = 0;
+    const worker = {
+      id: "fake",
+      capabilities: {
+        hostLanes: ["linux"],
+        canInterrupt: true,
+        canReadSubscriptionUsage: true,
+        publicationCeiling: "none",
+      },
+      start: async () => {
+        starts += 1;
+        return handle;
+      },
+      recover: async () => "running" as const,
+      wait: async () => await completion.promise,
+      interrupt: async () => {},
+    } satisfies WorkerDriver;
+    const reports: string[] = [];
+    const tracked: string[] = [];
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      worker,
+      journal,
+      {
+        reportExecutor: async (receipt) => {
+          reports.push(receipt.stage);
+          return {
+            kind: "executor-receipt",
+            hostId: "linux-control-1",
+            sequence: reports.length,
+            acceptedAt: "2026-08-13T18:00:02.000Z",
+            commandId: receipt.commandId,
+            stage: receipt.stage,
+          };
+        },
+      },
+      {
+        track: (_accountId, turn) => tracked.push(`track:${turn.turnId}`),
+        untrack: (_accountId, turnId) => tracked.push(`untrack:${turnId}`),
+      },
+      () => {},
+      () => new Date("2026-08-13T18:00:02.000Z"),
+    );
+    await supervisor.accept(command());
+    await supervisor.accept(command());
+    expect(starts).toBe(1);
+    expect(reports).toEqual(["started"]);
+    expect(await supervisor.activeClaimIds()).toEqual(["claim-1234"]);
+    completion.resolve("completed");
+    for (let attempt = 0; attempt < 20 && reports.length < 2; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(reports).toEqual(["started", "completed"]);
+    expect(tracked).toEqual([
+      "track:turn-1",
+      "track:turn-1",
+      "untrack:turn-1",
+    ]);
+    await expect(journal.read()).resolves.toMatchObject({
+      stage: "completed",
+      reportedAt: "2026-08-13T18:00:02.000Z",
+    });
+  });
+
+  it("recovers a persisted turn without starting a duplicate", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    await journal.accept(command(), "2026-08-13T18:00:00.000Z");
+    await journal.started(command().commandId, handle);
+    let starts = 0;
+    let recovers = 0;
+    const worker = {
+      id: "fake",
+      capabilities: {
+        hostLanes: ["linux"],
+        canInterrupt: true,
+        canReadSubscriptionUsage: true,
+        publicationCeiling: "none",
+      },
+      start: async () => {
+        starts += 1;
+        return handle;
+      },
+      recover: async () => {
+        recovers += 1;
+        return "running" as const;
+      },
+      wait: async () => await new Promise<"completed">(() => {}),
+      interrupt: async () => {},
+    } satisfies WorkerDriver;
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      worker,
+      journal,
+      {
+        reportExecutor: async (receipt) => ({
+          kind: "executor-receipt",
+          hostId: "linux-control-1",
+          sequence: 1,
+          acceptedAt: "2026-08-13T18:00:02.000Z",
+          commandId: receipt.commandId,
+          stage: receipt.stage,
+        }),
+      },
+      { track: () => {}, untrack: () => {} },
+      () => {},
+      () => new Date("2026-08-13T18:00:02.000Z"),
+    );
+    await supervisor.recover();
+    expect(starts).toBe(0);
+    expect(recovers).toBe(1);
+    await expect(journal.read()).resolves.toMatchObject({
+      stage: "started",
+      reportedAt: "2026-08-13T18:00:02.000Z",
+    });
+  });
+
+  it("fails closed when a crash leaves the start outcome ambiguous", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    await journal.accept(command(), "2026-08-13T18:00:00.000Z");
+    let starts = 0;
+    const worker = {
+      id: "fake",
+      capabilities: {
+        hostLanes: ["linux"],
+        canInterrupt: true,
+        canReadSubscriptionUsage: true,
+        publicationCeiling: "none",
+      },
+      start: async () => {
+        starts += 1;
+        return handle;
+      },
+      recover: async () => "running" as const,
+      wait: async () => await new Promise<"completed">(() => {}),
+      interrupt: async () => {},
+    } satisfies WorkerDriver;
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      worker,
+      journal,
+      {
+        reportExecutor: async () => {
+          throw new Error("should not report");
+        },
+      },
+      { track: () => {}, untrack: () => {} },
+      () => {},
+    );
+    await expect(supervisor.recover()).rejects.toThrow("requires reconciliation");
+    await expect(supervisor.accept(command())).rejects.toThrow(
+      "requires reconciliation",
+    );
+    expect(starts).toBe(0);
+  });
+});

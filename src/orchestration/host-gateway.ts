@@ -15,6 +15,12 @@ import {
   type SignedCheckpointGrant,
 } from "../checkpoints/grant.js";
 import { claimRegistry } from "./claim-registry.js";
+import { executorCommandRegistry } from "./executor-command-registry.js";
+import {
+  assertCommandMatchesCurrentClaim,
+  type ExecutorStartCommand,
+} from "../execution/command.js";
+import { decideQuota } from "../policy/quota.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -45,6 +51,27 @@ export type HostGatewayReceipt =
       readonly sequence: number;
       readonly acceptedAt: string;
       readonly grant: SignedCheckpointGrant;
+    }
+  | {
+      readonly kind: "executor-poll";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly command: ExecutorStartCommand | null;
+      readonly reason:
+        | "offered"
+        | "no-command"
+        | "quota-unavailable"
+        | "quota-blocked"
+        | "claim-stale";
+    }
+  | {
+      readonly kind: "executor-receipt";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly commandId: string;
+      readonly stage: "started" | "completed" | "interrupted" | "failed";
     };
 
 function terminal(message: string, errorCode = 403): never {
@@ -143,7 +170,7 @@ export function createHostGateway(
               acceptedAt,
               decision,
             };
-          } else {
+          } else if (envelope.kind === "checkpoint-grant") {
             if (checkpointGrantIssuer === undefined) {
               return terminal("Checkpoint transfer grants are not configured", 503);
             }
@@ -183,6 +210,142 @@ export function createHostGateway(
               sequence: envelope.sequence,
               acceptedAt,
               grant,
+            };
+          } else if (envelope.kind === "executor-poll") {
+            const accountId = envelope.payload.accountId;
+            if (!enrollment.accountIds.includes(accountId)) {
+              return terminal("Executor poll account is outside host enrollment");
+            }
+            const account = await ctx.objectClient(accountGovernor, accountId).status();
+            if (account.snapshot === null) {
+              receipt = {
+                kind: "executor-poll",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                command: null,
+                reason: "quota-unavailable",
+              };
+            } else {
+              const decision = decideQuota({ snapshot: account.snapshot, now: acceptedAt });
+              if (decision.action !== "admit" && decision.action !== "throttle") {
+                receipt = {
+                  kind: "executor-poll",
+                  hostId: envelope.hostId,
+                  sequence: envelope.sequence,
+                  acceptedAt,
+                  command: null,
+                  reason: "quota-blocked",
+                };
+              } else {
+                const registry = ctx.objectClient(executorCommandRegistry, envelope.hostId);
+                const state = await registry.read();
+                if (
+                  state === null ||
+                  (state.stage !== "pending" && state.stage !== "offered")
+                ) {
+                  receipt = {
+                    kind: "executor-poll",
+                    hostId: envelope.hostId,
+                    sequence: envelope.sequence,
+                    acceptedAt,
+                    command: null,
+                    reason: "no-command",
+                  };
+                } else {
+                  const command = state.command;
+                  const claimKey = `${command.claim.repository.owner}/${command.claim.repository.name}#${command.claim.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+                  const currentClaim = await ctx.objectClient(claimRegistry, claimKey).read();
+                  try {
+                    if (currentClaim === null) {
+                      throw new Error("Executor command has no current claim.");
+                    }
+                    assertCommandMatchesCurrentClaim({
+                      command,
+                      currentClaim,
+                      requestingHostId: envelope.hostId,
+                      accountId,
+                      hostLane: enrollment.lane,
+                      now: acceptedAt,
+                    });
+                    await registry.offer({
+                      commandId: command.commandId,
+                      offeredAt: acceptedAt,
+                    });
+                    receipt = {
+                      kind: "executor-poll",
+                      hostId: envelope.hostId,
+                      sequence: envelope.sequence,
+                      acceptedAt,
+                      command,
+                      reason: "offered",
+                    };
+                  } catch (error) {
+                    await registry.cancel({
+                      commandId: command.commandId,
+                      cancelledAt: acceptedAt,
+                      reason:
+                        error instanceof Error ? error.message : "Executor command is stale.",
+                    });
+                    receipt = {
+                      kind: "executor-poll",
+                      hostId: envelope.hostId,
+                      sequence: envelope.sequence,
+                      acceptedAt,
+                      command: null,
+                      reason: "claim-stale",
+                    };
+                  }
+                }
+              }
+            }
+          } else {
+            const reported = envelope.payload;
+            if (!enrollment.accountIds.includes(reported.accountId)) {
+              return terminal("Executor receipt account is outside host enrollment");
+            }
+            const registry = ctx.objectClient(executorCommandRegistry, envelope.hostId);
+            const state = await registry.read();
+            if (state === null || state.command.commandId !== reported.commandId) {
+              return terminal("Executor receipt has no current command", 409);
+            }
+            const command = state.command;
+            const claimKey = `${command.claim.repository.owner}/${command.claim.repository.name}#${command.claim.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+            const currentClaim = await ctx.objectClient(claimRegistry, claimKey).read();
+            if (currentClaim === null) {
+              return terminal("Executor receipt has no current claim", 409);
+            }
+            try {
+              assertCommandMatchesCurrentClaim({
+                command,
+                currentClaim,
+                requestingHostId: envelope.hostId,
+                accountId: reported.accountId,
+                hostLane: enrollment.lane,
+                now: acceptedAt,
+                enforceStartWindow: false,
+              });
+            } catch (error) {
+              return terminal(
+                error instanceof Error ? error.message : "Executor receipt claim is stale",
+                409,
+              );
+            }
+            const recorded = await registry.record({
+              receipt: { ...reported, observedAt: acceptedAt },
+              acceptedAt,
+            });
+            receipt = {
+              kind: "executor-receipt",
+              hostId: envelope.hostId,
+              sequence: envelope.sequence,
+              acceptedAt,
+              commandId: command.commandId,
+              stage: recorded.stage as
+                | "started"
+                | "completed"
+                | "interrupted"
+                | "failed",
             };
           }
           ctx.set("lastSequence", envelope.sequence);

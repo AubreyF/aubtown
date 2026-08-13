@@ -39,6 +39,19 @@ function protocolBundle(): Record<string, string> {
       "sandbox",
       "serviceName",
     ]),
+    "v2/ThreadResumeParams.json": JSON.stringify([
+      "threadId",
+      "cwd",
+      "model",
+      "approvalPolicy",
+      "sandbox",
+    ]),
+    "v2/ThreadResumeResponse.json": JSON.stringify([
+      "thread",
+      "turns",
+      "id",
+      "status",
+    ]),
     "v2/TurnStartParams.json": JSON.stringify([
       "threadId",
       "input",

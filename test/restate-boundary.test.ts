@@ -6,6 +6,7 @@ import { controlPlaneServices } from "../src/orchestration/control-plane-service
 import { custodyTransferWorkflow } from "../src/orchestration/custody-transfer-workflow.js";
 import { dryRunWorkflow } from "../src/orchestration/dry-run-workflow.js";
 import { fakeWorker } from "../src/orchestration/fake-worker.js";
+import { executorCommandRegistry } from "../src/orchestration/executor-command-registry.js";
 import { hostRegistry } from "../src/orchestration/host-registry.js";
 import { createHostGateway } from "../src/orchestration/host-gateway.js";
 import { qualificationWorkflow } from "../src/orchestration/qualification-workflow.js";
@@ -20,6 +21,7 @@ describe("Restate ingress boundary", () => {
       custodyTransferWorkflow,
       dryRunWorkflow,
       fakeWorker,
+      executorCommandRegistry,
       hostRegistry,
       qualificationWorkflow,
       reconciliationWorkflow,

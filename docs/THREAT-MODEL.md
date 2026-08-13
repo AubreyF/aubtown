@@ -25,6 +25,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
 | Codex update changes the worker or quota protocol | Absolute executable, exact version, generated-schema compatibility check, and advertised model and effort gate before host admission |
+| Poll retry or host restart starts a second turn | One Restate command per host plus a mode-0600 local execution journal and app-server thread resume |
 | Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
 | Checkpoint manifest is changed | Manifest is authenticated as XChaCha20-Poly1305 associated data |
 | Checkpoint restore overwrites destination work | Clean exact-base requirement and exclusive untracked-file creation |

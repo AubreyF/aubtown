@@ -52,6 +52,14 @@ class FakeTransport implements JsonRpcTransport {
     if (method === "thread/start") {
       return { thread: { id: "thread-1" } };
     }
+    if (method === "thread/resume") {
+      return {
+        thread: {
+          id: "thread-1",
+          turns: [{ id: "turn-1", status: "inProgress" }],
+        },
+      };
+    }
     if (method === "turn/start") {
       return { turn: { id: "turn-1", status: "inProgress" } };
     }
@@ -202,5 +210,35 @@ describe("Codex app-server integration", () => {
       params: { turn: { id: "turn-1", status: "completed" } },
     });
     await expect(driver.wait(handle)).resolves.toBe("completed");
+  });
+
+  it("recovers an in-progress turn from persisted app-server history", async () => {
+    const transport = new FakeTransport();
+    const client = new CodexAppServerClient(transport);
+    const driver = new CodexDriver(client, {
+      model: "gpt-5.6-sol",
+      effort: "high",
+    });
+    await expect(
+      driver.recover(
+        {
+          driverId: driver.id,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          startedAt: "2026-08-13T08:00:00.000Z",
+        },
+        "/worktrees/1234",
+      ),
+    ).resolves.toBe("running");
+    expect(transport.messages.at(-1)).toMatchObject({
+      method: "thread/resume",
+      params: {
+        threadId: "thread-1",
+        cwd: "/worktrees/1234",
+        model: "gpt-5.6-sol",
+        approvalPolicy: "never",
+        sandbox: "workspaceWrite",
+      },
+    });
   });
 });

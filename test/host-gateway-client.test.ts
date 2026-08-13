@@ -60,4 +60,37 @@ describe("HostGatewayClient", () => {
     const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
     expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
   });
+
+  it("signs executor polls and rejects mismatched receipt identities", async () => {
+    const keys = keyPair();
+    let request: RequestInit | undefined;
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080",
+      "linux-control-1",
+      keys.privateKey,
+      { next: async () => 8 },
+      async (_input, init) => {
+        request = init;
+        return Response.json({
+          kind: "executor-poll",
+          hostId: "linux-control-1",
+          sequence: 8,
+          acceptedAt: "2026-08-13T18:00:00.000Z",
+          command: null,
+          reason: "no-command",
+        });
+      },
+      () => new Date("2026-08-13T18:00:00.000Z"),
+    );
+    await expect(client.pollExecutor("codex-pro-1")).resolves.toMatchObject({
+      kind: "executor-poll",
+      reason: "no-command",
+    });
+    const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
+    expect(envelope).toMatchObject({
+      kind: "executor-poll",
+      payload: { accountId: "codex-pro-1" },
+    });
+    expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+  });
 });

@@ -4,6 +4,7 @@ import { claimRegistry } from "./claim-registry.js";
 import { custodyTransferWorkflow } from "./custody-transfer-workflow.js";
 import { dryRunWorkflow } from "./dry-run-workflow.js";
 import { fakeWorker } from "./fake-worker.js";
+import { executorCommandRegistry } from "./executor-command-registry.js";
 import { hostRegistry } from "./host-registry.js";
 import { createHostGateway } from "./host-gateway.js";
 import { integrationHarness } from "./integration-harness.js";
@@ -20,6 +21,7 @@ export function controlPlaneServices(
     claimRegistry,
     dryRunWorkflow,
     fakeWorker,
+    executorCommandRegistry,
     qualificationWorkflow,
     schedulerRegistry,
     hostRegistry,

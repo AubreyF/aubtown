@@ -30,6 +30,14 @@ const REQUIRED_PROTOCOL_FILES = {
     "sandbox",
     "serviceName",
   ],
+  "v2/ThreadResumeParams.json": [
+    "threadId",
+    "cwd",
+    "model",
+    "approvalPolicy",
+    "sandbox",
+  ],
+  "v2/ThreadResumeResponse.json": ["thread", "turns", "id", "status"],
   "v2/TurnStartParams.json": [
     "threadId",
     "input",

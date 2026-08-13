@@ -66,6 +66,21 @@ export class CodexDriver implements WorkerDriver {
     return await this.client.waitForTurn(handle);
   }
 
+  async recover(
+    handle: WorkerTurnHandle,
+    repositoryRoot: string,
+  ): Promise<"running" | "completed" | "interrupted" | "failed"> {
+    if (handle.driverId !== this.id) {
+      throw new Error("Codex driver cannot recover another driver's turn.");
+    }
+    return await this.client.recoverTurn({
+      threadId: handle.threadId,
+      turnId: handle.turnId,
+      cwd: repositoryRoot,
+      model: this.options.model,
+    });
+  }
+
   async interrupt(handle: WorkerTurnHandle): Promise<void> {
     await this.client.interrupt(handle.threadId, handle.turnId);
   }

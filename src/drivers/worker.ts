@@ -29,6 +29,10 @@ export interface WorkerDriver {
   readonly id: string;
   readonly capabilities: WorkerCapabilities;
   start(request: WorkerTurnRequest): Promise<WorkerTurnHandle>;
+  recover(
+    handle: WorkerTurnHandle,
+    repositoryRoot: string,
+  ): Promise<"running" | "completed" | "interrupted" | "failed">;
   wait(handle: WorkerTurnHandle): Promise<"completed" | "interrupted" | "failed">;
   interrupt(handle: WorkerTurnHandle): Promise<void>;
 }
