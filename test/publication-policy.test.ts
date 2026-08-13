@@ -8,8 +8,63 @@ import {
   report,
   usage,
 } from "./helpers.js";
+import type {
+  ExactValidationReceipt,
+  IndependentReviewReceipt,
+  WorkProductIdentity,
+} from "../src/adjudication/receipts.js";
 
 const head = "c".repeat(40);
+const workProduct: WorkProductIdentity = {
+  schemaVersion: 1,
+  repository: FREED_REPOSITORY,
+  issueNumber: 1_234,
+  claimId: "claim-1234",
+  custodyEpoch: 1,
+  hostId: "linux-control-1",
+  commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
+  checkpointReference: "d".repeat(64),
+  head,
+  patchDigest: "e".repeat(64),
+  implementation: {
+    driverId: "codex-app-server-v1",
+    threadId: "implementation-thread",
+    turnId: "implementation-turn",
+  },
+};
+
+const validation: ExactValidationReceipt = {
+  schemaVersion: 1,
+  kind: "exact-validation",
+  workProduct,
+  passed: true,
+  commands: [
+    {
+      argv: ["npm", "test"],
+      cwd: "/worktrees/1234",
+      exitCode: 0,
+      outputDigest: "f".repeat(64),
+      durationMs: 1_000,
+    },
+  ],
+  completedAt: "2026-08-13T08:00:30.000Z",
+  summary: "Focused validation passed.",
+};
+
+const review: IndependentReviewReceipt = {
+  schemaVersion: 1,
+  kind: "independent-review",
+  workProduct,
+  reviewer: {
+    driverId: "codex-app-server-v1",
+    threadId: "review-thread",
+    turnId: "review-turn",
+  },
+  verdict: "pass",
+  findings: [],
+  completedAt: "2026-08-13T08:00:45.000Z",
+  summary: "Independent review passed.",
+};
 
 function plan(overrides: Partial<Parameters<typeof planDraftPublication>[0]> = {}) {
   const qualified = report();
@@ -24,18 +79,9 @@ function plan(overrides: Partial<Parameters<typeof planDraftPublication>[0]> = {
     quota: decideQuota({ snapshot: usage(), now: "2026-08-13T08:01:00.000Z" }),
     publicationCeiling: "draft-pr",
     head,
-    validation: {
-      head,
-      passed: true,
-      completedAt: "2026-08-13T08:00:30.000Z",
-      summary: "Focused validation passed.",
-    },
-    review: {
-      head,
-      passed: true,
-      completedAt: "2026-08-13T08:00:45.000Z",
-      summary: "Independent review passed.",
-    },
+    workProduct,
+    validation,
+    review,
     title: "fix: make validation deterministic",
     bodySummary: "Makes the qualified validation ordering deterministic.",
     now: "2026-08-13T08:01:00.000Z",
@@ -54,16 +100,16 @@ describe("draft publication policy", () => {
   it("blocks stale custody and non-exact validation", () => {
     const result = plan({
       currentClaim: claim({ custodyEpoch: 2 }),
-      validation: {
-        head: "d".repeat(40),
-        passed: true,
-        completedAt: "2026-08-13T08:00:30.000Z",
-        summary: "Wrong head.",
-      },
+      workProduct: { ...workProduct, head: "d".repeat(40) },
     });
     expect(result.allowed).toBe(false);
     expect(result.reasons).toEqual(
-      expect.arrayContaining(["current-custody-not-proven", "validation-not-exact-head"]),
+      expect.arrayContaining([
+        "current-custody-not-proven",
+        "work-product-not-exact-head",
+        "validation-work-product-mismatch",
+        "review-work-product-mismatch",
+      ]),
     );
   });
 

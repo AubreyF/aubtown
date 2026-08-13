@@ -31,7 +31,10 @@ function protocolBundle(): Record<string, string> {
       "account/usage/read",
       "model/list",
     ]),
-    "ServerNotification.json": JSON.stringify(["turn/completed"]),
+    "ServerNotification.json": JSON.stringify([
+      "turn/completed",
+      "item/completed",
+    ]),
     "v2/ThreadStartParams.json": JSON.stringify([
       "cwd",
       "model",
@@ -63,6 +66,18 @@ function protocolBundle(): Record<string, string> {
       "model",
       "effort",
       "summary",
+      "outputSchema",
+      "readOnly",
+    ]),
+    "v2/ItemCompletedNotification.json": JSON.stringify([
+      "threadId",
+      "turnId",
+      "completedAtMs",
+      "item",
+      "agentMessage",
+      "text",
+      "phase",
+      "final_answer",
     ]),
     "v2/TurnInterruptParams.json": JSON.stringify(["threadId", "turnId"]),
     "v2/TurnCompletedNotification.json": JSON.stringify([

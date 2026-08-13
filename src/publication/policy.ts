@@ -7,17 +7,16 @@ import type {
 } from "../domain/types.js";
 import type { QuotaDecision } from "../policy/quota.js";
 import { buildStatusProjection, type StatusProjection } from "../projection/status.js";
+import {
+  assessHandoff,
+  type ExactValidationReceipt,
+  type IndependentReviewReceipt,
+  type WorkProductIdentity,
+} from "../adjudication/receipts.js";
 
 const GIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 const FORBIDDEN_AUTHORSHIP = /\b(?:codex|symphony|openhands|openai|agent)\b/iu;
 const CONVENTIONAL_TITLE = /^(?:feat|fix|chore|docs|refactor|perf|style|test)(?:\([^)]+\))?: .+/u;
-
-export interface ExactHeadReceipt {
-  readonly head: string;
-  readonly passed: boolean;
-  readonly completedAt: string;
-  readonly summary: string;
-}
 
 export interface ExistingPullRequest {
   readonly number: number;
@@ -48,8 +47,9 @@ export function planDraftPublication(input: {
   readonly quota: QuotaDecision;
   readonly publicationCeiling: PublicationCeiling;
   readonly head: string;
-  readonly validation: ExactHeadReceipt;
-  readonly review: ExactHeadReceipt;
+  readonly workProduct: WorkProductIdentity;
+  readonly validation: ExactValidationReceipt;
+  readonly review: IndependentReviewReceipt;
   readonly title: string;
   readonly bodySummary: string;
   readonly existingPullRequest?: ExistingPullRequest;
@@ -88,14 +88,26 @@ export function planDraftPublication(input: {
   if (!GIT_SHA_PATTERN.test(input.head)) {
     reasons.push("invalid-head");
   }
-  for (const [name, receipt] of [
-    ["validation", input.validation],
-    ["review", input.review],
-  ] as const) {
-    if (!receipt.passed || receipt.head !== input.head) {
-      reasons.push(`${name}-not-exact-head`);
-    }
+  if (
+    input.workProduct.repository.owner !== input.repository.owner ||
+    input.workProduct.repository.name !== input.repository.name ||
+    input.workProduct.issueNumber !== input.claim.issueNumber ||
+    input.workProduct.claimId !== input.claim.claimId ||
+    input.workProduct.custodyEpoch !== input.claim.custodyEpoch ||
+    input.workProduct.hostId !== input.claim.hostId
+  ) {
+    reasons.push("work-product-identity-mismatch");
   }
+  if (input.workProduct.head !== input.head) {
+    reasons.push("work-product-not-exact-head");
+  }
+  reasons.push(
+    ...assessHandoff({
+      workProduct: input.workProduct,
+      validation: input.validation,
+      review: input.review,
+    }).reasons,
+  );
   if (
     input.qualification.workLane === "provider-visible" ||
     input.qualification.workLane === "release" ||

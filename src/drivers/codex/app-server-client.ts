@@ -204,6 +204,7 @@ export type CodexModel = z.infer<typeof modelListResponseSchema>["data"][number]
 export class CodexAppServerClient {
   #initialized = false;
   readonly #completedTurns = new Map<string, "completed" | "interrupted" | "failed">();
+  readonly #finalMessages = new Map<string, string>();
   readonly #turnWaiters = new Map<
     string,
     Set<(status: "completed" | "interrupted" | "failed") => void>
@@ -295,6 +296,7 @@ export class CodexAppServerClient {
   async startThread(input: {
     readonly cwd: string;
     readonly model: string;
+    readonly sandbox?: "readOnly" | "workspaceWrite";
   }): Promise<string> {
     await this.initialize();
     const response = threadStartResponseSchema.parse(
@@ -304,7 +306,7 @@ export class CodexAppServerClient {
           model: input.model,
           cwd: input.cwd,
           approvalPolicy: "never",
-          sandbox: "workspaceWrite",
+          sandbox: input.sandbox ?? "workspaceWrite",
           serviceName: "freedworks",
         },
       }),
@@ -336,6 +338,37 @@ export class CodexAppServerClient {
           model: input.model,
           effort: input.effort,
           summary: "concise",
+        },
+      }),
+    );
+    return response.turn.id;
+  }
+
+  async startStructuredReadOnlyTurn(input: {
+    readonly threadId: string;
+    readonly prompt: string;
+    readonly cwd: string;
+    readonly model: string;
+    readonly effort: "low" | "medium" | "high" | "xhigh";
+    readonly outputSchema: Readonly<Record<string, unknown>>;
+  }): Promise<string> {
+    await this.initialize();
+    const response = turnStartResponseSchema.parse(
+      await this.transport.send({
+        method: "turn/start",
+        params: {
+          threadId: input.threadId,
+          input: [{ type: "text", text: input.prompt }],
+          cwd: input.cwd,
+          approvalPolicy: "never",
+          sandboxPolicy: {
+            type: "readOnly",
+            networkAccess: false,
+          },
+          model: input.model,
+          effort: input.effort,
+          summary: "concise",
+          outputSchema: input.outputSchema,
         },
       }),
     );
@@ -393,6 +426,25 @@ export class CodexAppServerClient {
     });
   }
 
+  async waitForStructuredOutput(input: {
+    readonly threadId: string;
+    readonly turnId: string;
+  }): Promise<unknown> {
+    const status = await this.waitForTurn(input);
+    if (status !== "completed") {
+      throw new Error(`Structured Codex turn ended with status ${status}.`);
+    }
+    const message = this.#finalMessages.get(input.turnId);
+    if (message === undefined) {
+      throw new Error("Structured Codex turn completed without a final agent message.");
+    }
+    try {
+      return JSON.parse(message);
+    } catch {
+      throw new Error("Structured Codex turn returned invalid JSON.");
+    }
+  }
+
   async interrupt(threadId: string, turnId: string): Promise<void> {
     await this.initialize();
     await this.transport.send({
@@ -406,6 +458,29 @@ export class CodexAppServerClient {
   }
 
   #acceptNotification(message: unknown): void {
+    const completedItem = z
+      .object({
+        method: z.literal("item/completed"),
+        params: z.object({
+          threadId: z.string(),
+          turnId: z.string(),
+          item: z.object({
+            type: z.literal("agentMessage"),
+            text: z.string(),
+            phase: z.enum(["commentary", "final_answer"]).nullable().optional(),
+          }).passthrough(),
+        }).passthrough(),
+      })
+      .safeParse(message);
+    if (
+      completedItem.success &&
+      completedItem.data.params.item.phase !== "commentary"
+    ) {
+      this.#finalMessages.set(
+        completedItem.data.params.turnId,
+        completedItem.data.params.item.text,
+      );
+    }
     const parsed = z
       .object({
         method: z.literal("turn/completed"),

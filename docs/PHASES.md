@@ -47,6 +47,8 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Fence first-epoch execution until the selected host prepares and signs the exact clean initial worktree.
 - [x] Route Linux and macOS lanes from durable heartbeats, enrolled account profiles, and rolling-week quota headroom.
 - [x] Atomically convert a verified, claim-bound authority admission into scheduler, claim, workspace, and executor records.
+- [x] Bind validation and independent-review receipts to the complete authenticated work-product identity.
+- [x] Run structured independent review in a fresh read-only, network-disabled Codex thread.
 
 ## Phase 3: one Freed issue
 

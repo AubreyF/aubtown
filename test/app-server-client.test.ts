@@ -8,7 +8,9 @@ import {
   selectRollingWeeklyWindow,
 } from "../src/drivers/codex/quota-source.js";
 import { CodexDriver } from "../src/drivers/codex/driver.js";
-import { claim, report } from "./helpers.js";
+import { CodexIndependentReviewer } from "../src/adjudication/codex-reviewer.js";
+import type { WorkProductIdentity } from "../src/adjudication/receipts.js";
+import { claim, FREED_REPOSITORY, report } from "./helpers.js";
 
 class FakeTransport implements JsonRpcTransport {
   readonly messages: unknown[] = [];
@@ -210,6 +212,88 @@ describe("Codex app-server integration", () => {
       params: { turn: { id: "turn-1", status: "completed" } },
     });
     await expect(driver.wait(handle)).resolves.toBe("completed");
+  });
+
+  it("runs independent review in a fresh read-only structured thread", async () => {
+    const transport = new FakeTransport();
+    const client = new CodexAppServerClient(transport);
+    const reviewer = new CodexIndependentReviewer(client, {
+      model: "gpt-5.6-sol",
+      effort: "high",
+      now: () => new Date("2026-08-13T08:00:00.000Z"),
+    });
+    const workProduct: WorkProductIdentity = {
+      schemaVersion: 1,
+      repository: FREED_REPOSITORY,
+      issueNumber: 1_234,
+      claimId: "claim-1234",
+      custodyEpoch: 1,
+      hostId: "linux-control-1",
+      commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
+      checkpointReference: "d".repeat(64),
+      head: "c".repeat(40),
+      patchDigest: "e".repeat(64),
+      implementation: {
+        driverId: "codex-app-server-v1",
+        threadId: "implementation-thread",
+        turnId: "implementation-turn",
+      },
+    };
+    const handle = await reviewer.start({
+      workProduct,
+      qualification: report(),
+      repositoryRoot: "/worktrees/1234",
+    });
+    const threadRequest = transport.messages.find(
+      (message) => (message as { method?: string }).method === "thread/start",
+    );
+    const turnRequest = transport.messages.find(
+      (message) => (message as { method?: string }).method === "turn/start",
+    );
+    expect(threadRequest).toMatchObject({
+      params: { sandbox: "readOnly", cwd: "/worktrees/1234" },
+    });
+    expect(turnRequest).toMatchObject({
+      params: {
+        threadId: "thread-1",
+        sandboxPolicy: { type: "readOnly", networkAccess: false },
+        outputSchema: {
+          required: ["verdict", "summary", "findings"],
+          additionalProperties: false,
+        },
+      },
+    });
+    transport.emit({
+      method: "item/completed",
+      params: {
+        threadId: handle.threadId,
+        turnId: handle.turnId,
+        completedAtMs: 1_786_608_000_000,
+        item: {
+          type: "agentMessage",
+          id: "message-1",
+          phase: "final_answer",
+          text: JSON.stringify({
+            verdict: "pass",
+            summary: "No correctness findings.",
+            findings: [],
+          }),
+        },
+      },
+    });
+    transport.emit({
+      method: "turn/completed",
+      params: { turn: { id: handle.turnId, status: "completed" } },
+    });
+    await expect(reviewer.wait(handle)).resolves.toMatchObject({
+      verdict: "pass",
+      summary: "No correctness findings.",
+      reviewer: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+      },
+      workProduct,
+    });
   });
 
   it("recovers an in-progress turn from persisted app-server history", async () => {
