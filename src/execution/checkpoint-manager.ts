@@ -42,7 +42,10 @@ export class RemoteExecutionCheckpointManager implements ExecutionCheckpointMana
       claim: input.command.claim,
       repositoryRoot: input.command.repositoryRoot,
       baseRef: `origin/${input.command.claim.repository.defaultBranch}`,
-      validationReceipts: [`worker-turn:${input.status}`],
+      validationReceipts: [
+        `executor-command:${input.command.commandId}`,
+        `worker-turn:${input.status}`,
+      ],
       keyReference: this.keyReference,
       createdAt: input.createdAt,
     });

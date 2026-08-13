@@ -21,7 +21,7 @@ import {
   executorCommandReceiptSchema,
   executorReconcileRequestSchema,
   executorStartCommandSchema,
-  type ExecutorCommandReceipt,
+  type ExecutorCommandReportInput,
   type ExecutorReconcileRequest,
 } from "../execution/command.js";
 import {
@@ -157,6 +157,7 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
     acceptedAt: z.iso.datetime(),
     commandId: z.uuid(),
     stage: z.enum(["started", "completed", "interrupted", "failed"]),
+    checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
   }),
   z.object({
     kind: z.literal("executor-reconcile"),
@@ -363,7 +364,7 @@ export class HostGatewayClient implements DurableUsageGovernor {
   }
 
   async reportExecutor(
-    input: Omit<ExecutorCommandReceipt, "observedAt">,
+    input: ExecutorCommandReportInput,
   ): Promise<Extract<HostGatewayReceipt, { readonly kind: "executor-receipt" }>> {
     const issuedAt = this.now().toISOString();
     const receipt = await this.#submit({
@@ -377,7 +378,12 @@ export class HostGatewayClient implements DurableUsageGovernor {
     if (receipt.kind !== "executor-receipt") {
       throw new Error("Host gateway returned the wrong receipt kind.");
     }
-    if (receipt.commandId !== input.commandId || receipt.stage !== input.stage) {
+    if (
+      receipt.commandId !== input.commandId ||
+      receipt.stage !== input.stage ||
+      (input.stage !== "started" &&
+        receipt.checkpointReference !== input.checkpointReference)
+    ) {
       throw new Error("Host gateway executor receipt does not match its signed request.");
     }
     return receipt;

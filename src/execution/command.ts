@@ -100,22 +100,38 @@ export const executorStartCommandSchema = z.object({
 
 export type ExecutorStartCommand = z.infer<typeof executorStartCommandSchema>;
 
-export const executorCommandReceiptSchema = z.object({
+const executorReceiptIdentitySchema = z.object({
   commandId: z.uuid(),
   claimId: z.string().min(1),
   custodyEpoch: z.number().int().positive(),
   accountId: z.string().min(1),
-  stage: z.enum(["started", "completed", "interrupted", "failed"]),
   threadId: z.string().min(1),
   turnId: z.string().min(1),
   observedAt: z.iso.datetime(),
 });
 
+export const executorCommandReceiptSchema = z.discriminatedUnion("stage", [
+  executorReceiptIdentitySchema.extend({
+    stage: z.literal("started"),
+  }),
+  executorReceiptIdentitySchema.extend({
+    stage: z.enum(["completed", "interrupted", "failed"]),
+    checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u),
+  }),
+]);
+
 export type ExecutorCommandReceipt = z.infer<
   typeof executorCommandReceiptSchema
 >;
 
-export const executorReconcileRequestSchema = executorCommandReceiptSchema.pick({
+export type ExecutorCommandReportInput =
+  ExecutorCommandReceipt extends infer Receipt
+    ? Receipt extends ExecutorCommandReceipt
+      ? Omit<Receipt, "observedAt">
+      : never
+    : never;
+
+export const executorReconcileRequestSchema = executorReceiptIdentitySchema.pick({
   commandId: true,
   claimId: true,
   custodyEpoch: true,

@@ -44,6 +44,50 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+const checkpointReference = "d".repeat(64);
+
+function checkpointManager(): ExecutionCheckpointManager {
+  let captured:
+    | Awaited<ReturnType<ExecutionCheckpointManager["capture"]>>
+    | undefined;
+  return {
+    capture: async ({ command: executorCommand, status, createdAt }) => {
+      captured = {
+        reference: checkpointReference,
+        manifest: createCheckpointManifest({
+          claim: executorCommand.claim,
+          repositoryHead: "a".repeat(40),
+          baseHead: "b".repeat(40),
+          patch: new TextEncoder().encode("diff --git a/a b/a\n"),
+          includedUntrackedPaths: [],
+          validationReceipts: [
+            `executor-command:${executorCommand.commandId}`,
+            `worker-turn:${status}`,
+          ],
+          createdAt,
+        }),
+      };
+      return captured;
+    },
+    upload: async () => {
+      if (captured === undefined) {
+        throw new Error("Test checkpoint was not captured before upload.");
+      }
+      return {
+        schemaVersion: 1,
+        reference: captured.reference,
+        contentLength: 1_024,
+        hostId: "linux-control-1",
+        grantNonce: "11111111-1111-4111-8111-111111111111",
+        manifest: captured.manifest,
+        storedAt: "2026-08-13T18:00:03.000Z",
+        signatureBase64: "edge-signature",
+      };
+    },
+    catalog: async () => {},
+  };
+}
+
 describe("HostExecutionSupervisor", () => {
   it("starts once, records before reporting, and persists completion", async () => {
     const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
@@ -83,6 +127,9 @@ describe("HostExecutionSupervisor", () => {
             acceptedAt: "2026-08-13T18:00:02.000Z",
             commandId: receipt.commandId,
             stage: receipt.stage,
+            ...(receipt.stage === "started"
+              ? {}
+              : { checkpointReference: receipt.checkpointReference }),
           };
         },
         reconcileExecutor: async (request) => ({
@@ -101,6 +148,7 @@ describe("HostExecutionSupervisor", () => {
       },
       () => {},
       () => new Date("2026-08-13T18:00:02.000Z"),
+      checkpointManager(),
     );
     await supervisor.accept(command());
     await supervisor.accept(command());
@@ -224,6 +272,9 @@ describe("HostExecutionSupervisor", () => {
             acceptedAt: "2026-08-13T18:00:02.000Z",
             commandId: receipt.commandId,
             stage: receipt.stage,
+            ...(receipt.stage === "started"
+              ? {}
+              : { checkpointReference: receipt.checkpointReference }),
           };
         },
         reconcileExecutor: async (request) => ({
@@ -239,6 +290,7 @@ describe("HostExecutionSupervisor", () => {
       { track: () => {}, untrack: () => {} },
       () => {},
       () => new Date("2026-08-13T18:00:02.000Z"),
+      checkpointManager(),
     );
 
     await supervisor.accept(command());
@@ -263,7 +315,10 @@ describe("HostExecutionSupervisor", () => {
       baseHead: "b".repeat(40),
       patch: new TextEncoder().encode("diff --git a/a b/a\n"),
       includedUntrackedPaths: [],
-      validationReceipts: ["worker-turn:completed"],
+      validationReceipts: [
+        `executor-command:${command().commandId}`,
+        "worker-turn:completed",
+      ],
       createdAt: "2026-08-13T18:00:02.000Z",
     });
     const reference = "d".repeat(64);
@@ -323,6 +378,9 @@ describe("HostExecutionSupervisor", () => {
             acceptedAt: "2026-08-13T18:00:04.000Z",
             commandId: receipt.commandId,
             stage: receipt.stage,
+            ...(receipt.stage === "started"
+              ? {}
+              : { checkpointReference: receipt.checkpointReference }),
           };
         },
         reconcileExecutor: async (request) => ({

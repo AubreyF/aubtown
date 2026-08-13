@@ -41,6 +41,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Bind failover routing to the scheduler-owned qualified host lane.
 - [x] Require an edge-signed, current-custody storage receipt before a checkpoint can authorize failover.
 - [x] Withhold terminal worker receipts until capture, remote storage, and catalog stages are durably recorded.
+- [x] Bind each terminal worker receipt to the exact authenticated command checkpoint and terminal stage.
 - [x] Drain active work through the terminal checkpoint path during planned host shutdown.
 - [x] Fence transferred execution until the destination downloads, restores, verifies, and signs the exact prior-epoch checkpoint.
 - [x] Fence first-epoch execution until the selected host prepares and signs the exact clean initial worktree.

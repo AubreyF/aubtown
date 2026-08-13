@@ -141,6 +141,52 @@ describe("HostGatewayClient", () => {
     expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
   });
 
+  it("binds a terminal executor report to its cataloged checkpoint", async () => {
+    const keys = keyPair();
+    const reference = "d".repeat(64);
+    let request: RequestInit | undefined;
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080",
+      "linux-control-1",
+      keys.privateKey,
+      { next: async () => 10 },
+      async (_input, init) => {
+        request = init;
+        return Response.json({
+          kind: "executor-receipt",
+          hostId: "linux-control-1",
+          sequence: 10,
+          acceptedAt: "2026-08-13T18:00:00.000Z",
+          commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
+          stage: "completed",
+          checkpointReference: reference,
+        });
+      },
+      () => new Date("2026-08-13T18:00:00.000Z"),
+    );
+    await expect(
+      client.reportExecutor({
+        commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
+        claimId: "claim-1234",
+        custodyEpoch: 1,
+        accountId: "codex-pro-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+        stage: "completed",
+        checkpointReference: reference,
+      }),
+    ).resolves.toMatchObject({ checkpointReference: reference });
+    const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
+    expect(envelope).toMatchObject({
+      kind: "executor-receipt",
+      payload: {
+        stage: "completed",
+        checkpointReference: reference,
+      },
+    });
+    expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+  });
+
   it("submits an edge-signed checkpoint receipt through the host envelope", async () => {
     const hostKeys = keyPair();
     const receiptKeys = keyPair();

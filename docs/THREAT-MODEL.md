@@ -27,6 +27,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Codex update changes the worker or quota protocol | Absolute executable, exact version, generated-schema compatibility check, and advertised model and effort gate before host admission |
 | Poll retry or host restart starts a second turn | One Restate command per host plus a mode-0600 local execution journal and app-server thread resume |
 | Terminal result is accepted before work is recoverable | Host journal requires encrypted capture, edge-signed storage receipt, and catalog admission before the terminal executor receipt |
+| Terminal result describes work other than the stored checkpoint | Receipt carries the content address; authenticated manifest must match current host, claim, epoch, exact command ID, and terminal stage |
 | Returning stale host resumes work after failover | Signed startup reconciliation requires the exact current claim epoch, command, thread, turn, enrolled account, and quota headroom before app-server resume |
 | Custody moves while the old host may still write | Per-host transfer fence cancels only unoffered commands and blocks offered, started, or ambiguous commands until terminal adjudication |
 | Caller lies that a host is offline | Failover rereads canonical source and candidate heartbeats from ingress-private Restate state and requires at least 24 hours offline |
@@ -70,6 +71,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 - No account selection without an enabled account and a compatible host.
 - No execution at custody epoch two or later without the matching destination restore receipt.
 - No execution at custody epoch one without the matching initial workspace receipt.
+- No terminal executor result without its matching authenticated, cataloged command checkpoint.
 - No admitted dispatch workflow call from an unverified repository authority bridge.
 
 ## Deferred risks

@@ -4,7 +4,7 @@ import type {
   WorkerTurnHandle,
 } from "../drivers/worker.js";
 import type {
-  ExecutorCommandReceipt,
+  ExecutorCommandReportInput,
   ExecutorReconcileRequest,
   ExecutorStartCommand,
 } from "./command.js";
@@ -19,7 +19,7 @@ import type {
 
 export interface ExecutorReceiptGateway {
   reportExecutor(
-    input: Omit<ExecutorCommandReceipt, "observedAt">,
+    input: ExecutorCommandReportInput,
   ): Promise<Extract<HostGatewayReceipt, { readonly kind: "executor-receipt" }>>;
   reconcileExecutor(
     input: ExecutorReconcileRequest,
@@ -255,15 +255,29 @@ export class HostExecutionSupervisor {
       throw new Error("An unstarted execution cannot be reported.");
     }
     const handle = this.#requiredHandle(ready);
-    await this.gateway.reportExecutor({
+    const identity = {
       commandId: ready.command.commandId,
       claimId: ready.command.claim.claimId,
       custodyEpoch: ready.command.claim.custodyEpoch,
       accountId: ready.command.accountId,
-      stage: ready.stage,
       threadId: handle.threadId,
       turnId: handle.turnId,
-    });
+    };
+    if (ready.stage === "started") {
+      await this.gateway.reportExecutor({ ...identity, stage: "started" });
+    } else {
+      const reference = ready.checkpoint?.reference;
+      if (reference === undefined || ready.checkpoint?.catalogedAt === undefined) {
+        throw new Error(
+          "Terminal execution cannot be reported without its cataloged checkpoint.",
+        );
+      }
+      await this.gateway.reportExecutor({
+        ...identity,
+        stage: ready.stage,
+        checkpointReference: reference,
+      });
+    }
     await this.journal.reported(ready.command.commandId, this.now().toISOString());
   }
 

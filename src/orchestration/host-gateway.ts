@@ -131,6 +131,7 @@ export type HostGatewayReceipt =
       readonly acceptedAt: string;
       readonly commandId: string;
       readonly stage: "started" | "completed" | "interrupted" | "failed";
+      readonly checkpointReference?: string;
     }
   | {
       readonly kind: "executor-reconcile";
@@ -881,6 +882,36 @@ export function createHostGateway(
                 409,
               );
             }
+            if (reported.stage !== "started") {
+              const checkpoint = await ctx
+                .objectClient(checkpointCatalog, reported.checkpointReference)
+                .read();
+              const manifest = checkpoint?.manifest;
+              if (
+                checkpoint === null ||
+                manifest === undefined ||
+                checkpoint.hostId !== envelope.hostId ||
+                manifest.repository.owner !== currentClaim.repository.owner ||
+                manifest.repository.name !== currentClaim.repository.name ||
+                manifest.repository.defaultBranch !==
+                  currentClaim.repository.defaultBranch ||
+                manifest.issueNumber !== currentClaim.issueNumber ||
+                manifest.claimId !== currentClaim.claimId ||
+                manifest.custodyEpoch !== currentClaim.custodyEpoch ||
+                manifest.sourceHostId !== envelope.hostId ||
+                !manifest.validationReceipts.includes(
+                  `executor-command:${reported.commandId}`,
+                ) ||
+                !manifest.validationReceipts.includes(
+                  `worker-turn:${reported.stage}`,
+                )
+              ) {
+                return terminal(
+                  "Executor terminal receipt has no matching authenticated checkpoint",
+                  409,
+                );
+              }
+            }
             const recorded = await registry.record({
               receipt: { ...reported, observedAt: acceptedAt },
               acceptedAt,
@@ -896,6 +927,9 @@ export function createHostGateway(
                 | "completed"
                 | "interrupted"
                 | "failed",
+              ...(recorded.checkpointReference === undefined
+                ? {}
+                : { checkpointReference: recorded.checkpointReference }),
             };
           }
           ctx.set("lastSequence", envelope.sequence);

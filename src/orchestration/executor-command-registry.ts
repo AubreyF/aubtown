@@ -24,6 +24,7 @@ export interface ExecutorCommandState {
   readonly threadId?: string;
   readonly turnId?: string;
   readonly finishedAt?: string;
+  readonly checkpointReference?: string;
   readonly reason?: string;
 }
 
@@ -292,7 +293,8 @@ export const executorCommandRegistry = restate.object({
         if (
           current.stage === receipt.stage &&
           current.threadId === receipt.threadId &&
-          current.turnId === receipt.turnId
+          current.turnId === receipt.turnId &&
+          current.checkpointReference === receipt.checkpointReference
         ) {
           return current;
         }
@@ -309,6 +311,7 @@ export const executorCommandRegistry = restate.object({
         ...current,
         stage: receipt.stage,
         finishedAt: input.acceptedAt,
+        checkpointReference: receipt.checkpointReference,
       };
       ctx.set("command", next);
       return next;

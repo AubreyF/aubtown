@@ -441,84 +441,193 @@ curl --fail --silent --show-error \
     '.kind == "executor-poll" and .reason == "offered" and .command.commandId == $commandId' \
   >/dev/null
 
-for command_stage in started completed; do
-  command_sequence=7
-  if [[ "$command_stage" == "completed" ]]; then
-    command_sequence=9
-  fi
-  jq -n \
-    --arg host "$HOST_ID" \
-    --arg now "$NOW" \
-    --arg commandId "$COMMAND_ID" \
-    --arg claimId "integration-claim-${ISSUE_NUMBER}" \
-    --arg stage "$command_stage" \
-    --argjson sequence "$command_sequence" \
-    '{schemaVersion: 1, hostId: $host, sequence: $sequence, issuedAt: $now, kind: "executor-receipt", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", stage: $stage, threadId: "integration-thread", turnId: "integration-turn", observedAt: $now}}' \
-    > "${TMP_DIR}/executor-${command_stage}-unsigned.json"
-  "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-${command_stage}-unsigned.json" \
-    > "${TMP_DIR}/executor-${command_stage}.json"
-  curl --fail --silent --show-error \
-    -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
-    -H 'content-type: application/json' \
-    -H "idempotency-key: integration-executor-${command_stage}-${command_sequence}" \
-    --data-binary "@${TMP_DIR}/executor-${command_stage}.json" \
-    | jq -e --arg stage "$command_stage" '.kind == "executor-receipt" and .stage == $stage' \
-    >/dev/null
-  if [[ "$command_stage" == "started" ]]; then
-    jq -n \
-      --arg key "$HOST_ID" \
-      --arg claimId "integration-claim-${ISSUE_NUMBER}" \
-      --arg now "$NOW" \
-      '{key: $key, claimId: $claimId, custodyEpoch: 1, preparedAt: $now}' \
-      > "${TMP_DIR}/active-transfer-request.json"
-    ACTIVE_TRANSFER_STATUS="$(curl --silent --show-error \
-      -o "${TMP_DIR}/active-transfer-response.json" \
-      -w '%{http_code}' \
-      -X POST "${HARNESS}/prepareExecutorTransfer" \
-      -H 'content-type: application/json' \
-      --data-binary "@${TMP_DIR}/active-transfer-request.json")"
-    if [[ "$ACTIVE_TRANSFER_STATUS" != "500" ]]; then
-      echo "Expected active executor custody transfer to return 500, received ${ACTIVE_TRANSFER_STATUS}." >&2
-      exit 1
-    fi
-    jq -n \
-      --arg host "$HOST_ID" \
-      --arg now "$NOW" \
-      --arg commandId "$COMMAND_ID" \
-      --arg claimId "integration-claim-${ISSUE_NUMBER}" \
-      '{schemaVersion: 1, hostId: $host, sequence: 8, issuedAt: $now, kind: "executor-reconcile", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", threadId: "integration-thread", turnId: "integration-turn"}}' \
-      > "${TMP_DIR}/executor-reconcile-unsigned.json"
-    "${ROOT_DIR}/node_modules/.bin/tsx" \
-      "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
-      "$PRIVATE_KEY" \
-      "${TMP_DIR}/executor-reconcile-unsigned.json" \
-      > "${TMP_DIR}/executor-reconcile.json"
-    curl --fail --silent --show-error \
-      -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
-      -H 'content-type: application/json' \
-      -H 'idempotency-key: integration-executor-reconcile-8' \
-      --data-binary "@${TMP_DIR}/executor-reconcile.json" \
-      | jq -e \
-        --arg commandId "$COMMAND_ID" \
-        '.kind == "executor-reconcile" and .commandId == $commandId and .action == "resume" and .reason == "current"' \
-      >/dev/null
-  fi
-done
-harness_key readExecutorCommand "$HOST_ID" "${TMP_DIR}/executor-command-finished.json"
-jq -e '.stage == "completed"' "${TMP_DIR}/executor-command-finished.json" >/dev/null
-jq \
-  '.sequence = 10' \
-  "${TMP_DIR}/executor-reconcile-unsigned.json" \
-  > "${TMP_DIR}/executor-reconcile-terminal-unsigned.json"
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --arg commandId "$COMMAND_ID" \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  '{schemaVersion: 1, hostId: $host, sequence: 7, issuedAt: $now, kind: "executor-receipt", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", stage: "started", threadId: "integration-thread", turnId: "integration-turn", observedAt: $now}}' \
+  > "${TMP_DIR}/executor-started-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-started-unsigned.json" \
+  > "${TMP_DIR}/executor-started.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-executor-started-7' \
+  --data-binary "@${TMP_DIR}/executor-started.json" \
+  | jq -e '.kind == "executor-receipt" and .stage == "started"' \
+  >/dev/null
+jq -n \
+  --arg key "$HOST_ID" \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  --arg now "$NOW" \
+  '{key: $key, claimId: $claimId, custodyEpoch: 1, preparedAt: $now}' \
+  > "${TMP_DIR}/active-transfer-request.json"
+ACTIVE_TRANSFER_STATUS="$(curl --silent --show-error \
+  -o "${TMP_DIR}/active-transfer-response.json" \
+  -w '%{http_code}' \
+  -X POST "${HARNESS}/prepareExecutorTransfer" \
+  -H 'content-type: application/json' \
+  --data-binary "@${TMP_DIR}/active-transfer-request.json")"
+if [[ "$ACTIVE_TRANSFER_STATUS" != "500" ]]; then
+  echo "Expected active executor custody transfer to return 500, received ${ACTIVE_TRANSFER_STATUS}." >&2
+  exit 1
+fi
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --arg commandId "$COMMAND_ID" \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  '{schemaVersion: 1, hostId: $host, sequence: 8, issuedAt: $now, kind: "executor-reconcile", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", threadId: "integration-thread", turnId: "integration-turn"}}' \
+  > "${TMP_DIR}/executor-reconcile-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" \
   "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
   "$PRIVATE_KEY" \
-  "${TMP_DIR}/executor-reconcile-terminal-unsigned.json" \
+  "${TMP_DIR}/executor-reconcile-unsigned.json" \
+  > "${TMP_DIR}/executor-reconcile.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-executor-reconcile-8' \
+  --data-binary "@${TMP_DIR}/executor-reconcile.json" \
+  | jq -e \
+    --arg commandId "$COMMAND_ID" \
+    '.kind == "executor-reconcile" and .commandId == $commandId and .action == "resume" and .reason == "current"' \
+  >/dev/null
+
+jq -cn \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --arg commandId "$COMMAND_ID" \
+  --argjson issue "$ISSUE_NUMBER" \
+  '{schemaVersion: 1, manifest: {schemaVersion: 2, repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, sourceHostId: $host, repositoryHead: ("a" * 40), baseHead: ("b" * 40), patchDigest: ("c" * 64), includedUntrackedPaths: [], validationReceipts: [("executor-command:" + $commandId), "worker-turn:completed"], createdAt: $now}, ciphertextBase64: "AQIDBA==", nonceBase64: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", algorithm: "xchacha20-poly1305", keyReference: "keyring:integration"}' \
+  > "${TMP_DIR}/checkpoint-payload.json"
+CHECKPOINT_REFERENCE="$(openssl dgst -sha256 "${TMP_DIR}/checkpoint-payload.json" | awk '{print $NF}')"
+CHECKPOINT_LENGTH="$(wc -c < "${TMP_DIR}/checkpoint-payload.json" | tr -d '[:space:]')"
+
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --arg commandId "$COMMAND_ID" \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  --arg reference "$(printf '0%.0s' {1..64})" \
+  '{schemaVersion: 1, hostId: $host, sequence: 9, issuedAt: $now, kind: "executor-receipt", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", stage: "completed", threadId: "integration-thread", turnId: "integration-turn", checkpointReference: $reference, observedAt: $now}}' \
+  > "${TMP_DIR}/executor-completed-uncataloged-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-completed-uncataloged-unsigned.json" \
+  > "${TMP_DIR}/executor-completed-uncataloged.json"
+UNCATALOGED_COMPLETION_STATUS="$(curl --silent --show-error \
+  -o "${TMP_DIR}/executor-completed-uncataloged-response.json" \
+  -w '%{http_code}' \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-executor-completed-uncataloged-9' \
+  --data-binary "@${TMP_DIR}/executor-completed-uncataloged.json")"
+if [[ "$UNCATALOGED_COMPLETION_STATUS" != "409" ]]; then
+  echo "Expected completion without a cataloged checkpoint to return 409, received ${UNCATALOGED_COMPLETION_STATUS}." >&2
+  exit 1
+fi
+
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --argjson issue "$ISSUE_NUMBER" \
+  --argjson contentLength "$CHECKPOINT_LENGTH" \
+  '{schemaVersion: 1, hostId: $host, sequence: 9, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, checkpointEpoch: 1, operation: "upload", reference: $reference, contentLength: $contentLength}}' \
+  > "${TMP_DIR}/grant-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/grant-unsigned.json" \
+  > "${TMP_DIR}/grant-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-checkpoint-grant-9' \
+  --data-binary "@${TMP_DIR}/grant-envelope.json" \
+  > "${TMP_DIR}/grant-receipt.json"
+jq -e \
+  --arg host "$HOST_ID" \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --argjson issue "$ISSUE_NUMBER" \
+  --argjson contentLength "$CHECKPOINT_LENGTH" \
+  '.kind == "checkpoint-grant" and .sequence == 9 and .grant.hostId == $host and .grant.issueNumber == $issue and .grant.operation == "upload" and .grant.reference == $reference and .grant.contentLength == $contentLength and (.grant.signatureBase64 | length) > 20' \
+  "${TMP_DIR}/grant-receipt.json" \
+  >/dev/null
+
+jq '.grant' "${TMP_DIR}/grant-receipt.json" > "${TMP_DIR}/upload-grant.json"
+UPLOAD_GRANT_NONCE="$(jq -r '.nonce' "${TMP_DIR}/upload-grant.json")"
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg nonce "$UPLOAD_GRANT_NONCE" \
+  --arg now "$NOW" \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  '{schemaVersion: 1, hostId: $host, grantNonce: $nonce, method: "PUT", path: ("/v1/checkpoints/" + $reference), bodyDigest: $reference, requestedAt: $now}' \
+  > "${TMP_DIR}/upload-proof-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-checkpoint-proof.ts" "$PRIVATE_KEY" "${TMP_DIR}/upload-proof-unsigned.json" \
+  > "${TMP_DIR}/upload-proof.json"
+UPLOAD_GRANT_HEADER="$(openssl base64 -A -in "${TMP_DIR}/upload-grant.json" | tr '+/' '-_' | tr -d '=')"
+UPLOAD_PROOF_HEADER="$(openssl base64 -A -in "${TMP_DIR}/upload-proof.json" | tr '+/' '-_' | tr -d '=')"
+curl --fail --silent --show-error \
+  -X PUT "${CHECKPOINT_EDGE}/v1/checkpoints/${CHECKPOINT_REFERENCE}" \
+  -H "authorization: FreedworksGrant ${UPLOAD_GRANT_HEADER}" \
+  -H "x-freedworks-host-proof: ${UPLOAD_PROOF_HEADER}" \
+  -H 'content-type: application/vnd.freedworks.checkpoint+json' \
+  --data-binary "@${TMP_DIR}/checkpoint-payload.json" \
+  > "${TMP_DIR}/checkpoint-upload-response.json"
+jq -e \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  '.reference == $reference and .receipt.reference == $reference and (.receipt.signatureBase64 | length) > 20' \
+  "${TMP_DIR}/checkpoint-upload-response.json" \
+  >/dev/null
+jq '.receipt' "${TMP_DIR}/checkpoint-upload-response.json" > "${TMP_DIR}/checkpoint-storage-receipt.json"
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --slurpfile receipt "${TMP_DIR}/checkpoint-storage-receipt.json" \
+  '{schemaVersion: 1, hostId: $host, sequence: 10, issuedAt: $now, kind: "checkpoint-receipt", payload: $receipt[0]}' \
+  > "${TMP_DIR}/checkpoint-receipt-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/checkpoint-receipt-unsigned.json" \
+  > "${TMP_DIR}/checkpoint-receipt-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-checkpoint-receipt-10' \
+  --data-binary "@${TMP_DIR}/checkpoint-receipt-envelope.json" \
+  | jq -e \
+    --arg reference "$CHECKPOINT_REFERENCE" \
+    '.kind == "checkpoint-receipt" and .reference == $reference' \
+  >/dev/null
+
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --arg commandId "$COMMAND_ID" \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  '{schemaVersion: 1, hostId: $host, sequence: 11, issuedAt: $now, kind: "executor-receipt", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", stage: "completed", threadId: "integration-thread", turnId: "integration-turn", checkpointReference: $reference, observedAt: $now}}' \
+  > "${TMP_DIR}/executor-completed-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-completed-unsigned.json" \
+  > "${TMP_DIR}/executor-completed.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-executor-completed-11' \
+  --data-binary "@${TMP_DIR}/executor-completed.json" \
+  | jq -e \
+    --arg reference "$CHECKPOINT_REFERENCE" \
+    '.kind == "executor-receipt" and .stage == "completed" and .checkpointReference == $reference' \
+  >/dev/null
+harness_key readExecutorCommand "$HOST_ID" "${TMP_DIR}/executor-command-finished.json"
+jq -e \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  '.stage == "completed" and .checkpointReference == $reference' \
+  "${TMP_DIR}/executor-command-finished.json" \
+  >/dev/null
+jq '.sequence = 12' "${TMP_DIR}/executor-reconcile-unsigned.json" > "${TMP_DIR}/executor-reconcile-terminal-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-reconcile-terminal-unsigned.json" \
   > "${TMP_DIR}/executor-reconcile-terminal.json"
 curl --fail --silent --show-error \
   -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
   -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-executor-reconcile-10' \
+  -H 'idempotency-key: integration-executor-reconcile-12' \
   --data-binary "@${TMP_DIR}/executor-reconcile-terminal.json" \
   | jq -e \
     --arg commandId "$COMMAND_ID" \
@@ -553,88 +662,6 @@ jq -e \
   "${TMP_DIR}/pending-executor-command-cancelled.json" \
   >/dev/null
 
-jq -cn \
-  --arg host "$HOST_ID" \
-  --arg now "$NOW" \
-  --argjson issue "$ISSUE_NUMBER" \
-  '{schemaVersion: 1, manifest: {schemaVersion: 2, repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, sourceHostId: $host, repositoryHead: ("a" * 40), baseHead: ("b" * 40), patchDigest: ("c" * 64), includedUntrackedPaths: [], validationReceipts: ["integration:passed"], createdAt: $now}, ciphertextBase64: "AQIDBA==", nonceBase64: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", algorithm: "xchacha20-poly1305", keyReference: "keyring:integration"}' \
-  > "${TMP_DIR}/checkpoint-payload.json"
-CHECKPOINT_REFERENCE="$(openssl dgst -sha256 "${TMP_DIR}/checkpoint-payload.json" | awk '{print $NF}')"
-CHECKPOINT_LENGTH="$(wc -c < "${TMP_DIR}/checkpoint-payload.json" | tr -d '[:space:]')"
-
-jq -n \
-  --arg host "$HOST_ID" \
-  --arg now "$NOW" \
-  --arg reference "$CHECKPOINT_REFERENCE" \
-  --argjson issue "$ISSUE_NUMBER" \
-  --argjson contentLength "$CHECKPOINT_LENGTH" \
-  '{schemaVersion: 1, hostId: $host, sequence: 11, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, checkpointEpoch: 1, operation: "upload", reference: $reference, contentLength: $contentLength}}' \
-  > "${TMP_DIR}/grant-unsigned.json"
-"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/grant-unsigned.json" \
-  > "${TMP_DIR}/grant-envelope.json"
-curl --fail --silent --show-error \
-  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
-  -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-checkpoint-grant-11' \
-  --data-binary "@${TMP_DIR}/grant-envelope.json" \
-  > "${TMP_DIR}/grant-receipt.json"
-jq -e \
-  --arg host "$HOST_ID" \
-  --arg reference "$CHECKPOINT_REFERENCE" \
-  --argjson issue "$ISSUE_NUMBER" \
-  --argjson contentLength "$CHECKPOINT_LENGTH" \
-  '.kind == "checkpoint-grant" and .sequence == 11 and .grant.hostId == $host and .grant.issueNumber == $issue and .grant.operation == "upload" and .grant.reference == $reference and .grant.contentLength == $contentLength and (.grant.signatureBase64 | length) > 20' \
-  "${TMP_DIR}/grant-receipt.json" \
-  >/dev/null
-
-jq '.grant' "${TMP_DIR}/grant-receipt.json" > "${TMP_DIR}/upload-grant.json"
-UPLOAD_GRANT_NONCE="$(jq -r '.nonce' "${TMP_DIR}/upload-grant.json")"
-jq -n \
-  --arg host "$HOST_ID" \
-  --arg nonce "$UPLOAD_GRANT_NONCE" \
-  --arg now "$NOW" \
-  --arg reference "$CHECKPOINT_REFERENCE" \
-  '{schemaVersion: 1, hostId: $host, grantNonce: $nonce, method: "PUT", path: ("/v1/checkpoints/" + $reference), bodyDigest: $reference, requestedAt: $now}' \
-  > "${TMP_DIR}/upload-proof-unsigned.json"
-"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-checkpoint-proof.ts" "$PRIVATE_KEY" "${TMP_DIR}/upload-proof-unsigned.json" \
-  > "${TMP_DIR}/upload-proof.json"
-UPLOAD_GRANT_HEADER="$(openssl base64 -A -in "${TMP_DIR}/upload-grant.json" | tr '+/' '-_' | tr -d '=')"
-UPLOAD_PROOF_HEADER="$(openssl base64 -A -in "${TMP_DIR}/upload-proof.json" | tr '+/' '-_' | tr -d '=')"
-curl --fail --silent --show-error \
-  -X PUT "${CHECKPOINT_EDGE}/v1/checkpoints/${CHECKPOINT_REFERENCE}" \
-  -H "authorization: FreedworksGrant ${UPLOAD_GRANT_HEADER}" \
-  -H "x-freedworks-host-proof: ${UPLOAD_PROOF_HEADER}" \
-  -H 'content-type: application/vnd.freedworks.checkpoint+json' \
-  --data-binary "@${TMP_DIR}/checkpoint-payload.json" \
-  > "${TMP_DIR}/checkpoint-upload-response.json"
-jq -e \
-  --arg reference "$CHECKPOINT_REFERENCE" \
-  '.reference == $reference and .receipt.reference == $reference and (.receipt.signatureBase64 | length) > 20' \
-  "${TMP_DIR}/checkpoint-upload-response.json" \
-  >/dev/null
-jq '.receipt' \
-  "${TMP_DIR}/checkpoint-upload-response.json" \
-  > "${TMP_DIR}/checkpoint-storage-receipt.json"
-jq -n \
-  --arg host "$HOST_ID" \
-  --arg now "$NOW" \
-  --slurpfile receipt "${TMP_DIR}/checkpoint-storage-receipt.json" \
-  '{schemaVersion: 1, hostId: $host, sequence: 12, issuedAt: $now, kind: "checkpoint-receipt", payload: $receipt[0]}' \
-  > "${TMP_DIR}/checkpoint-receipt-unsigned.json"
-"${ROOT_DIR}/node_modules/.bin/tsx" \
-  "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
-  "$PRIVATE_KEY" \
-  "${TMP_DIR}/checkpoint-receipt-unsigned.json" \
-  > "${TMP_DIR}/checkpoint-receipt-envelope.json"
-curl --fail --silent --show-error \
-  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
-  -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-checkpoint-receipt-12' \
-  --data-binary "@${TMP_DIR}/checkpoint-receipt-envelope.json" \
-  | jq -e \
-    --arg reference "$CHECKPOINT_REFERENCE" \
-    '.kind == "checkpoint-receipt" and .reference == $reference' \
-  >/dev/null
 jq '.signatureBase64 = ((if .signatureBase64[0:1] == "A" then "B" else "A" end) + .signatureBase64[1:])' \
   "${TMP_DIR}/checkpoint-storage-receipt.json" \
   > "${TMP_DIR}/checkpoint-storage-receipt-tampered.json"
