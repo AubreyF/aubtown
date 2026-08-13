@@ -329,7 +329,7 @@ jq -e \
 for command_stage in started completed; do
   command_sequence=4
   if [[ "$command_stage" == "completed" ]]; then
-    command_sequence=5
+    command_sequence=6
   fi
   jq -n \
     --arg host "$HOST_ID" \
@@ -366,10 +366,49 @@ for command_stage in started completed; do
       echo "Expected active executor custody transfer to return 500, received ${ACTIVE_TRANSFER_STATUS}." >&2
       exit 1
     fi
+    jq -n \
+      --arg host "$HOST_ID" \
+      --arg now "$NOW" \
+      --arg commandId "$COMMAND_ID" \
+      --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+      '{schemaVersion: 1, hostId: $host, sequence: 5, issuedAt: $now, kind: "executor-reconcile", payload: {commandId: $commandId, claimId: $claimId, custodyEpoch: 1, accountId: "codex-pro-integration", threadId: "integration-thread", turnId: "integration-turn"}}' \
+      > "${TMP_DIR}/executor-reconcile-unsigned.json"
+    "${ROOT_DIR}/node_modules/.bin/tsx" \
+      "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
+      "$PRIVATE_KEY" \
+      "${TMP_DIR}/executor-reconcile-unsigned.json" \
+      > "${TMP_DIR}/executor-reconcile.json"
+    curl --fail --silent --show-error \
+      -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+      -H 'content-type: application/json' \
+      -H 'idempotency-key: integration-executor-reconcile-5' \
+      --data-binary "@${TMP_DIR}/executor-reconcile.json" \
+      | jq -e \
+        --arg commandId "$COMMAND_ID" \
+        '.kind == "executor-reconcile" and .commandId == $commandId and .action == "resume" and .reason == "current"' \
+      >/dev/null
   fi
 done
 harness_key readExecutorCommand "$HOST_ID" "${TMP_DIR}/executor-command-finished.json"
 jq -e '.stage == "completed"' "${TMP_DIR}/executor-command-finished.json" >/dev/null
+jq \
+  '.sequence = 7' \
+  "${TMP_DIR}/executor-reconcile-unsigned.json" \
+  > "${TMP_DIR}/executor-reconcile-terminal-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" \
+  "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
+  "$PRIVATE_KEY" \
+  "${TMP_DIR}/executor-reconcile-terminal-unsigned.json" \
+  > "${TMP_DIR}/executor-reconcile-terminal.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-executor-reconcile-7' \
+  --data-binary "@${TMP_DIR}/executor-reconcile-terminal.json" \
+  | jq -e \
+    --arg commandId "$COMMAND_ID" \
+    '.kind == "executor-reconcile" and .commandId == $commandId and .action == "quarantine" and .reason == "command-stale"' \
+  >/dev/null
 PENDING_COMMAND_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 jq --arg commandId "$PENDING_COMMAND_ID" '.commandId = $commandId' \
   "${TMP_DIR}/executor-command-input.json" \
@@ -414,14 +453,14 @@ jq -n \
   --arg reference "$CHECKPOINT_REFERENCE" \
   --argjson issue "$ISSUE_NUMBER" \
   --argjson contentLength "$CHECKPOINT_LENGTH" \
-  '{schemaVersion: 1, hostId: $host, sequence: 6, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, checkpointEpoch: 1, operation: "upload", reference: $reference, contentLength: $contentLength}}' \
+  '{schemaVersion: 1, hostId: $host, sequence: 8, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, checkpointEpoch: 1, operation: "upload", reference: $reference, contentLength: $contentLength}}' \
   > "${TMP_DIR}/grant-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/grant-unsigned.json" \
   > "${TMP_DIR}/grant-envelope.json"
 curl --fail --silent --show-error \
   -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
   -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-checkpoint-grant-6' \
+  -H 'idempotency-key: integration-checkpoint-grant-8' \
   --data-binary "@${TMP_DIR}/grant-envelope.json" \
   > "${TMP_DIR}/grant-receipt.json"
 jq -e \
@@ -429,7 +468,7 @@ jq -e \
   --arg reference "$CHECKPOINT_REFERENCE" \
   --argjson issue "$ISSUE_NUMBER" \
   --argjson contentLength "$CHECKPOINT_LENGTH" \
-  '.kind == "checkpoint-grant" and .sequence == 6 and .grant.hostId == $host and .grant.issueNumber == $issue and .grant.operation == "upload" and .grant.reference == $reference and .grant.contentLength == $contentLength and (.grant.signatureBase64 | length) > 20' \
+  '.kind == "checkpoint-grant" and .sequence == 8 and .grant.hostId == $host and .grant.issueNumber == $issue and .grant.operation == "upload" and .grant.reference == $reference and .grant.contentLength == $contentLength and (.grant.signatureBase64 | length) > 20' \
   "${TMP_DIR}/grant-receipt.json" \
   >/dev/null
 
@@ -562,4 +601,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound executor lifecycle completed, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, replay and restart fencing passed."

@@ -19,8 +19,10 @@ import {
 } from "../checkpoints/grant.js";
 import {
   executorCommandReceiptSchema,
+  executorReconcileRequestSchema,
   executorStartCommandSchema,
   type ExecutorCommandReceipt,
+  type ExecutorReconcileRequest,
 } from "../execution/command.js";
 
 const quotaDecisionSchema = z.object({
@@ -97,6 +99,21 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
     acceptedAt: z.iso.datetime(),
     commandId: z.uuid(),
     stage: z.enum(["started", "completed", "interrupted", "failed"]),
+  }),
+  z.object({
+    kind: z.literal("executor-reconcile"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    commandId: z.uuid(),
+    action: z.enum(["resume", "quarantine"]),
+    reason: z.enum([
+      "current",
+      "command-stale",
+      "claim-stale",
+      "quota-unavailable",
+      "quota-blocked",
+    ]),
   }),
 ]);
 
@@ -194,6 +211,32 @@ export class HostGatewayClient implements DurableUsageGovernor {
     }
     if (receipt.commandId !== input.commandId || receipt.stage !== input.stage) {
       throw new Error("Host gateway executor receipt does not match its signed request.");
+    }
+    return receipt;
+  }
+
+  async reconcileExecutor(
+    input: ExecutorReconcileRequest,
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "executor-reconcile" }>> {
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "executor-reconcile",
+      payload: executorReconcileRequestSchema.parse(input),
+    });
+    if (receipt.kind !== "executor-reconcile") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    if (receipt.commandId !== input.commandId) {
+      throw new Error("Host gateway reconciliation names another command.");
+    }
+    if (
+      (receipt.action === "resume" && receipt.reason !== "current") ||
+      (receipt.action === "quarantine" && receipt.reason === "current")
+    ) {
+      throw new Error("Host gateway reconciliation action contradicts its reason.");
     }
     return receipt;
   }

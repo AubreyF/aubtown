@@ -5,6 +5,7 @@ import type {
 } from "../drivers/worker.js";
 import type {
   ExecutorCommandReceipt,
+  ExecutorReconcileRequest,
   ExecutorStartCommand,
 } from "./command.js";
 import {
@@ -16,6 +17,9 @@ export interface ExecutorReceiptGateway {
   reportExecutor(
     input: Omit<ExecutorCommandReceipt, "observedAt">,
   ): Promise<Extract<HostGatewayReceipt, { readonly kind: "executor-receipt" }>>;
+  reconcileExecutor(
+    input: ExecutorReconcileRequest,
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "executor-reconcile" }>>;
 }
 
 export interface ExecutionTurnTracker {
@@ -55,6 +59,26 @@ export class HostExecutionSupervisor {
       return;
     }
     const handle = this.#requiredHandle(record);
+    if (this.#watchingTurnId === handle.turnId) {
+      return;
+    }
+    const reconciliation = await this.gateway.reconcileExecutor({
+      commandId: record.command.commandId,
+      claimId: record.command.claim.claimId,
+      custodyEpoch: record.command.claim.custodyEpoch,
+      accountId: record.command.accountId,
+      threadId: handle.threadId,
+      turnId: handle.turnId,
+    });
+    if (reconciliation.action !== "resume") {
+      this.eventSink({
+        event: "executor-turn-quarantined",
+        commandId: record.command.commandId,
+        turnId: handle.turnId,
+        reason: reconciliation.reason,
+      });
+      return;
+    }
     const status = await this.worker.recover(handle, record.command.repositoryRoot);
     if (status === "running") {
       this.turns.track(this.accountId, handle);

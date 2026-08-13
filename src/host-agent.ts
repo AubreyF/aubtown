@@ -127,6 +127,7 @@ async function sample(): Promise<void> {
   try {
     const receipt = await monitor.sample(accountId);
     process.stdout.write(`${JSON.stringify({ event: "quota-sampled", ...receipt })}\n`);
+    await execution.recover();
     if (
       receipt.decision.action === "admit" ||
       receipt.decision.action === "throttle"

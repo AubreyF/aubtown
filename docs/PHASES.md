@@ -36,6 +36,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Pin each executor to an absolute Codex binary, exact version, generated app-server protocol, advertised model, and advertised reasoning effort.
 - [x] Add signed claim-bound command polling, durable host execution journaling, app-server turn recovery, and idempotent result reporting.
 - [x] Fence custody transfer against offered, running, and ambiguous executor commands.
+- [x] Require signed coordinator adjudication before a restarted host resumes a persisted turn.
 
 ## Phase 3: one Freed issue
 

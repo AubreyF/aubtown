@@ -115,6 +115,19 @@ export type ExecutorCommandReceipt = z.infer<
   typeof executorCommandReceiptSchema
 >;
 
+export const executorReconcileRequestSchema = executorCommandReceiptSchema.pick({
+  commandId: true,
+  claimId: true,
+  custodyEpoch: true,
+  accountId: true,
+  threadId: true,
+  turnId: true,
+});
+
+export type ExecutorReconcileRequest = z.infer<
+  typeof executorReconcileRequestSchema
+>;
+
 export function createExecutorStartCommand(input: {
   readonly commandId: string;
   readonly claim: DispatchClaim;

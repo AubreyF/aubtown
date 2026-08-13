@@ -72,6 +72,20 @@ export type HostGatewayReceipt =
       readonly acceptedAt: string;
       readonly commandId: string;
       readonly stage: "started" | "completed" | "interrupted" | "failed";
+    }
+  | {
+      readonly kind: "executor-reconcile";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly commandId: string;
+      readonly action: "resume" | "quarantine";
+      readonly reason:
+        | "current"
+        | "command-stale"
+        | "claim-stale"
+        | "quota-unavailable"
+        | "quota-blocked";
     };
 
 function terminal(message: string, errorCode = 403): never {
@@ -296,6 +310,89 @@ export function createHostGateway(
                       reason: "claim-stale",
                     };
                   }
+                }
+              }
+            }
+          } else if (envelope.kind === "executor-reconcile") {
+            const requested = envelope.payload;
+            const quarantine = (
+              reason:
+                | "command-stale"
+                | "claim-stale"
+                | "quota-unavailable"
+                | "quota-blocked",
+            ): HostGatewayReceipt => ({
+              kind: "executor-reconcile",
+              hostId: envelope.hostId,
+              sequence: envelope.sequence,
+              acceptedAt,
+              commandId: requested.commandId,
+              action: "quarantine",
+              reason,
+            });
+            if (!enrollment.accountIds.includes(requested.accountId)) {
+              return terminal("Executor reconciliation account is outside host enrollment");
+            }
+            const registry = ctx.objectClient(executorCommandRegistry, envelope.hostId);
+            const state = await registry.read();
+            if (
+              state === null ||
+              state.command.commandId !== requested.commandId ||
+              state.stage !== "started" ||
+              state.threadId !== requested.threadId ||
+              state.turnId !== requested.turnId
+            ) {
+              receipt = quarantine("command-stale");
+            } else {
+              const command = state.command;
+              const claimKey = `${command.claim.repository.owner}/${command.claim.repository.name}#${command.claim.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+              const currentClaim = await ctx.objectClient(claimRegistry, claimKey).read();
+              let claimCurrent = true;
+              try {
+                if (
+                  currentClaim === null ||
+                  requested.claimId !== command.claim.claimId ||
+                  requested.custodyEpoch !== command.claim.custodyEpoch
+                ) {
+                  throw new Error("Executor reconciliation claim is stale.");
+                }
+                assertCommandMatchesCurrentClaim({
+                  command,
+                  currentClaim,
+                  requestingHostId: envelope.hostId,
+                  accountId: requested.accountId,
+                  hostLane: enrollment.lane,
+                  now: acceptedAt,
+                  enforceStartWindow: false,
+                });
+              } catch {
+                claimCurrent = false;
+              }
+              if (!claimCurrent) {
+                receipt = quarantine("claim-stale");
+              } else {
+                const account = await ctx
+                  .objectClient(accountGovernor, requested.accountId)
+                  .status();
+                if (account.snapshot === null) {
+                  receipt = quarantine("quota-unavailable");
+                } else {
+                  const decision = decideQuota({
+                    snapshot: account.snapshot,
+                    now: acceptedAt,
+                  });
+                  receipt =
+                    decision.action === "admit" || decision.action === "throttle"
+                      ? {
+                          kind: "executor-reconcile",
+                          hostId: envelope.hostId,
+                          sequence: envelope.sequence,
+                          acceptedAt,
+                          commandId: requested.commandId,
+                          action: "resume",
+                          reason: "current",
+                        }
+                      : quarantine("quota-blocked");
                 }
               }
             }

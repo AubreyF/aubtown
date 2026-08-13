@@ -83,6 +83,15 @@ describe("HostExecutionSupervisor", () => {
             stage: receipt.stage,
           };
         },
+        reconcileExecutor: async (request) => ({
+          kind: "executor-reconcile",
+          hostId: "linux-control-1",
+          sequence: 1,
+          acceptedAt: "2026-08-13T18:00:02.000Z",
+          commandId: request.commandId,
+          action: "resume",
+          reason: "current",
+        }),
       },
       {
         track: (_accountId, turn) => tracked.push(`track:${turn.turnId}`),
@@ -152,11 +161,21 @@ describe("HostExecutionSupervisor", () => {
           commandId: receipt.commandId,
           stage: receipt.stage,
         }),
+        reconcileExecutor: async (request) => ({
+          kind: "executor-reconcile",
+          hostId: "linux-control-1",
+          sequence: 1,
+          acceptedAt: "2026-08-13T18:00:02.000Z",
+          commandId: request.commandId,
+          action: "resume",
+          reason: "current",
+        }),
       },
       { track: () => {}, untrack: () => {} },
       () => {},
       () => new Date("2026-08-13T18:00:02.000Z"),
     );
+    await supervisor.recover();
     await supervisor.recover();
     expect(starts).toBe(0);
     expect(recovers).toBe(1);
@@ -196,6 +215,9 @@ describe("HostExecutionSupervisor", () => {
         reportExecutor: async () => {
           throw new Error("should not report");
         },
+        reconcileExecutor: async () => {
+          throw new Error("should not reconcile");
+        },
       },
       { track: () => {}, untrack: () => {} },
       () => {},
@@ -205,5 +227,60 @@ describe("HostExecutionSupervisor", () => {
       "requires reconciliation",
     );
     expect(starts).toBe(0);
+  });
+
+  it("quarantines a stale persisted turn before app-server resume", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    await journal.accept(command(), "2026-08-13T18:00:00.000Z");
+    await journal.started(command().commandId, handle);
+    let recovers = 0;
+    const events: Array<Record<string, unknown>> = [];
+    const worker = {
+      id: "fake",
+      capabilities: {
+        hostLanes: ["linux"],
+        canInterrupt: true,
+        canReadSubscriptionUsage: true,
+        publicationCeiling: "none",
+      },
+      start: async () => handle,
+      recover: async () => {
+        recovers += 1;
+        return "running" as const;
+      },
+      wait: async () => await new Promise<"completed">(() => {}),
+      interrupt: async () => {},
+    } satisfies WorkerDriver;
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      worker,
+      journal,
+      {
+        reportExecutor: async () => {
+          throw new Error("should not report");
+        },
+        reconcileExecutor: async (request) => ({
+          kind: "executor-reconcile",
+          hostId: "linux-control-1",
+          sequence: 1,
+          acceptedAt: "2026-08-13T18:00:02.000Z",
+          commandId: request.commandId,
+          action: "quarantine",
+          reason: "claim-stale",
+        }),
+      },
+      { track: () => {}, untrack: () => {} },
+      (event) => events.push(event),
+    );
+    await supervisor.recover();
+    expect(recovers).toBe(0);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        event: "executor-turn-quarantined",
+        reason: "claim-stale",
+      }),
+    );
   });
 });
