@@ -16,6 +16,7 @@ import { reconciliationWorkflow } from "./reconciliation-workflow.js";
 import { schedulerRegistry } from "./scheduler-registry.js";
 import { createRoutePlanner, routePlannerApi } from "./route-planner.js";
 import { admittedDispatchWorkflow } from "./admitted-dispatch-workflow.js";
+import { handoffRegistry } from "./handoff-registry.js";
 
 export function controlPlaneServices(
   hostGateway: ReturnType<typeof createHostGateway>,
@@ -35,6 +36,7 @@ export function controlPlaneServices(
     hostRegistry,
     hostRestoreRegistry,
     hostWorkspaceRegistry,
+    handoffRegistry,
     custodyTransferWorkflow,
     reconciliationWorkflow,
     routePlanner,

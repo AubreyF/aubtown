@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { canonicalJson } from "../security/canonical-json.js";
+import type { CustodyCheckpoint } from "../domain/types.js";
+import type { ExecutorStartCommand } from "../execution/command.js";
+import type { WorkerTurnHandle } from "../drivers/worker.js";
 
 const gitShaSchema = z.string().regex(/^[0-9a-f]{40}$/u);
 const digestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
@@ -23,6 +26,8 @@ export const workProductIdentitySchema = z.object({
   claimId: z.string().min(1),
   custodyEpoch: z.number().int().positive(),
   hostId: z.string().min(1),
+  branch: z.string().min(1),
+  worktree: z.string().startsWith("/"),
   commandId: z.uuid(),
   checkpointReference: digestSchema,
   head: gitShaSchema,
@@ -31,6 +36,48 @@ export const workProductIdentitySchema = z.object({
 });
 
 export type WorkProductIdentity = z.infer<typeof workProductIdentitySchema>;
+
+export function createWorkProductIdentity(input: {
+  readonly command: ExecutorStartCommand;
+  readonly checkpointReference: string;
+  readonly checkpoint: CustodyCheckpoint;
+  readonly implementation: WorkerTurnHandle;
+}): WorkProductIdentity {
+  const { claim } = input.command;
+  const checkpoint = input.checkpoint;
+  if (
+    checkpoint.repository.owner !== claim.repository.owner ||
+    checkpoint.repository.name !== claim.repository.name ||
+    checkpoint.repository.defaultBranch !== claim.repository.defaultBranch ||
+    checkpoint.issueNumber !== claim.issueNumber ||
+    checkpoint.claimId !== claim.claimId ||
+    checkpoint.custodyEpoch !== claim.custodyEpoch ||
+    checkpoint.sourceHostId !== claim.hostId ||
+    !checkpoint.validationReceipts.includes(
+      `executor-command:${input.command.commandId}`,
+    ) ||
+    !checkpoint.validationReceipts.includes("worker-turn:completed")
+  ) {
+    throw new Error(
+      "Completed executor command does not match its authenticated checkpoint.",
+    );
+  }
+  return workProductIdentitySchema.parse({
+    schemaVersion: 1,
+    repository: claim.repository,
+    issueNumber: claim.issueNumber,
+    claimId: claim.claimId,
+    custodyEpoch: claim.custodyEpoch,
+    hostId: claim.hostId,
+    branch: claim.branch,
+    worktree: claim.worktree,
+    commandId: input.command.commandId,
+    checkpointReference: input.checkpointReference,
+    head: checkpoint.repositoryHead,
+    patchDigest: checkpoint.patchDigest,
+    implementation: input.implementation,
+  });
+}
 
 const validationCommandReceiptSchema = z.object({
   argv: z.array(z.string()).min(1),

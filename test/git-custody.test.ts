@@ -58,6 +58,18 @@ describe("GitCustodyCheckpointService", () => {
       createdAt: "2026-08-13T18:00:00.000Z",
     });
     expect(captured.manifest.baseHead).toBe(baseHead);
+    await expect(
+      service.inspect({
+        repositoryRoot: source,
+        branch: originalClaim.branch,
+        baseRef: "origin/dev",
+      }),
+    ).resolves.toEqual({
+      repositoryHead: captured.manifest.repositoryHead,
+      baseHead: captured.manifest.baseHead,
+      patchDigest: captured.manifest.patchDigest,
+      includedUntrackedPaths: captured.manifest.includedUntrackedPaths,
+    });
 
     await service.restore({
       reference: captured.reference,
@@ -79,5 +91,15 @@ describe("GitCustodyCheckpointService", () => {
     expect(await git(destination, ["diff", "--cached", "--name-only"])).toContain(
       "tracked.txt",
     );
+    await expect(
+      service.inspect({
+        repositoryRoot: destination,
+        branch: originalClaim.branch,
+        baseRef: "origin/dev",
+      }),
+    ).resolves.toMatchObject({
+      repositoryHead: captured.manifest.repositoryHead,
+      patchDigest: captured.manifest.patchDigest,
+    });
   });
 });

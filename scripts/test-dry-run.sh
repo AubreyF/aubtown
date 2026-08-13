@@ -105,6 +105,43 @@ harness_key readScheduler "freed-project/freed" "${TMP_DIR}/scheduler-after-work
 jq -e '. == []' "${TMP_DIR}/scheduler-after-workflow.json" > /dev/null
 
 jq -n \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --slurpfile fixture "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
+  '{schemaVersion: 1, repository: $fixture[0].claim.repository, issueNumber: $fixture[0].claim.issueNumber, claimId: $fixture[0].claim.claimId, custodyEpoch: $fixture[0].claim.custodyEpoch, hostId: $fixture[0].claim.hostId, branch: $fixture[0].claim.branch, worktree: $fixture[0].claim.worktree, commandId: "50e13459-412e-41f7-809f-0d91dc660d52", checkpointReference: $reference, head: ("c" * 40), patchDigest: ("d" * 64), implementation: {driverId: "codex-app-server-v1", threadId: "implementation-thread", turnId: "implementation-turn"}}' \
+  > "${TMP_DIR}/handoff-work-product.json"
+harness_file \
+  initializeHandoff \
+  "$CHECKPOINT_REFERENCE" \
+  workProduct \
+  "${TMP_DIR}/handoff-work-product.json" \
+  "${TMP_DIR}/handoff-initialized.json"
+jq -e '.stage == "awaiting-validation"' "${TMP_DIR}/handoff-initialized.json" >/dev/null
+jq -n \
+  --slurpfile workProduct "${TMP_DIR}/handoff-work-product.json" \
+  '{schemaVersion: 1, kind: "exact-validation", workProduct: $workProduct[0], passed: true, commands: [{argv: ["/opt/node/bin/npm", "test"], cwd: $workProduct[0].worktree, exitCode: 0, outputDigest: ("e" * 64), durationMs: 1000}], completedAt: "2026-08-13T08:00:30.000Z", summary: "Validation passed."}' \
+  > "${TMP_DIR}/handoff-validation.json"
+harness_file \
+  recordHandoffValidation \
+  "$CHECKPOINT_REFERENCE" \
+  validation \
+  "${TMP_DIR}/handoff-validation.json" \
+  "${TMP_DIR}/handoff-validated.json"
+jq -e '.stage == "awaiting-review"' "${TMP_DIR}/handoff-validated.json" >/dev/null
+jq -n \
+  --slurpfile workProduct "${TMP_DIR}/handoff-work-product.json" \
+  '{schemaVersion: 1, kind: "independent-review", workProduct: $workProduct[0], reviewer: {driverId: "codex-app-server-review-v1", threadId: "review-thread", turnId: "review-turn"}, verdict: "pass", findings: [], completedAt: "2026-08-13T08:00:45.000Z", summary: "Review passed."}' \
+  > "${TMP_DIR}/handoff-review.json"
+harness_file \
+  recordHandoffReview \
+  "$CHECKPOINT_REFERENCE" \
+  review \
+  "${TMP_DIR}/handoff-review.json" \
+  "${TMP_DIR}/handoff-reviewed.json"
+jq -e '.stage == "ready" and .reasons == []' "${TMP_DIR}/handoff-reviewed.json" >/dev/null
+harness_key readHandoff "$CHECKPOINT_REFERENCE" "${TMP_DIR}/handoff-read.json"
+jq -e '.stage == "ready" and .validation.passed == true and .review.verdict == "pass"' "${TMP_DIR}/handoff-read.json" >/dev/null
+
+jq -n \
   --slurpfile fixture "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
   --slurpfile result "${TMP_DIR}/admitted.json" \
   '{claim: $fixture[0].claim, qualification: $result[0].qualification, concurrency: "bounded"}' \
@@ -456,4 +493,4 @@ jq -e \
   "${TMP_DIR}/reconciliation-result.json" \
   > /dev/null
 
-echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, unauthenticated checkpoint rejected, canonical 24-hour failover superseded the offline turn, custody transferred behind a restore fence, restart state reconciled, claims released."
+echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, validation and fresh review advanced one durable handoff, unauthenticated checkpoint rejected, canonical 24-hour failover superseded the offline turn, custody transferred behind a restore fence, restart state reconciled, claims released."

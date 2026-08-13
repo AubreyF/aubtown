@@ -45,6 +45,12 @@ import {
   admittedDispatchWorkflow,
   type AdmittedDispatchInput,
 } from "./admitted-dispatch-workflow.js";
+import { handoffRegistry } from "./handoff-registry.js";
+import type {
+  ExactValidationReceipt,
+  IndependentReviewReceipt,
+  WorkProductIdentity,
+} from "../adjudication/receipts.js";
 
 interface KeyedInput<T> {
   readonly key: string;
@@ -106,6 +112,18 @@ interface WorkspaceRequirementInput extends KeyOnlyInput {
   readonly requirement: InitialWorkspaceRequirement;
 }
 
+interface WorkProductInput extends KeyOnlyInput {
+  readonly workProduct: WorkProductIdentity;
+}
+
+interface ValidationReceiptInput extends KeyOnlyInput {
+  readonly validation: ExactValidationReceipt;
+}
+
+interface ReviewReceiptInput extends KeyOnlyInput {
+  readonly review: IndependentReviewReceipt;
+}
+
 /**
  * Local integration ingress for black-box tests. Production never binds this
  * service. All durable factory services remain ingress-private.
@@ -158,6 +176,29 @@ export const integrationHarness = restate.service({
         .require(request.requirement),
     readWorkspace: async (ctx: restate.Context, request: KeyOnlyInput) =>
       await ctx.objectClient(hostWorkspaceRegistry, request.key).read(),
+    initializeHandoff: async (
+      ctx: restate.Context,
+      request: WorkProductInput,
+    ) =>
+      await ctx
+        .objectClient(handoffRegistry, request.key)
+        .initialize(request.workProduct),
+    recordHandoffValidation: async (
+      ctx: restate.Context,
+      request: ValidationReceiptInput,
+    ) =>
+      await ctx
+        .objectClient(handoffRegistry, request.key)
+        .recordValidation(request.validation),
+    recordHandoffReview: async (
+      ctx: restate.Context,
+      request: ReviewReceiptInput,
+    ) =>
+      await ctx
+        .objectClient(handoffRegistry, request.key)
+        .recordReview(request.review),
+    readHandoff: async (ctx: restate.Context, request: KeyOnlyInput) =>
+      await ctx.objectClient(handoffRegistry, request.key).read(),
     requireWorkspace: async (
       ctx: restate.Context,
       request: WorkspaceRequirementInput,

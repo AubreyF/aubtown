@@ -229,6 +229,8 @@ describe("Codex app-server integration", () => {
       claimId: "claim-1234",
       custodyEpoch: 1,
       hostId: "linux-control-1",
+      branch: "fix/deterministic-validation",
+      worktree: "/worktrees/1234",
       commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
       checkpointReference: "d".repeat(64),
       head: "c".repeat(40),

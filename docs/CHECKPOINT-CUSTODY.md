@@ -19,6 +19,8 @@ The complete archive is encrypted with XChaCha20-Poly1305. The manifest is authe
 
 The host execution journal persists capture, edge storage receipt, and catalog admission separately. A terminal executor receipt is withheld until all three stages succeed. That receipt carries the checkpoint content address. Restate accepts it only when the authenticated manifest names the current host, claim, epoch, command ID, and reported terminal stage. After a restart, the host resumes at the first missing stage and never starts another worker turn for that command.
 
+The same archive builder exposes a read-only worktree inspection path. Validation compares the current Git head and complete archive digest with the terminal checkpoint before and after every command. The digest includes the binary tracked patch plus approved untracked paths, contents, and executable bits. This catches candidate mutation that a Git-head check alone would miss.
+
 Manifest schema 2 binds the checkpoint to its repository, issue, claim, custody epoch, and source host. Schema 1 checkpoints were never used for real factory work and are not accepted by the remote transfer path.
 
 ## Transfer

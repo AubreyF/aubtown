@@ -33,6 +33,13 @@ export interface CapturedCheckpoint {
   readonly manifest: CustodyCheckpoint;
 }
 
+export interface GitWorktreeState {
+  readonly repositoryHead: string;
+  readonly baseHead: string;
+  readonly patchDigest: string;
+  readonly includedUntrackedPaths: readonly string[];
+}
+
 export class GitCustodyCheckpointService {
   constructor(
     private readonly runner: CommandRunner,
@@ -49,78 +56,42 @@ export class GitCustodyCheckpointService {
     readonly keyReference: string;
     readonly createdAt: string;
   }): Promise<CapturedCheckpoint> {
-    await this.#assertBranch(input.repositoryRoot, input.claim.branch);
-    const repositoryHead = await this.#gitLine(input.repositoryRoot, ["rev-parse", "HEAD"]);
-    const baseHead = await this.#gitLine(input.repositoryRoot, [
-      "merge-base",
-      "HEAD",
-      input.baseRef,
-    ]);
-    const patch = (
-      await this.runner.run({
-        executable: this.gitExecutable,
-        args: ["diff", "--binary", "--full-index", baseHead, "--", "."],
-        cwd: input.repositoryRoot,
-        maxBufferBytes: MAX_ARCHIVE_BYTES,
-      })
-    ).stdout;
-    const untrackedOutput = (
-      await this.runner.run({
-        executable: this.gitExecutable,
-        args: ["ls-files", "--others", "--exclude-standard", "-z"],
-        cwd: input.repositoryRoot,
-        maxBufferBytes: 16 * 1_024 * 1_024,
-      })
-    ).stdout;
-    const untrackedPaths = untrackedOutput
-      .split("\0")
-      .filter(Boolean)
-      .sort();
-    const untracked: GitCheckpointArchive["untracked"] = [];
-    for (const relativePath of untrackedPaths) {
-      if (!isCheckpointPathAllowed(relativePath)) {
-        throw new Error(`Checkpoint path is forbidden: ${relativePath}`);
-      }
-      const absolutePath = await this.#physicalRepositoryFile(
-        input.repositoryRoot,
-        relativePath,
-      );
-      const stats = await lstat(absolutePath);
-      if (stats.size > MAX_UNTRACKED_FILE_BYTES) {
-        throw new Error(`Untracked checkpoint file is too large: ${relativePath}`);
-      }
-      untracked.push({
-        path: relativePath,
-        contentBase64: (await readFile(absolutePath)).toString("base64"),
-        executable: (stats.mode & 0o100) !== 0,
-      });
-    }
-    const archive: GitCheckpointArchive = {
-      schemaVersion: 1,
-      baseHead,
-      repositoryHead,
-      patch,
-      untracked,
-    };
-    const archiveBytes = new TextEncoder().encode(JSON.stringify(archive));
-    if (archiveBytes.length > MAX_ARCHIVE_BYTES) {
-      throw new Error("Checkpoint archive exceeds the custody size limit.");
-    }
+    const snapshot = await this.#snapshot({
+      repositoryRoot: input.repositoryRoot,
+      branch: input.claim.branch,
+      baseRef: input.baseRef,
+    });
     const manifest = createCheckpointManifest({
       claim: input.claim,
-      repositoryHead,
-      baseHead,
-      patch: archiveBytes,
-      includedUntrackedPaths: untrackedPaths,
+      repositoryHead: snapshot.archive.repositoryHead,
+      baseHead: snapshot.archive.baseHead,
+      patch: snapshot.archiveBytes,
+      includedUntrackedPaths: snapshot.untrackedPaths,
       validationReceipts: input.validationReceipts,
       createdAt: input.createdAt,
     });
     const encrypted = await this.cipher.encrypt({
       manifest,
-      archive: archiveBytes,
+      archive: snapshot.archiveBytes,
       keyReference: input.keyReference,
     });
     return { reference: await this.store.put(encrypted), manifest };
+  }
+
+  async inspect(input: {
+    readonly repositoryRoot: string;
+    readonly branch: string;
+    readonly baseRef: string;
+  }): Promise<GitWorktreeState> {
+    const snapshot = await this.#snapshot(input);
+    return {
+      repositoryHead: snapshot.archive.repositoryHead,
+      baseHead: snapshot.archive.baseHead,
+      patchDigest: createHash("sha256")
+        .update(snapshot.archiveBytes)
+        .digest("hex"),
+      includedUntrackedPaths: snapshot.untrackedPaths,
+    };
   }
 
   async restore(input: {
@@ -279,6 +250,75 @@ export class GitCustodyCheckpointService {
       JSON.parse(new TextDecoder().decode(archiveBytes)),
     );
     return { manifest: encrypted.manifest, archive };
+  }
+
+  async #snapshot(input: {
+    readonly repositoryRoot: string;
+    readonly branch: string;
+    readonly baseRef: string;
+  }): Promise<{
+    readonly archive: GitCheckpointArchive;
+    readonly archiveBytes: Uint8Array;
+    readonly untrackedPaths: readonly string[];
+  }> {
+    await this.#assertBranch(input.repositoryRoot, input.branch);
+    const repositoryHead = await this.#gitLine(input.repositoryRoot, [
+      "rev-parse",
+      "HEAD",
+    ]);
+    const baseHead = await this.#gitLine(input.repositoryRoot, [
+      "merge-base",
+      "HEAD",
+      input.baseRef,
+    ]);
+    const patch = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["diff", "--binary", "--full-index", baseHead, "--", "."],
+        cwd: input.repositoryRoot,
+        maxBufferBytes: MAX_ARCHIVE_BYTES,
+      })
+    ).stdout;
+    const untrackedOutput = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["ls-files", "--others", "--exclude-standard", "-z"],
+        cwd: input.repositoryRoot,
+        maxBufferBytes: 16 * 1_024 * 1_024,
+      })
+    ).stdout;
+    const untrackedPaths = untrackedOutput.split("\0").filter(Boolean).sort();
+    const untracked: GitCheckpointArchive["untracked"] = [];
+    for (const relativePath of untrackedPaths) {
+      if (!isCheckpointPathAllowed(relativePath)) {
+        throw new Error(`Checkpoint path is forbidden: ${relativePath}`);
+      }
+      const absolutePath = await this.#physicalRepositoryFile(
+        input.repositoryRoot,
+        relativePath,
+      );
+      const stats = await lstat(absolutePath);
+      if (stats.size > MAX_UNTRACKED_FILE_BYTES) {
+        throw new Error(`Untracked checkpoint file is too large: ${relativePath}`);
+      }
+      untracked.push({
+        path: relativePath,
+        contentBase64: (await readFile(absolutePath)).toString("base64"),
+        executable: (stats.mode & 0o100) !== 0,
+      });
+    }
+    const archive: GitCheckpointArchive = {
+      schemaVersion: 1,
+      baseHead,
+      repositoryHead,
+      patch,
+      untracked,
+    };
+    const archiveBytes = new TextEncoder().encode(JSON.stringify(archive));
+    if (archiveBytes.length > MAX_ARCHIVE_BYTES) {
+      throw new Error("Checkpoint archive exceeds the custody size limit.");
+    }
+    return { archive, archiveBytes, untrackedPaths };
   }
 
   async #gitLine(root: string, args: readonly string[]): Promise<string> {

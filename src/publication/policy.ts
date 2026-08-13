@@ -94,7 +94,9 @@ export function planDraftPublication(input: {
     input.workProduct.issueNumber !== input.claim.issueNumber ||
     input.workProduct.claimId !== input.claim.claimId ||
     input.workProduct.custodyEpoch !== input.claim.custodyEpoch ||
-    input.workProduct.hostId !== input.claim.hostId
+    input.workProduct.hostId !== input.claim.hostId ||
+    input.workProduct.branch !== input.claim.branch ||
+    input.workProduct.worktree !== input.claim.worktree
   ) {
     reasons.push("work-product-identity-mismatch");
   }

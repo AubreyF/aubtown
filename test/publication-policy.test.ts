@@ -22,6 +22,8 @@ const workProduct: WorkProductIdentity = {
   claimId: "claim-1234",
   custodyEpoch: 1,
   hostId: "linux-control-1",
+  branch: claim().branch,
+  worktree: claim().worktree,
   commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
   checkpointReference: "d".repeat(64),
   head,

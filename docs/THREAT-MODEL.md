@@ -29,8 +29,11 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Terminal result is accepted before work is recoverable | Host journal requires encrypted capture, edge-signed storage receipt, and catalog admission before the terminal executor receipt |
 | Terminal result describes work other than the stored checkpoint | Receipt carries the content address; authenticated manifest must match current host, claim, epoch, exact command ID, and terminal stage |
 | Validation or review is replayed against another change | Both receipts bind the complete checkpoint-backed work-product identity, including head and patch digest |
+| Validation command changes uncommitted work while preserving Git HEAD | Custody archive digest is recomputed before and after each no-shell command and includes tracked plus approved-untracked state |
+| Issue text injects a shell pipeline as validation | Repository adapter supplies reviewed argv recipes with absolute physical executables; issue prose is never executed |
 | Implementation context approves its own work | Independent review requires a different thread and structured verdict; implementation-thread reuse is rejected |
 | Reviewer changes the candidate while inspecting it | Review runs in a read-only, network-disabled app-server sandbox and publication rechecks the exact work-product identity |
+| Restart skips validation or replaces a prior verdict | Checkpoint-keyed durable handoff registry enforces ordered immutable validation and review receipts |
 | Returning stale host resumes work after failover | Signed startup reconciliation requires the exact current claim epoch, command, thread, turn, enrolled account, and quota headroom before app-server resume |
 | Custody moves while the old host may still write | Per-host transfer fence cancels only unoffered commands and blocks offered, started, or ambiguous commands until terminal adjudication |
 | Caller lies that a host is offline | Failover rereads canonical source and candidate heartbeats from ingress-private Restate state and requires at least 24 hours offline |
@@ -77,6 +80,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 - No terminal executor result without its matching authenticated, cataloged command checkpoint.
 - No publication with validation or review receipts for another work-product identity.
 - No independent-review receipt from the implementation thread.
+- No draft handoff before the checkpoint-keyed durable state reaches `ready`.
 - No admitted dispatch workflow call from an unverified repository authority bridge.
 
 ## Deferred risks
