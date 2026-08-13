@@ -16,6 +16,10 @@
     "factory:human-review"
   ],
   "publicationCeiling": "draft-pr",
+  "lifecycleProjection": {
+    "enabled": false,
+    "machineAuthorLogin": "replace-with-coordinator-app-bot-login"
+  },
   "worktree": {
     "base": "origin/dev",
     "helper": "scripts/worktree-add.sh",

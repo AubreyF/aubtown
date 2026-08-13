@@ -25,7 +25,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Prove durable host liveness and 24 hour automatic custody transfer.
 - [x] Prove startup reconciliation against canonical task, issue, branch, and worktree state.
 - [x] Enforce exact-head draft publication planning and scoped GitHub App token minting.
-- [ ] Permit only approved lifecycle status projection.
+- [x] Implement approved-only lifecycle status projection, disabled by default until external write authorization.
 
 ## Phase 3: one Freed issue
 
