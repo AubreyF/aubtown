@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { reconcileClaim } from "../src/policy/reconciliation.js";
+import {
+  reconcileClaim,
+  reconcileSnapshot,
+} from "../src/policy/reconciliation.js";
 import { authorityTask, claim as dispatchClaim } from "./helpers.js";
 
 const issue = {
@@ -70,5 +73,64 @@ describe("reconcileClaim", () => {
         workspaces: [],
       }).action,
     ).toBe("block-authority");
+  });
+});
+
+describe("reconcileSnapshot", () => {
+  const currentWorkspace = () => {
+    const current = dispatchClaim();
+    return {
+      hostId: current.hostId,
+      claimId: current.claimId,
+      custodyEpoch: current.custodyEpoch,
+      branch: current.branch,
+      worktree: current.worktree,
+      exists: true,
+    };
+  };
+
+  it("admits startup only when every canonical witness agrees", () => {
+    const result = reconcileSnapshot({
+      observedAt: "2026-08-13T18:00:00.000Z",
+      now: "2026-08-13T18:00:30.000Z",
+      maxAgeSeconds: 120,
+      claims: [dispatchClaim()],
+      issues: [issue],
+      authorityTasks: [authorityTask()],
+      workspaces: [currentWorkspace()],
+    });
+    expect(result.dispatchSafe).toBe(true);
+    expect(result.entries[0]?.decision.action).toBe("continue");
+  });
+
+  it("blocks duplicate issue claims before dispatch", () => {
+    const result = reconcileSnapshot({
+      observedAt: "2026-08-13T18:00:00.000Z",
+      now: "2026-08-13T18:00:30.000Z",
+      maxAgeSeconds: 120,
+      claims: [
+        dispatchClaim(),
+        dispatchClaim({ claimId: "claim-duplicate", branch: "fix/other", worktree: "/tmp/other" }),
+      ],
+      issues: [issue],
+      authorityTasks: [authorityTask()],
+      workspaces: [currentWorkspace()],
+    });
+    expect(result.dispatchSafe).toBe(false);
+    expect(result.entries.every((entry) => entry.decision.action === "block-duplicate-claim"))
+      .toBe(true);
+  });
+
+  it("blocks stale startup evidence", () => {
+    const result = reconcileSnapshot({
+      observedAt: "2026-08-13T17:00:00.000Z",
+      now: "2026-08-13T18:00:30.000Z",
+      maxAgeSeconds: 120,
+      claims: [dispatchClaim()],
+      issues: [issue],
+      authorityTasks: [authorityTask()],
+      workspaces: [currentWorkspace()],
+    });
+    expect(result.entries[0]?.decision.action).toBe("block-stale-snapshot");
   });
 });

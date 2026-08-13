@@ -85,8 +85,12 @@ The initial Freed bridge remains fail-closed until the authority extension in [F
 
 Every successful mutating turn and planned shutdown creates an encrypted checkpoint. Checkpoints include Git state, approved untracked files, validation receipts, and custody metadata. They exclude credentials, ignored files, dependencies, arbitrary untracked files, and authentication caches.
 
+The pilot checkpoint implementation uses XChaCha20-Poly1305 with the manifest as authenticated associated data. A content-addressed atomic store retains encrypted archives. Restore requires a clean destination at the exact base head and advances custody before execution resumes. See [CHECKPOINT-CUSTODY.md](CHECKPOINT-CUSTODY.md).
+
 An offline host triggers alerts at 1 hour and 12 hours. At 24 hours, portable work may transfer to an online compatible host. The coordinator durably increments the custody epoch before the destination resumes. A returning stale host is quarantined until it proves it has no current claim.
 
 ## Publication
 
 Phase 1 performs no external writes. Phase 2 may update lifecycle labels and one machine-managed status comment after that write path is enabled. Phase 3 may publish a draft pull request. External bodies begin with `(AI Generated).` and a blank line. Automatic merge, release, deployment, issue closure, provider traffic, signing, secrets, and production migrations remain prohibited.
+
+Publication planning fails closed unless current custody, exact issue authority, quota headroom, exact-head validation, fresh independent review, safe lane classification, title hygiene, branch identity, and the draft-only ceiling all agree. The Draft Publisher token broker accepts only an admitted plan and narrows its installation token to one enrolled repository.

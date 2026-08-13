@@ -1,6 +1,7 @@
 import * as restate from "@restatedev/restate-sdk";
 import type {
   ActiveDispatch,
+  ClaimTransferRequest,
   DispatchClaim,
   QualificationReport,
 } from "../domain/types.js";
@@ -98,6 +99,45 @@ export const schedulerRegistry = restate.object({
         active.filter((candidate) => candidate.claim.claimId !== expected.claimId),
       );
       return true;
+    },
+    transfer: async (
+      ctx: restate.ObjectContext<SchedulerState>,
+      request: ClaimTransferRequest,
+    ): Promise<DispatchClaim> => {
+      const active = (await ctx.get("active")) ?? [];
+      const index = active.findIndex(
+        (entry) => entry.claim.claimId === request.claimId,
+      );
+      if (index < 0) {
+        throw new restate.TerminalError("Scheduler claim not found for custody transfer.");
+      }
+      const current = active[index]!.claim;
+      if (
+        current.custodyEpoch === request.nextEpoch &&
+        current.hostId === request.destinationHostId &&
+        current.workerId === request.destinationWorkerId &&
+        current.worktree === request.destinationWorktree
+      ) {
+        return current;
+      }
+      if (
+        current.custodyEpoch !== request.priorEpoch ||
+        request.nextEpoch !== request.priorEpoch + 1
+      ) {
+        throw new restate.TerminalError("Scheduler custody transfer must advance exactly one epoch.");
+      }
+      const transferred: DispatchClaim = {
+        ...current,
+        custodyEpoch: request.nextEpoch,
+        hostId: request.destinationHostId,
+        workerId: request.destinationWorkerId,
+        worktree: request.destinationWorktree,
+        claimedAt: request.transferredAt,
+      };
+      const next = [...active];
+      next[index] = { ...active[index]!, claim: transferred };
+      ctx.set("active", next);
+      return transferred;
     },
     read: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext<SchedulerState>) =>

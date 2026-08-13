@@ -28,6 +28,8 @@ The local Compose baseline accepts unsigned Restate-to-service requests because 
 9. Run read-only reconciliation and the shadow fixture.
 10. Keep all writers disabled until the dry-run and authority-extension receipts pass.
 
+Configure separate private-key references for the Coordinator and Draft Publisher GitHub Apps. The broker mints one-repository installation tokens with operation-specific permissions. Read-only qualification receives `issues: read`. Lifecycle projection receives `issues: write` only after its phase gate. Draft publication receives `contents: write` and `pull_requests: write` only after an admitted exact-head publication plan. Workers receive none of these credentials.
+
 ## Host quota monitor
 
 Run `npm run host:monitor` under systemd on Linux and launchd on macOS. The process starts Codex app-server inside that host's isolated `CODEX_HOME`, samples the actual rolling weekly window every 60 seconds, and submits observations to the durable account governor. Telemetry failures stop admission. When workers are enabled in the same host agent, the monitor also tracks their turn handles and sends targeted interrupts at the approved ceiling.
@@ -35,6 +37,8 @@ Run `npm run host:monitor` under systemd on Linux and launchd on macOS. The proc
 Set `FREEDWORKS_CODEX_MODEL` only after the account advertises that model as callable. Freedworks has no fallback model guess.
 
 Do not point two host agents at the same `CODEX_HOME`. One execution account profile belongs to one host agent. Future extra subscriptions use separate OS users, credential directories, account IDs, and app-server processes.
+
+Each executor sends a heartbeat to the durable host registry. A heartbeat older than 120 seconds removes the host from new routing. Custody alerts remain at 1 hour and 12 hours, with automatic portable-work transfer at 24 hours.
 
 ## Provider portability
 

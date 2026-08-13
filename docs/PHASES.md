@@ -21,6 +21,10 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Run Restate with a fake worker.
 - [x] Prove restart reconciliation and duplicate-dispatch prevention.
 - [x] Prove quota interruption, custody fencing, and conflict locking.
+- [x] Encrypt, store, transfer, and restore unpublished checkpoint work.
+- [x] Prove durable host liveness and 24 hour automatic custody transfer.
+- [x] Prove startup reconciliation against canonical task, issue, branch, and worktree state.
+- [x] Enforce exact-head draft publication planning and scoped GitHub App token minting.
 - [ ] Permit only approved lifecycle status projection.
 
 ## Phase 3: one Freed issue

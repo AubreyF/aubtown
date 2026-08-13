@@ -5,6 +5,9 @@ import { dryRunWorkflow } from "./orchestration/dry-run-workflow.js";
 import { fakeWorker } from "./orchestration/fake-worker.js";
 import { qualificationWorkflow } from "./orchestration/qualification-workflow.js";
 import { schedulerRegistry } from "./orchestration/scheduler-registry.js";
+import { hostRegistry } from "./orchestration/host-registry.js";
+import { custodyTransferWorkflow } from "./orchestration/custody-transfer-workflow.js";
+import { reconciliationWorkflow } from "./orchestration/reconciliation-workflow.js";
 
 const identityKeys = (process.env.FREEDWORKS_RESTATE_IDENTITY_KEYS ?? "")
   .split(",")
@@ -19,6 +22,9 @@ const port = await restate.serve({
     fakeWorker,
     qualificationWorkflow,
     schedulerRegistry,
+    hostRegistry,
+    custodyTransferWorkflow,
+    reconciliationWorkflow,
   ],
   ...(identityKeys.length === 0 ? {} : { identityKeys }),
 });

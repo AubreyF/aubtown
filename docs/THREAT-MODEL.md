@@ -25,9 +25,12 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
 | Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
+| Checkpoint manifest is changed | Manifest is authenticated as XChaCha20-Poly1305 associated data |
+| Checkpoint restore overwrites destination work | Clean exact-base requirement and exclusive untracked-file creation |
 | Provider-visible change runs unattended | Provider lane cap is zero and qualification is blocking |
 | Repository adapter broadens authority | Adapter conformance tests and supported command allowlist |
 | Tracker token reaches worker | Host-side GitHub App broker only |
+| App token has unnecessary authority | One enrolled repository and operation-specific installation permissions |
 | Malicious issue prompt changes policy | Issue text is data, fixed system policy remains outside worker input |
 | Retry burns subscription quota | Retry budget distinguishes transient failure from authority and human blocks |
 | Second queue appears | No ticket database or Markdown work queue in Freedworks |

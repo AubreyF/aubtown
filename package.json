@@ -20,6 +20,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@noble/ciphers": "2.3.0",
+    "@octokit/auth-app": "8.3.0",
     "@octokit/rest": "22.0.1",
     "@restatedev/restate-sdk": "1.16.5",
     "zod": "4.4.3"

@@ -101,6 +101,16 @@ export interface DispatchClaim {
   readonly claimedAt: string;
 }
 
+export interface ClaimTransferRequest {
+  readonly claimId: string;
+  readonly priorEpoch: number;
+  readonly nextEpoch: number;
+  readonly destinationHostId: string;
+  readonly destinationWorkerId: string;
+  readonly destinationWorktree: string;
+  readonly transferredAt: string;
+}
+
 export interface HostRecord {
   readonly id: string;
   readonly lane: HostLane;

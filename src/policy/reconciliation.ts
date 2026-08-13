@@ -7,6 +7,10 @@ import type {
 
 export type ReconciliationAction =
   | "continue"
+  | "block-stale-snapshot"
+  | "block-duplicate-claim"
+  | "block-resource-collision"
+  | "block-issue-mismatch"
   | "block-authority"
   | "block-label"
   | "block-issue-closed"
@@ -25,6 +29,9 @@ export function reconcileClaim(input: {
   readonly authorityTask?: AuthorityTask;
   readonly workspaces: readonly ReconciliationWorkspaceState[];
 }): ReconciliationDecision {
+  if (input.issue !== undefined && input.issue.number !== input.claim.issueNumber) {
+    return { action: "block-issue-mismatch", reason: "issue does not match claim identity" };
+  }
   if (input.issue === undefined || !input.issue.open) {
     return { action: "block-issue-closed", reason: "canonical issue is not open" };
   }
@@ -70,4 +77,108 @@ export function reconcileClaim(input: {
     };
   }
   return { action: "continue", reason: "canonical and projected state agree" };
+}
+
+export interface ReconciliationSnapshot {
+  readonly observedAt: string;
+  readonly now: string;
+  readonly maxAgeSeconds: number;
+  readonly claims: readonly DispatchClaim[];
+  readonly issues: readonly ReconciliationIssueState[];
+  readonly authorityTasks: readonly AuthorityTask[];
+  readonly workspaces: readonly ReconciliationWorkspaceState[];
+}
+
+export interface ReconciliationEntry {
+  readonly claimId: string;
+  readonly issueNumber: number;
+  readonly decision: ReconciliationDecision;
+}
+
+export interface ReconciliationReport {
+  readonly dispatchSafe: boolean;
+  readonly observedAt: string;
+  readonly entries: readonly ReconciliationEntry[];
+}
+
+export function reconcileSnapshot(
+  snapshot: ReconciliationSnapshot,
+): ReconciliationReport {
+  const ageSeconds =
+    (Date.parse(snapshot.now) - Date.parse(snapshot.observedAt)) / 1_000;
+  if (
+    !Number.isFinite(ageSeconds) ||
+    ageSeconds < 0 ||
+    ageSeconds > snapshot.maxAgeSeconds
+  ) {
+    const entries = snapshot.claims.map((claim) => ({
+      claimId: claim.claimId,
+      issueNumber: claim.issueNumber,
+      decision: {
+        action: "block-stale-snapshot" as const,
+        reason: "startup evidence is stale or temporally invalid",
+      },
+    }));
+    return { dispatchSafe: false, observedAt: snapshot.observedAt, entries };
+  }
+
+  const entries = snapshot.claims.map((claim): ReconciliationEntry => {
+    const duplicateIssue = snapshot.claims.some(
+      (candidate) =>
+        candidate.claimId !== claim.claimId &&
+        candidate.repository.owner === claim.repository.owner &&
+        candidate.repository.name === claim.repository.name &&
+        candidate.issueNumber === claim.issueNumber,
+    );
+    if (duplicateIssue) {
+      return {
+        claimId: claim.claimId,
+        issueNumber: claim.issueNumber,
+        decision: {
+          action: "block-duplicate-claim",
+          reason: "multiple active claims target one canonical issue",
+        },
+      };
+    }
+    const resourceCollision = snapshot.claims.some(
+      (candidate) =>
+        candidate.claimId !== claim.claimId &&
+        (candidate.branch === claim.branch || candidate.worktree === claim.worktree),
+    );
+    if (resourceCollision) {
+      return {
+        claimId: claim.claimId,
+        issueNumber: claim.issueNumber,
+        decision: {
+          action: "block-resource-collision",
+          reason: "another claim shares this branch or worktree",
+        },
+      };
+    }
+    const issue = snapshot.issues.find(
+      (candidate) => candidate.number === claim.issueNumber,
+    );
+    const authorityTask = snapshot.authorityTasks.find(
+      (task) =>
+        task.githubIssue.number === claim.issueNumber &&
+        task.githubIssue.url === issue?.url,
+    );
+    return {
+      claimId: claim.claimId,
+      issueNumber: claim.issueNumber,
+      decision: reconcileClaim({
+        claim,
+        ...(issue === undefined ? {} : { issue }),
+        ...(authorityTask === undefined ? {} : { authorityTask }),
+        workspaces: snapshot.workspaces.filter(
+          (workspace) => workspace.claimId === claim.claimId,
+        ),
+      }),
+    };
+  });
+  return {
+    dispatchSafe: entries.every((entry) => entry.decision.action === "continue"),
+    observedAt: snapshot.observedAt,
+    entries,
+  };
 }

@@ -20,5 +20,9 @@ Observed results:
 7. The repository scheduler admitted one bounded claim and rejected a second issue with an overlapping conflict domain.
 8. A custody transfer advanced exactly from epoch 1 to epoch 2. A stale epoch 1 release was rejected.
 9. The quota monitor selected the actual 10,080 minute app-server window and interrupted a tracked fake turn at the weekly ceiling.
+10. Host registry reads marked a fresh Linux heartbeat online and the same host offline after its liveness bound.
+11. The durable custody workflow transferred a 25-hour-offline Mac claim to Linux, changed the worktree, and advanced both claim registries to epoch 2.
+12. Startup reconciliation admitted only matching issue, authority, branch, worktree, host, and custody evidence.
+13. The checkpoint implementation encrypted and reconstructed tracked and approved untracked work without plaintext storage.
 
 The run contacted no worker model, wrote nothing to GitHub, created no Freed worktree, and acquired no Freed lease.

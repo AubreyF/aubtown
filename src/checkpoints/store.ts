@@ -22,3 +22,7 @@ export interface CheckpointCipher {
   }): Promise<EncryptedCheckpointPayload>;
   decrypt(payload: EncryptedCheckpointPayload): Promise<Uint8Array>;
 }
+
+export interface CheckpointKeyProvider {
+  resolve(keyReference: string): Promise<Uint8Array>;
+}

@@ -1,5 +1,8 @@
 import * as restate from "@restatedev/restate-sdk";
-import type { DispatchClaim } from "../domain/types.js";
+import type {
+  ClaimTransferRequest,
+  DispatchClaim,
+} from "../domain/types.js";
 
 interface ClaimState {
   claim: DispatchClaim;
@@ -45,18 +48,19 @@ export const claimRegistry = restate.object({
     },
     transfer: async (
       ctx: restate.ObjectContext<ClaimState>,
-      request: {
-        readonly claimId: string;
-        readonly priorEpoch: number;
-        readonly nextEpoch: number;
-        readonly destinationHostId: string;
-        readonly destinationWorkerId: string;
-        readonly transferredAt: string;
-      },
+      request: ClaimTransferRequest,
     ): Promise<DispatchClaim> => {
       const active = await ctx.get("claim");
       if (active === null || active.claimId !== request.claimId) {
         throw new restate.TerminalError("Active claim not found for custody transfer.");
+      }
+      if (
+        active.custodyEpoch === request.nextEpoch &&
+        active.hostId === request.destinationHostId &&
+        active.workerId === request.destinationWorkerId &&
+        active.worktree === request.destinationWorktree
+      ) {
+        return active;
       }
       if (
         active.custodyEpoch !== request.priorEpoch ||
@@ -69,6 +73,7 @@ export const claimRegistry = restate.object({
         custodyEpoch: request.nextEpoch,
         hostId: request.destinationHostId,
         workerId: request.destinationWorkerId,
+        worktree: request.destinationWorktree,
         claimedAt: request.transferredAt,
       };
       ctx.set("claim", transferred);
