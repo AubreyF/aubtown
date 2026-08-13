@@ -1,10 +1,14 @@
-import { lstat, readFile } from "node:fs/promises";
 import { S3Client } from "@aws-sdk/client-s3";
 import { LocalCheckpointStore } from "./checkpoints/local-store.js";
 import { S3CheckpointStore } from "./checkpoints/s3-store.js";
 import type { CheckpointStore } from "./checkpoints/store.js";
 import { createCheckpointServer } from "./gateway/checkpoint-server.js";
-import { loadHostEnrollments } from "./security/host-enrollment.js";
+import {
+  loadHostEnrollments,
+  loadPrivateKeyPem,
+  loadPublicKeyPem,
+} from "./security/host-enrollment.js";
+import { CheckpointStorageReceiptIssuer } from "./checkpoints/receipt.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -12,17 +16,6 @@ function requiredEnvironment(name: string): string {
     throw new Error(`${name} is required.`);
   }
   return value;
-}
-
-async function readPhysicalPublicKey(file: string): Promise<string> {
-  if (!file.startsWith("/")) {
-    throw new Error("Checkpoint grant public key path must be absolute.");
-  }
-  const stats = await lstat(file);
-  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 64 * 1_024) {
-    throw new Error("Checkpoint grant public key must be a small physical file.");
-  }
-  return await readFile(file, "utf8");
 }
 
 function checkpointStore(): CheckpointStore {
@@ -61,8 +54,15 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 const server = createCheckpointServer({
   store: checkpointStore(),
   hostEnrollments: await loadHostEnrollments(process.env),
-  grantPublicKeyPem: await readPhysicalPublicKey(
+  grantPublicKeyPem: await loadPublicKeyPem(
     requiredEnvironment("FREEDWORKS_CHECKPOINT_GRANT_PUBLIC_KEY_FILE"),
+    "Checkpoint grant public key",
+  ),
+  storageReceiptIssuer: new CheckpointStorageReceiptIssuer(
+    await loadPrivateKeyPem(
+      requiredEnvironment("FREEDWORKS_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE"),
+      "Checkpoint receipt private key",
+    ),
   ),
 });
 server.listen(port, "0.0.0.0", () => {

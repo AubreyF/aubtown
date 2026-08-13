@@ -49,6 +49,8 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Host key silently broadens authority | Enrollment fixes the host lane and allowed execution account IDs |
 | Executor receives object-store credentials | Separate checkpoint edge owns storage and accepts only five-minute claim-bound grants |
 | Stale host substitutes checkpoint content | Content address, schema 2 manifest identity, custody epoch, exact byte length, and host request proof must all match |
+| Caller invents checkpoint metadata for failover | Storage edge signs the persisted reference, length, grant nonce, source host, and full manifest; Restate verifies current custody and catalogs the receipt before transfer |
+| Compromised control plane invents a stored checkpoint | Receipt private key exists only at the checkpoint edge; the control plane receives only its public key |
 | Grant is stolen or replayed | Grant binds one host and operation, requires that host's signature, and expires after five minutes; upload replay is idempotent and download remains encrypted |
 
 ## Fail-closed invariants

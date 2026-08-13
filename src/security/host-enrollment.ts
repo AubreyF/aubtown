@@ -56,3 +56,14 @@ export async function loadPrivateKeyPem(file: string, purpose: string): Promise<
   }
   return await readFile(file, "utf8");
 }
+
+export async function loadPublicKeyPem(file: string, purpose: string): Promise<string> {
+  if (!file.startsWith("/")) {
+    throw new Error(`${purpose} path must be absolute.`);
+  }
+  const stats = await lstat(file);
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 64 * 1_024) {
+    throw new Error(`${purpose} must be a small physical file.`);
+  }
+  return await readFile(file, "utf8");
+}

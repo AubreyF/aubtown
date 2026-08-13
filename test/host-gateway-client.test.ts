@@ -1,7 +1,10 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { HostGatewayClient } from "../src/clients/host-gateway.js";
+import { CheckpointStorageReceiptIssuer } from "../src/checkpoints/receipt.js";
+import { createCheckpointManifest } from "../src/checkpoints/manifest.js";
 import { parseSignedHostEnvelope, verifyHostEnvelope } from "../src/security/host-envelope.js";
+import { claim } from "./helpers.js";
 
 function keyPair() {
   const pair = generateKeyPairSync("ed25519");
@@ -136,5 +139,57 @@ describe("HostGatewayClient", () => {
       },
     });
     expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+  });
+
+  it("submits an edge-signed checkpoint receipt through the host envelope", async () => {
+    const hostKeys = keyPair();
+    const receiptKeys = keyPair();
+    const receipt = new CheckpointStorageReceiptIssuer(receiptKeys.privateKey).issue({
+      schemaVersion: 1,
+      reference: "d".repeat(64),
+      contentLength: 1_024,
+      hostId: "macos-executor-1",
+      grantNonce: "11111111-1111-4111-8111-111111111111",
+      manifest: createCheckpointManifest({
+        claim: claim({ hostId: "macos-executor-1" }),
+        repositoryHead: "a".repeat(40),
+        baseHead: "b".repeat(40),
+        patch: new TextEncoder().encode("diff --git a/a b/a\n"),
+        includedUntrackedPaths: [],
+        validationReceipts: [],
+        createdAt: "2026-08-13T18:00:00.000Z",
+      }),
+      storedAt: "2026-08-13T18:00:01.000Z",
+    });
+    let request: RequestInit | undefined;
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080",
+      "macos-executor-1",
+      hostKeys.privateKey,
+      { next: async () => 10 },
+      async (_input, init) => {
+        request = init;
+        return Response.json({
+          kind: "checkpoint-receipt",
+          hostId: "macos-executor-1",
+          sequence: 10,
+          acceptedAt: "2026-08-13T18:00:02.000Z",
+          reference: receipt.reference,
+          storedAt: receipt.storedAt,
+        });
+      },
+      () => new Date("2026-08-13T18:00:02.000Z"),
+    );
+
+    await expect(client.submitCheckpointReceipt(receipt)).resolves.toMatchObject({
+      kind: "checkpoint-receipt",
+      reference: receipt.reference,
+    });
+    const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
+    expect(envelope).toMatchObject({
+      kind: "checkpoint-receipt",
+      payload: { reference: receipt.reference },
+    });
+    expect(verifyHostEnvelope(envelope, hostKeys.publicKey)).toBe(true);
   });
 });

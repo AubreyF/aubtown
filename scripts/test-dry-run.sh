@@ -10,6 +10,7 @@ BLOCKED_KEY="dry-run-blocked-${RUN_ID}"
 CONFLICT_KEY="dry-run-conflict-${RUN_ID}"
 CUSTODY_KEY="dry-run-custody-${RUN_ID}"
 TRANSFER_WORKFLOW_KEY="dry-run-transfer-${RUN_ID}"
+MISSING_RECEIPT_WORKFLOW_KEY="dry-run-transfer-missing-receipt-${RUN_ID}"
 LANE_MISMATCH_WORKFLOW_KEY="dry-run-transfer-lane-mismatch-${RUN_ID}"
 RECONCILE_WORKFLOW_KEY="dry-run-reconcile-${RUN_ID}"
 INGRESS="${FREEDWORKS_RESTATE_INGRESS:-http://127.0.0.1:8080}"
@@ -279,6 +280,12 @@ jq -n \
 
 jq -n \
   --arg source "$SOURCE_HOST_ID" \
+  --slurpfile claim "${TMP_DIR}/workflow-custody-claim.json" \
+  '{schemaVersion: 1, reference: ("d" * 64), contentLength: 1024, hostId: $source, grantNonce: "33333333-3333-4333-8333-333333333333", manifest: {schemaVersion: 2, repository: $claim[0].repository, issueNumber: $claim[0].issueNumber, claimId: $claim[0].claimId, custodyEpoch: $claim[0].custodyEpoch, sourceHostId: $claim[0].hostId, repositoryHead: ("a" * 40), baseHead: ("b" * 40), patchDigest: ("c" * 64), includedUntrackedPaths: [], validationReceipts: ["focused-test:passed"], createdAt: "2026-08-13T07:30:00.000Z"}, storedAt: "2026-08-13T07:30:01.000Z", signatureBase64: "integration-harness-only"}' \
+  > "${TMP_DIR}/workflow-checkpoint-receipt.json"
+
+jq -n \
+  --arg source "$SOURCE_HOST_ID" \
   --arg destination "$DESTINATION_HOST_ID" \
   --slurpfile claim "${TMP_DIR}/workflow-custody-claim.json" \
   '{
@@ -310,20 +317,7 @@ jq -n \
       }
     ],
     requiredLane: "linux",
-    checkpoint: {
-      schemaVersion: 2,
-      repository: $claim[0].repository,
-      issueNumber: $claim[0].issueNumber,
-      claimId: $claim[0].claimId,
-      custodyEpoch: $claim[0].custodyEpoch,
-      sourceHostId: $claim[0].hostId,
-      repositoryHead: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      baseHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      patchDigest: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      includedUntrackedPaths: [],
-      validationReceipts: ["focused-test:passed"],
-      createdAt: "2026-08-13T07:30:00.000Z"
-    },
+    checkpointReference: ("d" * 64),
     destinations: {
       ($destination): {
         workerId: "worker-linux-1",
@@ -333,6 +327,29 @@ jq -n \
     now: "2026-08-13T08:00:00.000Z"
   }' \
   > "${TMP_DIR}/workflow-custody-input.json"
+
+jq -n \
+  --arg key "$MISSING_RECEIPT_WORKFLOW_KEY" \
+  --slurpfile input "${TMP_DIR}/workflow-custody-input.json" \
+  '{key: $key, input: $input[0]}' \
+  > "${TMP_DIR}/workflow-custody-missing-receipt-request.json"
+MISSING_RECEIPT_STATUS="$(curl --silent --show-error \
+  -o "${TMP_DIR}/workflow-custody-missing-receipt-response.json" \
+  -w '%{http_code}' \
+  -X POST "${HARNESS}/runCustodyTransfer" \
+  -H 'content-type: application/json' \
+  --data-binary "@${TMP_DIR}/workflow-custody-missing-receipt-request.json")"
+if [[ "$MISSING_RECEIPT_STATUS" != "500" ]]; then
+  echo "Expected unregistered custody checkpoint to return 500, received ${MISSING_RECEIPT_STATUS}." >&2
+  exit 1
+fi
+
+harness_file \
+  recordCheckpointReceipt \
+  "$(printf 'd%.0s' {1..64})" \
+  receipt \
+  "${TMP_DIR}/workflow-checkpoint-receipt.json" \
+  /dev/null
 
 jq '.requiredLane = "macos"' \
   "${TMP_DIR}/workflow-custody-input.json" \
@@ -428,4 +445,4 @@ jq -e \
   "${TMP_DIR}/reconciliation-result.json" \
   > /dev/null
 
-echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, canonical 24-hour failover superseded the offline turn, custody transferred, restart state reconciled, claims released."
+echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, unauthenticated checkpoint rejected, canonical 24-hour failover superseded the offline turn, custody transferred, restart state reconciled, claims released."

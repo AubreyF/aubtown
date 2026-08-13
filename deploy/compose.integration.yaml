@@ -2,12 +2,16 @@ services:
   control-plane:
     environment:
       - FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE=/run/freedworks/checkpoint-grant-private.pem
+      - FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE=/run/freedworks/checkpoint-receipt-public.pem
     volumes:
       - "${FREEDWORKS_TEST_CHECKPOINT_GRANT_KEY_FILE:?set the integration grant key path}:/run/freedworks/checkpoint-grant-private.pem:ro"
+      - "${FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE:?set the integration receipt public key path}:/run/freedworks/checkpoint-receipt-public.pem:ro"
 
   checkpoint-edge:
     environment:
       - FREEDWORKS_HOST_ENROLLMENTS_JSON
       - FREEDWORKS_CHECKPOINT_GRANT_PUBLIC_KEY_FILE=/run/freedworks/checkpoint-grant-public.pem
+      - FREEDWORKS_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE=/run/freedworks/checkpoint-receipt-private.pem
     volumes:
       - "${FREEDWORKS_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE:?set the integration grant public key path}:/run/freedworks/checkpoint-grant-public.pem:ro"
+      - "${FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE:?set the integration receipt key path}:/run/freedworks/checkpoint-receipt-private.pem:ro"

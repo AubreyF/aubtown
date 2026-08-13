@@ -16,6 +16,8 @@ LINUX_PRIVATE_KEY="${TMP_DIR}/linux-host-private.pem"
 LINUX_PUBLIC_KEY="${TMP_DIR}/linux-host-public.pem"
 GRANT_PRIVATE_KEY="${TMP_DIR}/checkpoint-grant-private.pem"
 GRANT_PUBLIC_KEY="${TMP_DIR}/checkpoint-grant-public.pem"
+RECEIPT_PRIVATE_KEY="${TMP_DIR}/checkpoint-receipt-private.pem"
+RECEIPT_PUBLIC_KEY="${TMP_DIR}/checkpoint-receipt-public.pem"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 harness_file() {
@@ -121,6 +123,9 @@ openssl pkey -in "$LINUX_PRIVATE_KEY" -pubout -out "$LINUX_PUBLIC_KEY" >/dev/nul
 openssl genpkey -algorithm Ed25519 -out "$GRANT_PRIVATE_KEY" >/dev/null 2>&1
 chmod 600 "$GRANT_PRIVATE_KEY"
 openssl pkey -in "$GRANT_PRIVATE_KEY" -pubout -out "$GRANT_PUBLIC_KEY" >/dev/null 2>&1
+openssl genpkey -algorithm Ed25519 -out "$RECEIPT_PRIVATE_KEY" >/dev/null 2>&1
+chmod 600 "$RECEIPT_PRIVATE_KEY"
+openssl pkey -in "$RECEIPT_PRIVATE_KEY" -pubout -out "$RECEIPT_PUBLIC_KEY" >/dev/null 2>&1
 PUBLIC_KEY_VALUE="$(<"$PUBLIC_KEY")"
 LINUX_PUBLIC_KEY_VALUE="$(<"$LINUX_PUBLIC_KEY")"
 FREEDWORKS_HOST_ENROLLMENTS_JSON="$(jq -cn \
@@ -134,6 +139,10 @@ FREEDWORKS_TEST_CHECKPOINT_GRANT_KEY_FILE="$GRANT_PRIVATE_KEY"
 export FREEDWORKS_TEST_CHECKPOINT_GRANT_KEY_FILE
 FREEDWORKS_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE="$GRANT_PUBLIC_KEY"
 export FREEDWORKS_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE
+FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE="$RECEIPT_PRIVATE_KEY"
+export FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE
+FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE="$RECEIPT_PUBLIC_KEY"
+export FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE
 
 COMPOSE_ARGS=(
   -f "${ROOT_DIR}/deploy/compose.yaml"
@@ -491,8 +500,60 @@ curl --fail --silent --show-error \
   -H "x-freedworks-host-proof: ${UPLOAD_PROOF_HEADER}" \
   -H 'content-type: application/vnd.freedworks.checkpoint+json' \
   --data-binary "@${TMP_DIR}/checkpoint-payload.json" \
-  | jq -e --arg reference "$CHECKPOINT_REFERENCE" '.reference == $reference' \
+  > "${TMP_DIR}/checkpoint-upload-response.json"
+jq -e \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  '.reference == $reference and .receipt.reference == $reference and (.receipt.signatureBase64 | length) > 20' \
+  "${TMP_DIR}/checkpoint-upload-response.json" \
   >/dev/null
+jq '.receipt' \
+  "${TMP_DIR}/checkpoint-upload-response.json" \
+  > "${TMP_DIR}/checkpoint-storage-receipt.json"
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --slurpfile receipt "${TMP_DIR}/checkpoint-storage-receipt.json" \
+  '{schemaVersion: 1, hostId: $host, sequence: 9, issuedAt: $now, kind: "checkpoint-receipt", payload: $receipt[0]}' \
+  > "${TMP_DIR}/checkpoint-receipt-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" \
+  "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
+  "$PRIVATE_KEY" \
+  "${TMP_DIR}/checkpoint-receipt-unsigned.json" \
+  > "${TMP_DIR}/checkpoint-receipt-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-checkpoint-receipt-9' \
+  --data-binary "@${TMP_DIR}/checkpoint-receipt-envelope.json" \
+  | jq -e \
+    --arg reference "$CHECKPOINT_REFERENCE" \
+    '.kind == "checkpoint-receipt" and .reference == $reference' \
+  >/dev/null
+jq '.signatureBase64 = ((if .signatureBase64[0:1] == "A" then "B" else "A" end) + .signatureBase64[1:])' \
+  "${TMP_DIR}/checkpoint-storage-receipt.json" \
+  > "${TMP_DIR}/checkpoint-storage-receipt-tampered.json"
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --slurpfile receipt "${TMP_DIR}/checkpoint-storage-receipt-tampered.json" \
+  '{schemaVersion: 1, hostId: $host, sequence: 10, issuedAt: $now, kind: "checkpoint-receipt", payload: $receipt[0]}' \
+  > "${TMP_DIR}/checkpoint-receipt-tampered-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" \
+  "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
+  "$PRIVATE_KEY" \
+  "${TMP_DIR}/checkpoint-receipt-tampered-unsigned.json" \
+  > "${TMP_DIR}/checkpoint-receipt-tampered-envelope.json"
+TAMPERED_RECEIPT_STATUS="$(curl --silent --show-error \
+  -o "${TMP_DIR}/checkpoint-receipt-tampered-response.json" \
+  -w '%{http_code}' \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-checkpoint-receipt-tampered-10' \
+  --data-binary "@${TMP_DIR}/checkpoint-receipt-tampered-envelope.json")"
+if [[ "$TAMPERED_RECEIPT_STATUS" != "409" ]]; then
+  echo "Expected forged checkpoint storage receipt to return 409, received ${TAMPERED_RECEIPT_STATUS}." >&2
+  exit 1
+fi
 
 jq -n \
   --arg claimId "integration-claim-${ISSUE_NUMBER}" \

@@ -23,23 +23,46 @@ services:
     environment:
       - FREEDWORKS_ENABLE_INTEGRATION_HARNESS=false
       - FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE=/run/freedworks-secrets/checkpoint-grant-private.pem
+      - FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE=/run/freedworks/checkpoint-receipt-public.pem
       - FREEDWORKS_HOST_ENROLLMENTS_FILE=/run/freedworks/host-enrollments.json
       - FREEDWORKS_RESTATE_IDENTITY_KEYS
       - FREEDWORKS_HOST_ENROLLMENTS_JSON
     volumes:
       - "${FREEDWORKS_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/freedworks/host-enrollments.json:ro"
+      - "${FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE:?set the absolute checkpoint receipt public key path}:/run/freedworks/checkpoint-receipt-public.pem:ro"
       - control-secrets:/run/freedworks-secrets:ro
     depends_on:
       control-secrets-init:
         condition: service_completed_successfully
 
+  checkpoint-edge-secrets-init:
+    profiles: ["checkpoint-transfer"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    user: "0:0"
+    command:
+      - sh
+      - -c
+      - install -o 1000 -g 1000 -m 0400 /source/checkpoint-receipt-private.pem /destination/checkpoint-receipt-private.pem
+    restart: "no"
+    volumes:
+      - "${FREEDWORKS_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE:?set the absolute checkpoint receipt private key path}:/source/checkpoint-receipt-private.pem:ro"
+      - checkpoint-edge-secrets:/destination
+
   checkpoint-edge:
     environment:
       - FREEDWORKS_HOST_ENROLLMENTS_FILE=/run/freedworks/host-enrollments.json
       - FREEDWORKS_CHECKPOINT_GRANT_PUBLIC_KEY_FILE=/run/freedworks/checkpoint-grant-public.pem
+      - FREEDWORKS_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE=/run/freedworks-secrets/checkpoint-receipt-private.pem
     volumes:
       - "${FREEDWORKS_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/freedworks/host-enrollments.json:ro"
       - "${FREEDWORKS_CHECKPOINT_GRANT_PUBLIC_KEY_FILE:?set the absolute checkpoint grant public key path}:/run/freedworks/checkpoint-grant-public.pem:ro"
+      - checkpoint-edge-secrets:/run/freedworks-secrets:ro
+    depends_on:
+      checkpoint-edge-secrets-init:
+        condition: service_completed_successfully
 
 volumes:
   control-secrets:
+  checkpoint-edge-secrets:

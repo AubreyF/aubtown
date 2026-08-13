@@ -21,6 +21,11 @@ import {
   type ExecutorStartCommand,
 } from "../execution/command.js";
 import { decideQuota } from "../policy/quota.js";
+import {
+  verifyCheckpointStorageReceipt,
+  type SignedCheckpointStorageReceipt,
+} from "../checkpoints/receipt.js";
+import { checkpointCatalog } from "./checkpoint-catalog.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -51,6 +56,14 @@ export type HostGatewayReceipt =
       readonly sequence: number;
       readonly acceptedAt: string;
       readonly grant: SignedCheckpointGrant;
+    }
+  | {
+      readonly kind: "checkpoint-receipt";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly reference: string;
+      readonly storedAt: string;
     }
   | {
       readonly kind: "executor-poll";
@@ -95,6 +108,7 @@ function terminal(message: string, errorCode = 403): never {
 export function createHostGateway(
   enrollments: HostEnrollments,
   checkpointGrantIssuer: CheckpointGrantIssuer | undefined = undefined,
+  checkpointReceiptPublicKeyPem: string | undefined = undefined,
 ) {
   return restate.object({
     name: "HostGateway",
@@ -224,6 +238,54 @@ export function createHostGateway(
               sequence: envelope.sequence,
               acceptedAt,
               grant,
+            };
+          } else if (envelope.kind === "checkpoint-receipt") {
+            if (checkpointReceiptPublicKeyPem === undefined) {
+              return terminal("Checkpoint storage receipts are not configured", 503);
+            }
+            let stored: SignedCheckpointStorageReceipt;
+            try {
+              stored = verifyCheckpointStorageReceipt({
+                receipt: envelope.payload,
+                publicKeyPem: checkpointReceiptPublicKeyPem,
+              });
+            } catch (error) {
+              return terminal(
+                error instanceof Error
+                  ? error.message
+                  : "Checkpoint storage receipt is invalid",
+                409,
+              );
+            }
+            const manifest = stored.manifest;
+            const claimKey = `${manifest.repository.owner}/${manifest.repository.name}#${manifest.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+            const currentClaim = await ctx.objectClient(claimRegistry, claimKey).read();
+            if (
+              currentClaim === null ||
+              stored.hostId !== envelope.hostId ||
+              manifest.sourceHostId !== envelope.hostId ||
+              currentClaim.repository.owner !== manifest.repository.owner ||
+              currentClaim.repository.name !== manifest.repository.name ||
+              currentClaim.repository.defaultBranch !==
+                manifest.repository.defaultBranch ||
+              currentClaim.issueNumber !== manifest.issueNumber ||
+              currentClaim.claimId !== manifest.claimId ||
+              currentClaim.custodyEpoch !== manifest.custodyEpoch ||
+              currentClaim.hostId !== envelope.hostId
+            ) {
+              return terminal(
+                "Checkpoint storage receipt does not match current claim custody",
+                409,
+              );
+            }
+            await ctx.objectClient(checkpointCatalog, stored.reference).record(stored);
+            receipt = {
+              kind: "checkpoint-receipt",
+              hostId: envelope.hostId,
+              sequence: envelope.sequence,
+              acceptedAt,
+              reference: stored.reference,
+              storedAt: stored.storedAt,
             };
           } else if (envelope.kind === "executor-poll") {
             const accountId = envelope.payload.accountId;

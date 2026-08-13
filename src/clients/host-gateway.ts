@@ -24,6 +24,10 @@ import {
   type ExecutorCommandReceipt,
   type ExecutorReconcileRequest,
 } from "../execution/command.js";
+import {
+  signedCheckpointStorageReceiptSchema,
+  type SignedCheckpointStorageReceipt,
+} from "../checkpoints/receipt.js";
 
 const quotaDecisionSchema = z.object({
   action: z.enum(["admit", "throttle", "stop-admission", "interrupt"]),
@@ -77,6 +81,14 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
       }),
       z.object({ signatureBase64: z.string().min(1) }),
     ),
+  }),
+  z.object({
+    kind: z.literal("checkpoint-receipt"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    reference: z.string().regex(/^[0-9a-f]{64}$/u),
+    storedAt: z.iso.datetime(),
   }),
   z.object({
     kind: z.literal("executor-poll"),
@@ -175,6 +187,30 @@ export class HostGatewayClient implements DurableUsageGovernor {
       throw new Error("Host gateway returned the wrong receipt kind.");
     }
     return receipt.grant;
+  }
+
+  async submitCheckpointReceipt(
+    input: SignedCheckpointStorageReceipt,
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "checkpoint-receipt" }>> {
+    const stored = signedCheckpointStorageReceiptSchema.parse(input);
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "checkpoint-receipt",
+      payload: stored,
+    });
+    if (receipt.kind !== "checkpoint-receipt") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    if (
+      receipt.reference !== stored.reference ||
+      receipt.storedAt !== stored.storedAt
+    ) {
+      throw new Error("Host gateway checkpoint receipt does not match storage proof.");
+    }
+    return receipt;
   }
 
   async pollExecutor(accountId: string): Promise<

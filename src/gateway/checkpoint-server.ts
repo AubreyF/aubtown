@@ -17,6 +17,7 @@ import {
   verifyCheckpointProof,
 } from "../checkpoints/proof.js";
 import type { HostEnrollments } from "../security/host-enrollment.js";
+import { CheckpointStorageReceiptIssuer } from "../checkpoints/receipt.js";
 
 const ROUTE = /^\/v1\/checkpoints\/([0-9a-f]{64})$/u;
 const EMPTY_DIGEST = createHash("sha256").update(new Uint8Array()).digest("hex");
@@ -25,6 +26,7 @@ export interface CheckpointServerOptions {
   readonly store: CheckpointStore;
   readonly hostEnrollments: HostEnrollments;
   readonly grantPublicKeyPem: string;
+  readonly storageReceiptIssuer: CheckpointStorageReceiptIssuer;
   readonly now?: () => Date;
   readonly onDenial?: (reason: string) => void;
 }
@@ -125,11 +127,12 @@ export function createCheckpointServer(options: CheckpointServerOptions): Server
         return;
       }
       const method = request.method;
+      const acceptedAt = now().toISOString();
       const expectedOperation = method === "PUT" ? "upload" : "download";
       verifyCheckpointGrant({
         grant,
         publicKeyPem: options.grantPublicKeyPem,
-        now: now().toISOString(),
+        now: acceptedAt,
         expectedHostId: proof.hostId,
         expectedOperation,
         expectedReference: reference,
@@ -138,7 +141,7 @@ export function createCheckpointServer(options: CheckpointServerOptions): Server
       const verifiedProof = verifyCheckpointProof({
         proof,
         publicKeyPem: enrollment.publicKeyPem,
-        now: now().toISOString(),
+        now: acceptedAt,
         expectedHostId: grant.hostId,
         expectedGrantNonce: grant.nonce,
         expectedMethod: method,
@@ -165,7 +168,16 @@ export function createCheckpointServer(options: CheckpointServerOptions): Server
         if (storedReference !== reference) {
           throw new Error("Checkpoint store returned a different content address.");
         }
-        respond(response, 201, `${JSON.stringify({ reference })}\n`);
+        const receipt = options.storageReceiptIssuer.issue({
+          schemaVersion: 1,
+          reference,
+          contentLength: bytes.length,
+          hostId: grant.hostId,
+          grantNonce: grant.nonce,
+          manifest: payload.manifest,
+          storedAt: acceptedAt,
+        });
+        respond(response, 201, `${JSON.stringify({ reference, receipt })}\n`);
         return;
       }
       if (

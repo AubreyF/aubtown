@@ -1,10 +1,5 @@
 import * as restate from "@restatedev/restate-sdk";
-import type {
-  CustodyCheckpoint,
-  DispatchClaim,
-  HostLane,
-  HostRecord,
-} from "../domain/types.js";
+import type { DispatchClaim, HostLane, HostRecord } from "../domain/types.js";
 import {
   decideCustody,
   type CustodyDecision,
@@ -14,6 +9,7 @@ import { claimRegistry } from "./claim-registry.js";
 import { schedulerRegistry } from "./scheduler-registry.js";
 import { executorCommandRegistry } from "./executor-command-registry.js";
 import { hostRegistry } from "./host-registry.js";
+import { checkpointCatalog } from "./checkpoint-catalog.js";
 
 function claimMatches(left: DispatchClaim, right: DispatchClaim): boolean {
   return (
@@ -38,7 +34,7 @@ export interface CustodyTransferInput {
   readonly sourceHost: HostRecord;
   readonly hosts: readonly HostRecord[];
   readonly requiredLane: HostLane;
-  readonly checkpoint: CustodyCheckpoint;
+  readonly checkpointReference: string;
   readonly destinations: Readonly<
     Record<string, { readonly workerId: string; readonly worktree: string }>
   >;
@@ -131,8 +127,16 @@ export const custodyTransferWorkflow = restate.workflow({
         ctx.set("result", result);
         return result;
       }
+      const storedCheckpoint = await ctx
+        .objectClient(checkpointCatalog, input.checkpointReference)
+        .read();
+      if (storedCheckpoint === null) {
+        throw new restate.TerminalError(
+          "Custody checkpoint has no authenticated storage receipt.",
+        );
+      }
       const checkpoint = validateCheckpointForResume({
-        checkpoint: input.checkpoint,
+        checkpoint: storedCheckpoint.manifest,
         claim: activeClaim,
         expectedEpoch: decision.nextCustodyEpoch,
       });

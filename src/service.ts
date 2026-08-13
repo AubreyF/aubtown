@@ -2,7 +2,11 @@ import * as restate from "@restatedev/restate-sdk";
 import { integrationHarnessEnabled } from "./config/integration-harness.js";
 import { controlPlaneServices } from "./orchestration/control-plane-services.js";
 import { createHostGateway } from "./orchestration/host-gateway.js";
-import { loadHostEnrollments, loadPrivateKeyPem } from "./security/host-enrollment.js";
+import {
+  loadHostEnrollments,
+  loadPrivateKeyPem,
+  loadPublicKeyPem,
+} from "./security/host-enrollment.js";
 import { CheckpointGrantIssuer } from "./checkpoints/grant.js";
 
 const identityKeys = (process.env.FREEDWORKS_RESTATE_IDENTITY_KEYS ?? "")
@@ -17,7 +21,20 @@ const checkpointGrantIssuer =
     : new CheckpointGrantIssuer(
         await loadPrivateKeyPem(checkpointGrantKeyFile, "Checkpoint grant private key"),
       );
-const hostGateway = createHostGateway(hostEnrollments, checkpointGrantIssuer);
+const checkpointReceiptKeyFile =
+  process.env.FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE?.trim();
+const checkpointReceiptPublicKeyPem =
+  checkpointReceiptKeyFile === undefined || checkpointReceiptKeyFile.length === 0
+    ? undefined
+    : await loadPublicKeyPem(
+        checkpointReceiptKeyFile,
+        "Checkpoint receipt public key",
+      );
+const hostGateway = createHostGateway(
+  hostEnrollments,
+  checkpointGrantIssuer,
+  checkpointReceiptPublicKeyPem,
+);
 const enableIntegrationHarness = integrationHarnessEnabled(
   process.env.FREEDWORKS_ENABLE_INTEGRATION_HARNESS,
 );

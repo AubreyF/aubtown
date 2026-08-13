@@ -15,7 +15,7 @@ The checked-in Compose file is a local and single-node pilot baseline. It binds 
 
 The local Compose baseline accepts unsigned Restate-to-service requests because both containers share a private local network. Production must generate a Restate ED25519 request-identity key, store its private key outside the repository, configure Restate with `RESTATE_REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE`, and pass the resulting public identity through `FREEDWORKS_RESTATE_IDENTITY_KEYS`. The service then rejects invocations not signed by that Restate instance.
 
-Use `deploy/compose.production.yaml` with the baseline Compose file. It mounts the Restate identity private key and host enrollment file read-only from absolute host paths. A one-shot root initializer copies the checkpoint-grant private key into a `0400`, service-owned Docker volume and exits before the unprivileged control plane starts. The production override explicitly disables the local `IntegrationHarness`. All durable registries and workflows are Restate ingress-private. The systemd template composes both files. Actual keys, enrollments, account profiles, sequence state, and mutable service state stay outside Git.
+Use `deploy/compose.production.yaml` with the baseline Compose file. It mounts the Restate identity private key and host enrollment file read-only from absolute host paths. One root initializer copies the checkpoint-grant private key into a `0400`, control-plane-owned Docker volume. A separate initializer copies the checkpoint-receipt private key into a different `0400`, checkpoint-edge-owned volume. The control plane receives only the receipt public key, and the checkpoint edge receives only the grant public key. Each initializer exits before its unprivileged service starts. The production override explicitly disables the local `IntegrationHarness`. All durable registries and workflows are Restate ingress-private. The systemd template composes both files. Actual keys, enrollments, account profiles, sequence state, and mutable service state stay outside Git.
 
 The baseline Compose file enables `IntegrationHarness` for black-box tests on loopback. Never deploy that baseline alone on a persistent host. An unset harness flag fails closed. Values other than the exact strings `true` and `false` stop startup.
 
@@ -31,10 +31,11 @@ The baseline Compose file enables `IntegrationHarness` for black-box tests on lo
 8. Confirm request-identity validation, then register `http://control-plane:9080` with Restate from the private Docker network.
 9. Generate one Ed25519 host key on each executor. Keep the private key mode at `0600`. Add only its public key, fixed lane, and allowed account IDs to the Linux enrollment file.
 10. Generate a separate Ed25519 checkpoint-grant key on Linux. Mount its private key only into the control plane and its public key only into the checkpoint edge.
-11. Configure each executor with private host-edge and checkpoint-edge URLs, a private-key path, and a host-local durable sequence file. Never copy either the host key or sequence state to another host.
-12. Start the Compose `checkpoint-transfer` profile. Its one-shot initializer gives the unprivileged checkpoint edge sole access to the `0700` persistent volume and then exits.
-13. Run read-only reconciliation and the shadow fixture.
-14. Keep all writers disabled until the dry-run and authority-extension receipts pass.
+11. Generate a different Ed25519 checkpoint-receipt key. Mount its private key only into the checkpoint edge and its public key only into the control plane.
+12. Configure each executor with private host-edge and checkpoint-edge URLs, a private-key path, and a host-local durable sequence file. Never copy either the host key or sequence state to another host.
+13. Start the Compose `checkpoint-transfer` profile. Its one-shot initializers give each unprivileged service only its own private key and give the checkpoint edge sole access to the `0700` persistent volume.
+14. Run read-only reconciliation and the shadow fixture.
+15. Keep all writers disabled until the dry-run and authority-extension receipts pass.
 
 Configure separate private-key references for the Coordinator and Draft Publisher GitHub Apps. The broker mints one-repository installation tokens with operation-specific permissions. Read-only qualification receives `issues: read`. Lifecycle projection receives `issues: write` only after its phase gate. Draft publication receives `contents: write` and `pull_requests: write` only after an admitted exact-head publication plan. Workers receive none of these credentials.
 

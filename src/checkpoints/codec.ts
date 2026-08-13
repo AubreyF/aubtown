@@ -6,7 +6,7 @@ import type { EncryptedCheckpointPayload } from "./store.js";
 export const MAX_STORED_CHECKPOINT_BYTES = 512 * 1024 * 1024;
 export const CHECKPOINT_REFERENCE_PATTERN = /^[0-9a-f]{64}$/u;
 
-const manifestSchema: z.ZodType<CustodyCheckpoint> = z.object({
+export const checkpointManifestSchema: z.ZodType<CustodyCheckpoint> = z.object({
   schemaVersion: z.literal(2),
   repository: z.object({
     owner: z.string().min(1),
@@ -27,7 +27,7 @@ const manifestSchema: z.ZodType<CustodyCheckpoint> = z.object({
 
 const storedPayloadSchema = z.object({
   schemaVersion: z.literal(1),
-  manifest: manifestSchema,
+  manifest: checkpointManifestSchema,
   ciphertextBase64: z.string(),
   nonceBase64: z.string(),
   algorithm: z.literal("xchacha20-poly1305"),

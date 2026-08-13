@@ -39,6 +39,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Require signed coordinator adjudication before a restarted host resumes a persisted turn.
 - [x] Supersede stale source turns only after canonical 24-hour offline evidence and checkpoint validation.
 - [x] Bind failover routing to the scheduler-owned qualified host lane.
+- [x] Require an edge-signed, current-custody storage receipt before a checkpoint can authorize failover.
 
 ## Phase 3: one Freed issue
 

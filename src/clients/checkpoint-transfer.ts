@@ -10,6 +10,10 @@ import {
   encodeCheckpointAuthorization,
   signCheckpointProof,
 } from "../checkpoints/proof.js";
+import {
+  parseSignedCheckpointStorageReceipt,
+  type SignedCheckpointStorageReceipt,
+} from "../checkpoints/receipt.js";
 
 export class CheckpointTransferClient {
   constructor(
@@ -23,7 +27,7 @@ export class CheckpointTransferClient {
   async upload(
     payload: EncryptedCheckpointPayload,
     grant: SignedCheckpointGrant,
-  ): Promise<string> {
+  ): Promise<SignedCheckpointStorageReceipt> {
     const bytes = encodeCheckpoint(payload);
     const reference = checkpointReference(bytes);
     if (
@@ -62,7 +66,20 @@ export class CheckpointTransferClient {
         `Checkpoint edge returned ${response.status.toLocaleString("en-US", { useGrouping: false })} for upload.`,
       );
     }
-    return reference;
+    const body = (await response.json()) as { readonly reference?: unknown; readonly receipt?: unknown };
+    const receipt = parseSignedCheckpointStorageReceipt(body.receipt);
+    if (
+      body.reference !== reference ||
+      receipt.reference !== reference ||
+      receipt.contentLength !== bytes.length ||
+      receipt.hostId !== this.hostId ||
+      receipt.grantNonce !== grant.nonce ||
+      receipt.manifest.claimId !== payload.manifest.claimId ||
+      receipt.manifest.custodyEpoch !== payload.manifest.custodyEpoch
+    ) {
+      throw new Error("Checkpoint storage receipt does not match the uploaded payload.");
+    }
+    return receipt;
   }
 
   async download(grant: SignedCheckpointGrant): Promise<EncryptedCheckpointPayload> {

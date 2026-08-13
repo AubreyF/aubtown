@@ -27,6 +27,8 @@ import {
   hostRegistry,
   type HostHeartbeat,
 } from "./host-registry.js";
+import { checkpointCatalog } from "./checkpoint-catalog.js";
+import type { SignedCheckpointStorageReceipt } from "../checkpoints/receipt.js";
 import {
   schedulerRegistry,
   type SchedulerAcquireInput,
@@ -78,6 +80,10 @@ interface ExecutorRecordInput extends KeyOnlyInput {
 
 interface HostHeartbeatInput extends KeyOnlyInput {
   readonly heartbeat: HostHeartbeat;
+}
+
+interface CheckpointReceiptInput extends KeyOnlyInput {
+  readonly receipt: SignedCheckpointStorageReceipt;
 }
 
 /**
@@ -173,5 +179,9 @@ export const integrationHarness = restate.service({
       ctx: restate.Context,
       request: HostHeartbeatInput,
     ) => await ctx.objectClient(hostRegistry, request.key).heartbeat(request.heartbeat),
+    recordCheckpointReceipt: async (
+      ctx: restate.Context,
+      request: CheckpointReceiptInput,
+    ) => await ctx.objectClient(checkpointCatalog, request.key).record(request.receipt),
   },
 });

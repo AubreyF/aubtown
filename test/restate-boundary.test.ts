@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { integrationHarnessEnabled } from "../src/config/integration-harness.js";
 import { accountGovernor } from "../src/orchestration/account-governor.js";
 import { claimRegistry } from "../src/orchestration/claim-registry.js";
+import { checkpointCatalog } from "../src/orchestration/checkpoint-catalog.js";
 import { controlPlaneServices } from "../src/orchestration/control-plane-services.js";
 import { custodyTransferWorkflow } from "../src/orchestration/custody-transfer-workflow.js";
 import { dryRunWorkflow } from "../src/orchestration/dry-run-workflow.js";
@@ -17,6 +18,7 @@ describe("Restate ingress boundary", () => {
   it("keeps every durable internal service private to Restate calls", () => {
     const internalServices = [
       accountGovernor,
+      checkpointCatalog,
       claimRegistry,
       custodyTransferWorkflow,
       dryRunWorkflow,

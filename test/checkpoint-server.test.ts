@@ -15,6 +15,10 @@ import {
 import { createCheckpointManifest } from "../src/checkpoints/manifest.js";
 import { createCheckpointServer } from "../src/gateway/checkpoint-server.js";
 import { CheckpointTransferClient } from "../src/clients/checkpoint-transfer.js";
+import {
+  CheckpointStorageReceiptIssuer,
+  verifyCheckpointStorageReceipt,
+} from "../src/checkpoints/receipt.js";
 import { claim } from "./helpers.js";
 
 const roots: string[] = [];
@@ -43,6 +47,7 @@ describe("checkpoint transfer edge", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-checkpoint-edge-"));
     roots.push(root);
     const grantKeys = keys();
+    const receiptKeys = keys();
     const macKeys = keys();
     const linuxKeys = keys();
     const store = new LocalCheckpointStore(path.join(root, "shared-store"));
@@ -50,6 +55,9 @@ describe("checkpoint transfer edge", () => {
     const server = createCheckpointServer({
       store,
       grantPublicKeyPem: grantKeys.publicKey,
+      storageReceiptIssuer: new CheckpointStorageReceiptIssuer(
+        receiptKeys.privateKey,
+      ),
       hostEnrollments: {
         "macos-executor-1": {
           enabled: true,
@@ -124,7 +132,17 @@ describe("checkpoint transfer edge", () => {
       fetch,
       () => clock,
     );
-    await expect(macClient.upload(encrypted, uploadGrant)).resolves.toBe(reference);
+    const storageReceipt = await macClient.upload(encrypted, uploadGrant);
+    expect(
+      verifyCheckpointStorageReceipt({
+        receipt: storageReceipt,
+        publicKeyPem: receiptKeys.publicKey,
+      }),
+    ).toMatchObject({
+      reference,
+      hostId: "macos-executor-1",
+      manifest: { claimId: originalClaim.claimId, custodyEpoch: 1 },
+    });
 
     const transferredClaim = {
       ...originalClaim,
@@ -165,11 +183,15 @@ describe("checkpoint transfer edge", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-checkpoint-edge-"));
     roots.push(root);
     const grantKeys = keys();
+    const receiptKeys = keys();
     const macKeys = keys();
     const linuxKeys = keys();
     const server = createCheckpointServer({
       store: new LocalCheckpointStore(path.join(root, "store")),
       grantPublicKeyPem: grantKeys.publicKey,
+      storageReceiptIssuer: new CheckpointStorageReceiptIssuer(
+        receiptKeys.privateKey,
+      ),
       hostEnrollments: {
         "macos-executor-1": {
           enabled: true,

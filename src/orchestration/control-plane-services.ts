@@ -5,6 +5,7 @@ import { custodyTransferWorkflow } from "./custody-transfer-workflow.js";
 import { dryRunWorkflow } from "./dry-run-workflow.js";
 import { fakeWorker } from "./fake-worker.js";
 import { executorCommandRegistry } from "./executor-command-registry.js";
+import { checkpointCatalog } from "./checkpoint-catalog.js";
 import { hostRegistry } from "./host-registry.js";
 import { createHostGateway } from "./host-gateway.js";
 import { integrationHarness } from "./integration-harness.js";
@@ -22,6 +23,7 @@ export function controlPlaneServices(
     dryRunWorkflow,
     fakeWorker,
     executorCommandRegistry,
+    checkpointCatalog,
     qualificationWorkflow,
     schedulerRegistry,
     hostRegistry,
