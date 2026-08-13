@@ -53,6 +53,12 @@ interface ExecutorCommandInput extends KeyOnlyInput {
   readonly command: ExecutorStartCommand;
 }
 
+interface ExecutorTransferInput extends KeyOnlyInput {
+  readonly claimId: string;
+  readonly custodyEpoch: number;
+  readonly preparedAt: string;
+}
+
 /**
  * Local integration ingress for black-box tests. Production never binds this
  * service. All durable factory services remain ingress-private.
@@ -109,5 +115,22 @@ export const integrationHarness = restate.service({
         .enqueue(request.command),
     readExecutorCommand: async (ctx: restate.Context, request: KeyOnlyInput) =>
       await ctx.objectClient(executorCommandRegistry, request.key).read(),
+    prepareExecutorTransfer: async (
+      ctx: restate.Context,
+      request: ExecutorTransferInput,
+    ) =>
+      await ctx.objectClient(executorCommandRegistry, request.key).prepareTransfer({
+        claimId: request.claimId,
+        custodyEpoch: request.custodyEpoch,
+        preparedAt: request.preparedAt,
+      }),
+    releaseExecutorTransfer: async (
+      ctx: restate.Context,
+      request: ExecutorTransferInput,
+    ) =>
+      await ctx.objectClient(executorCommandRegistry, request.key).releaseTransfer({
+        claimId: request.claimId,
+        custodyEpoch: request.custodyEpoch,
+      }),
   },
 });

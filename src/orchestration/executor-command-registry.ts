@@ -1,4 +1,5 @@
 import * as restate from "@restatedev/restate-sdk";
+import { z } from "zod";
 import {
   assertExecutorStartCommand,
   executorCommandReceiptSchema,
@@ -25,8 +26,26 @@ export interface ExecutorCommandState {
   readonly reason?: string;
 }
 
+export interface ExecutorTransferFence {
+  readonly claimId: string;
+  readonly custodyEpoch: number;
+  readonly preparedAt: string;
+}
+
+const executorTransferFenceSchema = z.object({
+  claimId: z.string().min(1),
+  custodyEpoch: z.number().int().positive(),
+  preparedAt: z.iso.datetime(),
+});
+
+const executorTransferReleaseSchema = executorTransferFenceSchema.pick({
+  claimId: true,
+  custodyEpoch: true,
+});
+
 interface RegistryState {
   command: ExecutorCommandState;
+  transferFence: ExecutorTransferFence;
 }
 
 const TERMINAL_STAGES = new Set<ExecutorCommandStage>([
@@ -45,6 +64,16 @@ export const executorCommandRegistry = restate.object({
       rawCommand: ExecutorStartCommand,
     ): Promise<ExecutorCommandState> => {
       const command = assertExecutorStartCommand(rawCommand, ctx.key);
+      const transferFence = await ctx.get("transferFence");
+      if (
+        transferFence !== null &&
+        transferFence.claimId === command.claim.claimId &&
+        transferFence.custodyEpoch === command.claim.custodyEpoch
+      ) {
+        throw new restate.TerminalError(
+          "Executor claim is fenced for custody transfer.",
+        );
+      }
       const current = await ctx.get("command");
       if (current !== null && current.command.commandId === command.commandId) {
         return current;
@@ -57,6 +86,65 @@ export const executorCommandRegistry = restate.object({
       const state: ExecutorCommandState = { command, stage: "pending" };
       ctx.set("command", state);
       return state;
+    },
+    prepareTransfer: async (
+      ctx: restate.ObjectContext<RegistryState>,
+      rawRequest: ExecutorTransferFence,
+    ): Promise<ExecutorTransferFence> => {
+      const requested = executorTransferFenceSchema.parse(rawRequest);
+      const existing = await ctx.get("transferFence");
+      if (existing !== null) {
+        if (
+          existing.claimId === requested.claimId &&
+          existing.custodyEpoch === requested.custodyEpoch
+        ) {
+          return existing;
+        }
+        throw new restate.TerminalError(
+          "Executor host already has another custody transfer fence.",
+        );
+      }
+      const current = await ctx.get("command");
+      if (
+        current !== null &&
+        current.command.claim.claimId === requested.claimId
+      ) {
+        if (current.stage === "offered" || current.stage === "started") {
+          throw new restate.TerminalError(
+            "Executor command must finish or be interrupted before custody transfer.",
+          );
+        }
+        if (current.stage === "pending") {
+          ctx.set("command", {
+            ...current,
+            stage: "cancelled",
+            finishedAt: requested.preparedAt,
+            reason: "Claim custody transfer prepared before command offer.",
+          });
+        }
+      }
+      ctx.set("transferFence", requested);
+      return requested;
+    },
+    releaseTransfer: async (
+      ctx: restate.ObjectContext<RegistryState>,
+      rawExpected: Pick<ExecutorTransferFence, "claimId" | "custodyEpoch">,
+    ): Promise<boolean> => {
+      const expected = executorTransferReleaseSchema.parse(rawExpected);
+      const existing = await ctx.get("transferFence");
+      if (existing === null) {
+        return false;
+      }
+      if (
+        existing.claimId !== expected.claimId ||
+        existing.custodyEpoch !== expected.custodyEpoch
+      ) {
+        throw new restate.TerminalError(
+          "Only the fenced custody transfer may release the executor host.",
+        );
+      }
+      ctx.clear("transferFence");
+      return true;
     },
     read: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext<RegistryState>) =>

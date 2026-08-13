@@ -52,6 +52,26 @@ harness_key() {
     > "$output_file"
 }
 
+harness_executor_transfer() {
+  local handler="$1"
+  local key="$2"
+  local claim_id="$3"
+  local custody_epoch="$4"
+  local prepared_at="$5"
+  local output_file="$6"
+  jq -n \
+    --arg key "$key" \
+    --arg claimId "$claim_id" \
+    --argjson custodyEpoch "$custody_epoch" \
+    --arg preparedAt "$prepared_at" \
+    '{key: $key, claimId: $claimId, custodyEpoch: $custodyEpoch, preparedAt: $preparedAt}' \
+    | curl --fail --silent --show-error \
+        -X POST "${HARNESS}/${handler}" \
+        -H 'content-type: application/json' \
+        --data-binary @- \
+    > "$output_file"
+}
+
 PINNED_NODE="$(tr -d 'v[:space:]' < "${ROOT_DIR}/.nvmrc")"
 ACTIVE_NODE="$(node -p 'process.versions.node')"
 if [[ "$ACTIVE_NODE" != "$PINNED_NODE" ]]; then
@@ -329,9 +349,55 @@ for command_stage in started completed; do
     --data-binary "@${TMP_DIR}/executor-${command_stage}.json" \
     | jq -e --arg stage "$command_stage" '.kind == "executor-receipt" and .stage == $stage' \
     >/dev/null
+  if [[ "$command_stage" == "started" ]]; then
+    jq -n \
+      --arg key "$HOST_ID" \
+      --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+      --arg now "$NOW" \
+      '{key: $key, claimId: $claimId, custodyEpoch: 1, preparedAt: $now}' \
+      > "${TMP_DIR}/active-transfer-request.json"
+    ACTIVE_TRANSFER_STATUS="$(curl --silent --show-error \
+      -o "${TMP_DIR}/active-transfer-response.json" \
+      -w '%{http_code}' \
+      -X POST "${HARNESS}/prepareExecutorTransfer" \
+      -H 'content-type: application/json' \
+      --data-binary "@${TMP_DIR}/active-transfer-request.json")"
+    if [[ "$ACTIVE_TRANSFER_STATUS" != "500" ]]; then
+      echo "Expected active executor custody transfer to return 500, received ${ACTIVE_TRANSFER_STATUS}." >&2
+      exit 1
+    fi
+  fi
 done
 harness_key readExecutorCommand "$HOST_ID" "${TMP_DIR}/executor-command-finished.json"
 jq -e '.stage == "completed"' "${TMP_DIR}/executor-command-finished.json" >/dev/null
+PENDING_COMMAND_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+jq --arg commandId "$PENDING_COMMAND_ID" '.commandId = $commandId' \
+  "${TMP_DIR}/executor-command-input.json" \
+  > "${TMP_DIR}/pending-executor-command-input.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" \
+  "${ROOT_DIR}/src/cli/build-executor-command.ts" \
+  "${TMP_DIR}/pending-executor-command-input.json" \
+  > "${TMP_DIR}/pending-executor-command.json"
+harness_file \
+  enqueueExecutorCommand \
+  "$HOST_ID" \
+  command \
+  "${TMP_DIR}/pending-executor-command.json" \
+  "${TMP_DIR}/pending-executor-command-enqueued.json"
+jq -e '.stage == "pending"' "${TMP_DIR}/pending-executor-command-enqueued.json" >/dev/null
+harness_executor_transfer \
+  prepareExecutorTransfer \
+  "$HOST_ID" \
+  "integration-claim-${ISSUE_NUMBER}" \
+  1 \
+  "$NOW" \
+  "${TMP_DIR}/executor-transfer-fence.json"
+harness_key readExecutorCommand "$HOST_ID" "${TMP_DIR}/pending-executor-command-cancelled.json"
+jq -e \
+  --arg commandId "$PENDING_COMMAND_ID" \
+  '.command.commandId == $commandId and .stage == "cancelled"' \
+  "${TMP_DIR}/pending-executor-command-cancelled.json" \
+  >/dev/null
 
 jq -cn \
   --arg host "$HOST_ID" \
@@ -401,6 +467,13 @@ harness_file \
   "freed-project/freed#${ISSUE_NUMBER}" \
   request \
   "${TMP_DIR}/claim-transfer.json" \
+  /dev/null
+harness_executor_transfer \
+  releaseExecutorTransfer \
+  "$HOST_ID" \
+  "integration-claim-${ISSUE_NUMBER}" \
+  1 \
+  "$NOW" \
   /dev/null
 
 jq -n \
@@ -489,4 +562,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound executor lifecycle completed, encrypted checkpoint moved from Mac to Linux custody, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound executor lifecycle completed, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, replay and restart fencing passed."

@@ -12,6 +12,7 @@ import {
 } from "../policy/custody.js";
 import { claimRegistry } from "./claim-registry.js";
 import { schedulerRegistry } from "./scheduler-registry.js";
+import { executorCommandRegistry } from "./executor-command-registry.js";
 
 export interface CustodyTransferInput {
   readonly claim: DispatchClaim;
@@ -79,8 +80,21 @@ export const custodyTransferWorkflow = restate.workflow({
       const repositoryKey = `${input.claim.repository.owner}/${input.claim.repository.name}`;
       const registry = ctx.objectClient(claimRegistry, claimKey);
       const scheduler = ctx.objectClient(schedulerRegistry, repositoryKey);
+      const executor = ctx.objectClient(
+        executorCommandRegistry,
+        input.claim.hostId,
+      );
+      await executor.prepareTransfer({
+        claimId: input.claim.claimId,
+        custodyEpoch: input.claim.custodyEpoch,
+        preparedAt: input.now,
+      });
       const transferredClaim = await registry.transfer(transfer);
       await scheduler.transfer(transfer);
+      await executor.releaseTransfer({
+        claimId: input.claim.claimId,
+        custodyEpoch: input.claim.custodyEpoch,
+      });
       const result = { decision, transferredClaim };
       ctx.set("result", result);
       return result;
