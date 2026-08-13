@@ -24,4 +24,6 @@ The destination must be a clean worktree at the checkpoint's exact base head. Re
 
 ## Production storage
 
-The local store is the pilot implementation. Production uses an encrypted object store adapter with the same content-addressed contract. The encryption key is resolved by an external host key provider and is never stored in the archive, Restate, GitHub, or the repository.
+The local store remains useful for one-host tests. The shared adapter uses an S3-compatible object service with the same content-addressed payload format. It performs a conditional create, checks the content digest on every read, copies an authenticated object into a deterministic retired namespace before deleting the active name, and remains portable across storage vendors. Bucket versioning and retention are required in production so retirement stays recoverable.
+
+The encryption key is resolved by an external host key provider and is never stored in the archive, Restate, GitHub, or the repository. Raw object-store credentials must remain in a trusted custody service. They never enter a worker process or prompt. Short-lived, claim-bound transfer grants are still required before the shared adapter can be exposed to a remote executor.

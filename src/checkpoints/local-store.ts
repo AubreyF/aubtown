@@ -9,54 +9,17 @@ import {
   rm,
 } from "node:fs/promises";
 import path from "node:path";
-import { z } from "zod";
-import type { CustodyCheckpoint } from "../domain/types.js";
 import type {
   CheckpointStore,
   EncryptedCheckpointPayload,
 } from "./store.js";
-
-const MAX_CHECKPOINT_FILE_BYTES = 512 * 1024 * 1024;
-const REFERENCE_PATTERN = /^[0-9a-f]{64}$/u;
-
-const manifestSchema: z.ZodType<CustodyCheckpoint> = z.object({
-  schemaVersion: z.literal(1),
-  claimId: z.string().min(1),
-  custodyEpoch: z.number().int().positive(),
-  sourceHostId: z.string().min(1),
-  repositoryHead: z.string().regex(/^[0-9a-f]{40}$/u),
-  baseHead: z.string().regex(/^[0-9a-f]{40}$/u),
-  patchDigest: z.string().regex(/^[0-9a-f]{64}$/u),
-  includedUntrackedPaths: z.array(z.string()),
-  validationReceipts: z.array(z.string()),
-  createdAt: z.iso.datetime(),
-});
-
-const storedPayloadSchema = z.object({
-  schemaVersion: z.literal(1),
-  manifest: manifestSchema,
-  ciphertextBase64: z.string(),
-  nonceBase64: z.string(),
-  algorithm: z.literal("xchacha20-poly1305"),
-  keyReference: z.string().min(1),
-});
-
-function serialized(payload: EncryptedCheckpointPayload): Uint8Array {
-  return new TextEncoder().encode(
-    `${JSON.stringify({
-      schemaVersion: 1,
-      manifest: payload.manifest,
-      ciphertextBase64: Buffer.from(payload.ciphertext).toString("base64"),
-      nonceBase64: Buffer.from(payload.nonce).toString("base64"),
-      algorithm: payload.algorithm,
-      keyReference: payload.keyReference,
-    })}\n`,
-  );
-}
-
-function referenceFor(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
+import {
+  assertCheckpointReference,
+  checkpointReference,
+  decodeCheckpoint,
+  encodeCheckpoint,
+  MAX_STORED_CHECKPOINT_BYTES,
+} from "./codec.js";
 
 export class LocalCheckpointStore implements CheckpointStore {
   constructor(private readonly root: string) {
@@ -67,11 +30,8 @@ export class LocalCheckpointStore implements CheckpointStore {
 
   async put(payload: EncryptedCheckpointPayload): Promise<string> {
     await this.#ensureDirectory(this.root);
-    const bytes = serialized(payload);
-    if (bytes.length > MAX_CHECKPOINT_FILE_BYTES) {
-      throw new Error("Encrypted checkpoint exceeds the local store size limit.");
-    }
-    const reference = referenceFor(bytes);
+    const bytes = encodeCheckpoint(payload);
+    const reference = checkpointReference(bytes);
     const destination = this.#path(reference);
     try {
       const current = await this.#readExact(destination);
@@ -111,7 +71,7 @@ export class LocalCheckpointStore implements CheckpointStore {
   }
 
   async get(reference: string): Promise<EncryptedCheckpointPayload | undefined> {
-    this.#assertReference(reference);
+    assertCheckpointReference(reference);
     let bytes: Uint8Array;
     try {
       bytes = await this.#readExact(this.#path(reference));
@@ -121,21 +81,14 @@ export class LocalCheckpointStore implements CheckpointStore {
       }
       throw error;
     }
-    if (referenceFor(bytes) !== reference) {
+    if (checkpointReference(bytes) !== reference) {
       throw new Error("Stored checkpoint digest does not match its reference.");
     }
-    const parsed = storedPayloadSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
-    return {
-      manifest: parsed.manifest,
-      ciphertext: Buffer.from(parsed.ciphertextBase64, "base64"),
-      nonce: Buffer.from(parsed.nonceBase64, "base64"),
-      algorithm: parsed.algorithm,
-      keyReference: parsed.keyReference,
-    };
+    return decodeCheckpoint(bytes);
   }
 
   async retire(reference: string, retiredAt: string): Promise<void> {
-    this.#assertReference(reference);
+    assertCheckpointReference(reference);
     if (!Number.isFinite(Date.parse(retiredAt))) {
       throw new Error("Checkpoint retirement timestamp must be valid ISO time.");
     }
@@ -167,14 +120,8 @@ export class LocalCheckpointStore implements CheckpointStore {
   }
 
   #path(reference: string): string {
-    this.#assertReference(reference);
+    assertCheckpointReference(reference);
     return path.join(this.root, `${reference}.checkpoint`);
-  }
-
-  #assertReference(reference: string): void {
-    if (!REFERENCE_PATTERN.test(reference)) {
-      throw new Error("Checkpoint reference must be a lowercase SHA-256 digest.");
-    }
   }
 
   async #ensureDirectory(directory: string): Promise<void> {
@@ -191,7 +138,7 @@ export class LocalCheckpointStore implements CheckpointStore {
     if (!stats.isFile() || stats.isSymbolicLink()) {
       throw new Error(`Checkpoint entry is not a physical regular file: ${file}`);
     }
-    if (stats.size > MAX_CHECKPOINT_FILE_BYTES) {
+    if (stats.size > MAX_STORED_CHECKPOINT_BYTES) {
       throw new Error("Stored checkpoint exceeds the local store size limit.");
     }
     return await readFile(file);

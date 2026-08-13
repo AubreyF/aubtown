@@ -22,6 +22,8 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Prove restart reconciliation and duplicate-dispatch prevention.
 - [x] Prove quota interruption, custody fencing, and conflict locking.
 - [x] Encrypt, store, transfer, and restore unpublished checkpoint work.
+- [x] Add a vendor-neutral S3-compatible shared checkpoint adapter with content-address and recoverable-retirement checks.
+- [ ] Gate remote checkpoint access through short-lived, claim-bound transfer grants.
 - [x] Prove durable host liveness and 24 hour automatic custody transfer.
 - [x] Prove startup reconciliation against canonical task, issue, branch, and worktree state.
 - [x] Enforce exact-head draft publication planning and scoped GitHub App token minting.
