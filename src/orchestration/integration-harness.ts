@@ -31,6 +31,8 @@ import { checkpointCatalog } from "./checkpoint-catalog.js";
 import type { SignedCheckpointStorageReceipt } from "../checkpoints/receipt.js";
 import { hostRestoreRegistry } from "./host-restore-registry.js";
 import type { CustodyRestoreRequirement } from "../execution/restore.js";
+import { hostWorkspaceRegistry } from "./host-workspace-registry.js";
+import type { InitialWorkspaceRequirement } from "../execution/workspace.js";
 import {
   schedulerRegistry,
   type SchedulerAcquireInput,
@@ -92,6 +94,10 @@ interface RestoreRequirementInput extends KeyOnlyInput {
   readonly requirement: CustodyRestoreRequirement;
 }
 
+interface WorkspaceRequirementInput extends KeyOnlyInput {
+  readonly requirement: InitialWorkspaceRequirement;
+}
+
 /**
  * Local integration ingress for black-box tests. Production never binds this
  * service. All durable factory services remain ingress-private.
@@ -132,6 +138,15 @@ export const integrationHarness = restate.service({
     ) =>
       await ctx
         .objectClient(hostRestoreRegistry, request.key)
+        .require(request.requirement),
+    readWorkspace: async (ctx: restate.Context, request: KeyOnlyInput) =>
+      await ctx.objectClient(hostWorkspaceRegistry, request.key).read(),
+    requireWorkspace: async (
+      ctx: restate.Context,
+      request: WorkspaceRequirementInput,
+    ) =>
+      await ctx
+        .objectClient(hostWorkspaceRegistry, request.key)
         .require(request.requirement),
     releaseClaim: async (ctx: restate.Context, request: ClaimReleaseInput) =>
       await ctx.objectClient(claimRegistry, request.key).release(request.expected),

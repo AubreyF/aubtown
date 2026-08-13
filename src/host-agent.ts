@@ -17,6 +17,8 @@ import { GitCustodyCheckpointService } from "./checkpoints/git-custody.js";
 import { CheckpointTransferClient } from "./clients/checkpoint-transfer.js";
 import { RemoteExecutionCheckpointManager } from "./execution/checkpoint-manager.js";
 import { HostRestoreSupervisor } from "./execution/restore-supervisor.js";
+import { FreedWorkspaceManager } from "./execution/workspace-manager.js";
+import { HostWorkspaceSupervisor } from "./execution/workspace-supervisor.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -102,11 +104,12 @@ const checkpointCipher = new XChaChaCheckpointCipher(
   ),
 );
 const commandRunner = new ProcessCommandRunner();
+const gitExecutable = requiredAbsoluteEnvironment("FREEDWORKS_GIT_EXECUTABLE");
 const custodyService = new GitCustodyCheckpointService(
   commandRunner,
   checkpointCipher,
   checkpointStore,
-  requiredAbsoluteEnvironment("FREEDWORKS_GIT_EXECUTABLE"),
+  gitExecutable,
 );
 const checkpointTransfer = new CheckpointTransferClient(
   requiredEnvironment("FREEDWORKS_CHECKPOINT_EDGE_URL"),
@@ -120,14 +123,22 @@ const checkpointManager = new RemoteExecutionCheckpointManager(
   governor,
   checkpointKeyReference,
 );
-const restore = new HostRestoreSupervisor(
+const workspaceManager = new FreedWorkspaceManager(
   requiredAbsoluteEnvironment("FREED_REPOSITORY_ROOT"),
   requiredAbsoluteEnvironment("FREEDWORKS_WORKTREE_ROOT"),
   requiredAbsoluteEnvironment("FREEDWORKS_WORKTREE_HELPER"),
   commandRunner,
+  gitExecutable,
+);
+const restore = new HostRestoreSupervisor(
+  workspaceManager,
   custodyService,
   checkpointStore,
   checkpointTransfer,
+  governor,
+);
+const workspace = new HostWorkspaceSupervisor(
+  workspaceManager,
   governor,
 );
 const execution = new HostExecutionSupervisor(
@@ -206,6 +217,10 @@ async function sample(): Promise<void> {
     const receipt = await monitor.sample(accountId);
     process.stdout.write(`${JSON.stringify({ event: "quota-sampled", ...receipt })}\n`);
     await execution.recover();
+    const workspaceStatus = await workspace.reconcile();
+    process.stdout.write(
+      `${JSON.stringify({ event: "initial-workspace-reconciled", status: workspaceStatus })}\n`,
+    );
     const restoreStatus = await restore.reconcile();
     process.stdout.write(
       `${JSON.stringify({ event: "custody-restore-reconciled", status: restoreStatus })}\n`,

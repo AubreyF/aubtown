@@ -17,6 +17,7 @@ import {
 } from "../execution/command.js";
 import { signedCheckpointStorageReceiptSchema } from "../checkpoints/receipt.js";
 import { custodyRestoreReceiptSchema } from "../execution/restore.js";
+import { initialWorkspaceReceiptSchema } from "../execution/workspace.js";
 
 const HOST_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
@@ -115,6 +116,22 @@ const unsignedEnvelopeSchema = z.discriminatedUnion("kind", [
     issuedAt: z.iso.datetime(),
     kind: z.literal("restore-receipt"),
     payload: custodyRestoreReceiptSchema,
+  }),
+  z.object({
+    schemaVersion: z.literal(1),
+    hostId: z.string().regex(HOST_ID),
+    sequence: z.number().int().positive().safe(),
+    issuedAt: z.iso.datetime(),
+    kind: z.literal("workspace-poll"),
+    payload: z.object({}),
+  }),
+  z.object({
+    schemaVersion: z.literal(1),
+    hostId: z.string().regex(HOST_ID),
+    sequence: z.number().int().positive().safe(),
+    issuedAt: z.iso.datetime(),
+    kind: z.literal("workspace-receipt"),
+    payload: initialWorkspaceReceiptSchema,
   }),
 ]);
 

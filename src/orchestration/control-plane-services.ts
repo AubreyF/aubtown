@@ -8,6 +8,7 @@ import { executorCommandRegistry } from "./executor-command-registry.js";
 import { checkpointCatalog } from "./checkpoint-catalog.js";
 import { hostRegistry } from "./host-registry.js";
 import { hostRestoreRegistry } from "./host-restore-registry.js";
+import { hostWorkspaceRegistry } from "./host-workspace-registry.js";
 import { createHostGateway } from "./host-gateway.js";
 import { integrationHarness } from "./integration-harness.js";
 import { qualificationWorkflow } from "./qualification-workflow.js";
@@ -29,6 +30,7 @@ export function controlPlaneServices(
     schedulerRegistry,
     hostRegistry,
     hostRestoreRegistry,
+    hostWorkspaceRegistry,
     custodyTransferWorkflow,
     reconciliationWorkflow,
     hostGateway,

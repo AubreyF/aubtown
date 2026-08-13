@@ -8,6 +8,7 @@ import { XChaChaCheckpointCipher } from "../src/checkpoints/cipher.js";
 import { GitCustodyCheckpointService } from "../src/checkpoints/git-custody.js";
 import { LocalCheckpointStore } from "../src/checkpoints/local-store.js";
 import { HostRestoreSupervisor } from "../src/execution/restore-supervisor.js";
+import { FreedWorkspaceManager } from "../src/execution/workspace-manager.js";
 import type { CustodyRestoreRequirement } from "../src/execution/restore.js";
 import { claim } from "./helpers.js";
 
@@ -119,10 +120,12 @@ describe("HostRestoreSupervisor", () => {
     };
     const transfer = { download: async () => encrypted };
     const supervisor = new HostRestoreSupervisor(
-      source,
-      worktreeRoot,
-      path.join(source, "scripts", "worktree-add.sh"),
-      runner,
+      new FreedWorkspaceManager(
+        source,
+        worktreeRoot,
+        path.join(source, "scripts", "worktree-add.sh"),
+        runner,
+      ),
       destinationCustody,
       destinationStore,
       transfer as never,
@@ -146,10 +149,12 @@ describe("HostRestoreSupervisor", () => {
     ]);
 
     const escapedSupervisor = new HostRestoreSupervisor(
-      source,
-      worktreeRoot,
-      path.join(source, "scripts", "worktree-add.sh"),
-      runner,
+      new FreedWorkspaceManager(
+        source,
+        worktreeRoot,
+        path.join(source, "scripts", "worktree-add.sh"),
+        runner,
+      ),
       destinationCustody,
       destinationStore,
       transfer as never,

@@ -277,4 +277,86 @@ describe("HostGatewayClient", () => {
       expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
     }
   });
+
+  it("polls and reports initial workspace preparation through signed envelopes", async () => {
+    const keys = keyPair();
+    const requests: RequestInit[] = [];
+    let sequence = 12;
+    const requirement = {
+      schemaVersion: 1 as const,
+      repository: {
+        owner: "freed-project",
+        name: "freed",
+        defaultBranch: "dev",
+      },
+      issueNumber: 1_234,
+      claimId: "claim-1234",
+      custodyEpoch: 1 as const,
+      hostId: "linux-control-1",
+      workerId: "worker-linux-1",
+      worktree: "/srv/freedworks/worktrees/freed/1234",
+      branch: "fix/deterministic-validation",
+      conflictDomains: ["logical:tooling-validation"],
+      claimedAt: "2026-08-13T18:00:00.000Z",
+      baseHead: "a".repeat(40),
+      target: "shared",
+      requiredAt: "2026-08-13T18:00:01.000Z",
+    };
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080",
+      "linux-control-1",
+      keys.privateKey,
+      { next: async () => ++sequence },
+      async (_input, init) => {
+        requests.push(init ?? {});
+        if (requests.length === 1) {
+          return Response.json({
+            kind: "workspace-poll",
+            hostId: "linux-control-1",
+            sequence: 13,
+            acceptedAt: "2026-08-13T18:00:02.000Z",
+            requirement,
+            reason: "required",
+          });
+        }
+        return Response.json({
+          kind: "workspace-receipt",
+          hostId: "linux-control-1",
+          sequence: 14,
+          acceptedAt: "2026-08-13T18:00:03.000Z",
+          claimId: requirement.claimId,
+          custodyEpoch: 1,
+          baseHead: requirement.baseHead,
+        });
+      },
+      () => new Date("2026-08-13T18:00:02.000Z"),
+    );
+
+    await expect(client.pollWorkspace()).resolves.toMatchObject({
+      reason: "required",
+      requirement: { baseHead: requirement.baseHead },
+    });
+    await expect(
+      client.reportWorkspace({
+        schemaVersion: 1,
+        claimId: requirement.claimId,
+        custodyEpoch: 1,
+        hostId: requirement.hostId,
+        worktree: requirement.worktree,
+        branch: requirement.branch,
+        baseHead: requirement.baseHead,
+        preparedAt: "2026-08-13T18:00:03.000Z",
+      }),
+    ).resolves.toMatchObject({ kind: "workspace-receipt" });
+    const envelopes = requests.map((request) =>
+      parseSignedHostEnvelope(JSON.parse(String(request.body))),
+    );
+    expect(envelopes.map((envelope) => envelope.kind)).toEqual([
+      "workspace-poll",
+      "workspace-receipt",
+    ]);
+    for (const envelope of envelopes) {
+      expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+    }
+  });
 });

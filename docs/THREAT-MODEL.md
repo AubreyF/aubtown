@@ -33,6 +33,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Caller downgrades macOS-only work to Linux | Scheduler persists the qualified host lane with the claim and failover rejects any caller-supplied lane mismatch |
 | Offline source command never reports interruption | Validated 24-hour failover marks it superseded before epoch transfer; startup adjudication quarantines the old turn when that host returns |
 | Destination starts before unpublished work arrives | Every transferred epoch creates a durable restore requirement; executor poll and resume stay fenced until the destination's signed exact-state receipt is recorded |
+| Initial worker starts in a guessed or stale directory | Every first-epoch claim creates a durable workspace requirement; poll and resume stay fenced until the selected host signs the exact clean branch and base commit |
 | Restore is repeated after a crash | Destination first verifies the complete tracked and untracked worktree against the decrypted archive; exact restored state is accepted, while partial or divergent state fails closed |
 | Scheduler chooses an arbitrary writable restore path | Host resolves the destination beneath its configured physical worktree root and invokes only the physical Freed helper inside the configured repository |
 | Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
@@ -67,6 +68,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 - No dispatch with stale GitHub, quota, host, authority, lease, pull request, or worktree evidence.
 - No account selection without an enabled account and a compatible host.
 - No execution at custody epoch two or later without the matching destination restore receipt.
+- No execution at custody epoch one without the matching initial workspace receipt.
 
 ## Deferred risks
 

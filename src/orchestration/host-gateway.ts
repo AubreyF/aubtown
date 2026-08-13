@@ -31,6 +31,11 @@ import type {
   CustodyRestoreRequirement,
   CustodyRestoreState,
 } from "../execution/restore.js";
+import { hostWorkspaceRegistry } from "./host-workspace-registry.js";
+import type {
+  InitialWorkspaceRequirement,
+  InitialWorkspaceState,
+} from "../execution/workspace.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -88,6 +93,23 @@ export type HostGatewayReceipt =
       readonly checkpointReference: string;
     }
   | {
+      readonly kind: "workspace-poll";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly requirement: InitialWorkspaceRequirement | null;
+      readonly reason: "required" | "no-workspace" | "prepared" | "claim-stale";
+    }
+  | {
+      readonly kind: "workspace-receipt";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly claimId: string;
+      readonly custodyEpoch: 1;
+      readonly baseHead: string;
+    }
+  | {
       readonly kind: "executor-poll";
       readonly hostId: string;
       readonly sequence: number;
@@ -98,6 +120,7 @@ export type HostGatewayReceipt =
         | "no-command"
         | "quota-unavailable"
         | "quota-blocked"
+        | "workspace-required"
         | "restore-required"
         | "claim-stale";
     }
@@ -120,6 +143,7 @@ export type HostGatewayReceipt =
         | "current"
         | "command-stale"
         | "claim-stale"
+        | "workspace-required"
         | "restore-required"
         | "quota-unavailable"
         | "quota-blocked";
@@ -160,6 +184,40 @@ function restoreStateSatisfiesClaim(
   return (
     restore?.stage === "restored" &&
     restoreRequirementMatchesClaim(restore.requirement, claim, hostId)
+  );
+}
+
+function workspaceRequirementMatchesClaim(
+  requirement: InitialWorkspaceRequirement,
+  claim: DispatchClaim,
+  hostId: string,
+): boolean {
+  return (
+    requirement.repository.owner === claim.repository.owner &&
+    requirement.repository.name === claim.repository.name &&
+    requirement.repository.defaultBranch === claim.repository.defaultBranch &&
+    requirement.issueNumber === claim.issueNumber &&
+    requirement.claimId === claim.claimId &&
+    claim.custodyEpoch === 1 &&
+    requirement.hostId === hostId &&
+    requirement.hostId === claim.hostId &&
+    requirement.workerId === claim.workerId &&
+    requirement.worktree === claim.worktree &&
+    requirement.branch === claim.branch &&
+    requirement.claimedAt === claim.claimedAt &&
+    JSON.stringify([...requirement.conflictDomains].sort()) ===
+      JSON.stringify([...claim.conflictDomains].sort())
+  );
+}
+
+function workspaceStateSatisfiesClaim(
+  workspace: InitialWorkspaceState | null,
+  claim: DispatchClaim,
+  hostId: string,
+): boolean {
+  return (
+    workspace?.stage === "prepared" &&
+    workspaceRequirementMatchesClaim(workspace.requirement, claim, hostId)
   );
 }
 
@@ -430,6 +488,91 @@ export function createHostGateway(
               custodyEpoch: recorded.requirement.custodyEpoch,
               checkpointReference: recorded.requirement.checkpointReference,
             };
+          } else if (envelope.kind === "workspace-poll") {
+            const workspace = await ctx
+              .objectClient(hostWorkspaceRegistry, envelope.hostId)
+              .read();
+            if (workspace === null) {
+              receipt = {
+                kind: "workspace-poll",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                requirement: null,
+                reason: "no-workspace",
+              };
+            } else if (workspace.stage === "prepared") {
+              receipt = {
+                kind: "workspace-poll",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                requirement: null,
+                reason: "prepared",
+              };
+            } else {
+              const required = workspace.requirement;
+              const claimKey = `${required.repository.owner}/${required.repository.name}#${required.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+              const currentClaim = await ctx
+                .objectClient(claimRegistry, claimKey)
+                .read();
+              const current =
+                currentClaim !== null &&
+                workspaceRequirementMatchesClaim(
+                  required,
+                  currentClaim,
+                  envelope.hostId,
+                );
+              receipt = {
+                kind: "workspace-poll",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                requirement: current ? required : null,
+                reason: current ? "required" : "claim-stale",
+              };
+            }
+          } else if (envelope.kind === "workspace-receipt") {
+            const reported = envelope.payload;
+            if (reported.hostId !== envelope.hostId) {
+              return terminal("Initial workspace receipt targets another host", 409);
+            }
+            const workspace = await ctx
+              .objectClient(hostWorkspaceRegistry, envelope.hostId)
+              .read();
+            if (workspace === null) {
+              return terminal("Host has no initial workspace requirement", 409);
+            }
+            const required = workspace.requirement;
+            const claimKey = `${required.repository.owner}/${required.repository.name}#${required.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+            const currentClaim = await ctx
+              .objectClient(claimRegistry, claimKey)
+              .read();
+            if (
+              currentClaim === null ||
+              !workspaceRequirementMatchesClaim(
+                required,
+                currentClaim,
+                envelope.hostId,
+              )
+            ) {
+              return terminal(
+                "Initial workspace receipt does not match current claim custody",
+                409,
+              );
+            }
+            const recorded = await ctx
+              .objectClient(hostWorkspaceRegistry, envelope.hostId)
+              .record({ ...reported, preparedAt: acceptedAt });
+            receipt = {
+              kind: "workspace-receipt",
+              hostId: envelope.hostId,
+              sequence: envelope.sequence,
+              acceptedAt,
+              claimId: recorded.requirement.claimId,
+              custodyEpoch: 1,
+              baseHead: recorded.requirement.baseHead,
+            };
           } else if (envelope.kind === "executor-poll") {
             const accountId = envelope.payload.accountId;
             if (!enrollment.accountIds.includes(accountId)) {
@@ -475,9 +618,17 @@ export function createHostGateway(
                   const command = state.command;
                   const claimKey = `${command.claim.repository.owner}/${command.claim.repository.name}#${command.claim.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
                   const currentClaim = await ctx.objectClient(claimRegistry, claimKey).read();
+                  let workspaceSatisfied = false;
                   let restoreSatisfied = false;
                   if (currentClaim?.custodyEpoch === 1) {
-                    restoreSatisfied = true;
+                    const workspace = await ctx
+                      .objectClient(hostWorkspaceRegistry, envelope.hostId)
+                      .read();
+                    workspaceSatisfied = workspaceStateSatisfiesClaim(
+                      workspace,
+                      currentClaim,
+                      envelope.hostId,
+                    );
                   } else if (currentClaim !== null) {
                     const restore = await ctx
                       .objectClient(hostRestoreRegistry, envelope.hostId)
@@ -502,7 +653,22 @@ export function createHostGateway(
                       command: null,
                       reason: "claim-stale",
                     };
-                  } else if (!restoreSatisfied) {
+                  } else if (
+                    currentClaim.custodyEpoch === 1 &&
+                    !workspaceSatisfied
+                  ) {
+                    receipt = {
+                      kind: "executor-poll",
+                      hostId: envelope.hostId,
+                      sequence: envelope.sequence,
+                      acceptedAt,
+                      command: null,
+                      reason: "workspace-required",
+                    };
+                  } else if (
+                    currentClaim.custodyEpoch > 1 &&
+                    !restoreSatisfied
+                  ) {
                     receipt = {
                       kind: "executor-poll",
                       hostId: envelope.hostId,
@@ -561,6 +727,7 @@ export function createHostGateway(
               reason:
                 | "command-stale"
                 | "claim-stale"
+                | "workspace-required"
                 | "restore-required"
                 | "quota-unavailable"
                 | "quota-blocked",
@@ -614,21 +781,45 @@ export function createHostGateway(
               if (!claimCurrent) {
                 receipt = quarantine("claim-stale");
               } else {
+                const workspace =
+                  currentClaim?.custodyEpoch === 1
+                    ? await ctx
+                        .objectClient(hostWorkspaceRegistry, envelope.hostId)
+                        .read()
+                    : null;
                 const restore =
                   currentClaim !== null && currentClaim.custodyEpoch > 1
                     ? await ctx
                         .objectClient(hostRestoreRegistry, envelope.hostId)
                         .read()
                     : null;
+                const workspaceSatisfied =
+                  currentClaim !== null &&
+                  currentClaim.custodyEpoch === 1 &&
+                  workspaceStateSatisfiesClaim(
+                    workspace,
+                    currentClaim,
+                    envelope.hostId,
+                  );
                 const restoreSatisfied =
-                  currentClaim?.custodyEpoch === 1 ||
+                  currentClaim !== null &&
+                  currentClaim.custodyEpoch > 1 &&
                   (currentClaim !== null &&
                     restoreStateSatisfiesClaim(
                       restore,
                       currentClaim,
                       envelope.hostId,
                     ));
-                if (!restoreSatisfied) {
+                if (
+                  currentClaim?.custodyEpoch === 1 &&
+                  !workspaceSatisfied
+                ) {
+                  receipt = quarantine("workspace-required");
+                } else if (
+                  currentClaim !== null &&
+                  currentClaim.custodyEpoch > 1 &&
+                  !restoreSatisfied
+                ) {
                   receipt = quarantine("restore-required");
                 } else {
                   const account = await ctx

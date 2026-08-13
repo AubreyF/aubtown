@@ -33,6 +33,11 @@ import {
   custodyRestoreRequirementSchema,
   type CustodyRestoreReceipt,
 } from "../execution/restore.js";
+import {
+  initialWorkspaceReceiptSchema,
+  initialWorkspaceRequirementSchema,
+  type InitialWorkspaceReceipt,
+} from "../execution/workspace.js";
 
 const quotaDecisionSchema = z.object({
   action: z.enum(["admit", "throttle", "stop-admission", "interrupt"]),
@@ -113,6 +118,23 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
     checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u),
   }),
   z.object({
+    kind: z.literal("workspace-poll"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    requirement: initialWorkspaceRequirementSchema.nullable(),
+    reason: z.enum(["required", "no-workspace", "prepared", "claim-stale"]),
+  }),
+  z.object({
+    kind: z.literal("workspace-receipt"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    claimId: z.string().min(1),
+    custodyEpoch: z.literal(1),
+    baseHead: z.string().regex(/^[0-9a-f]{40}$/u),
+  }),
+  z.object({
     kind: z.literal("executor-poll"),
     hostId: z.string().min(1),
     sequence: z.number().int().positive().safe(),
@@ -123,6 +145,7 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
       "no-command",
       "quota-unavailable",
       "quota-blocked",
+      "workspace-required",
       "restore-required",
       "claim-stale",
     ]),
@@ -146,6 +169,7 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
       "current",
       "command-stale",
       "claim-stale",
+      "workspace-required",
       "restore-required",
       "quota-unavailable",
       "quota-blocked",
@@ -250,6 +274,48 @@ export class HostGatewayClient implements DurableUsageGovernor {
     });
     if (receipt.kind !== "restore-poll") {
       throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    return receipt;
+  }
+
+  async pollWorkspace(): Promise<
+    Extract<HostGatewayReceipt, { readonly kind: "workspace-poll" }>
+  > {
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "workspace-poll",
+      payload: {},
+    });
+    if (receipt.kind !== "workspace-poll") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    return receipt;
+  }
+
+  async reportWorkspace(
+    input: InitialWorkspaceReceipt,
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "workspace-receipt" }>> {
+    const prepared = initialWorkspaceReceiptSchema.parse(input);
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "workspace-receipt",
+      payload: prepared,
+    });
+    if (receipt.kind !== "workspace-receipt") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    if (
+      receipt.claimId !== prepared.claimId ||
+      receipt.custodyEpoch !== prepared.custodyEpoch ||
+      receipt.baseHead !== prepared.baseHead
+    ) {
+      throw new Error("Host gateway workspace receipt does not match its request.");
     }
     return receipt;
   }
