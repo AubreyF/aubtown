@@ -28,6 +28,10 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Poll retry or host restart starts a second turn | One Restate command per host plus a mode-0600 local execution journal and app-server thread resume |
 | Terminal result is accepted before work is recoverable | Host journal requires encrypted capture, edge-signed storage receipt, and catalog admission before the terminal executor receipt |
 | Terminal result describes work other than the stored checkpoint | Receipt carries the content address; authenticated manifest must match current host, claim, epoch, exact command ID, and terminal stage |
+| Worker creates or counterfeits the publication commit | Worker prompt forbids commits; host requires the worker head to remain at the qualified base, persists a private random nonce after the turn, and creates one bounded commit carrying that receipt |
+| Worker moves the local remote-tracking branch to redefine its base | Executor command carries the immutable admitted base SHA; finalization never derives authority from a worker-writable Git ref |
+| Host crashes after committing but before terminal journaling | Persisted finalization nonce lets restart accept only the exact one-commit head and receipt; any other clean commit fails closed |
+| Checkpoint captures a head other than the trusted finalization | Completed checkpoint head must equal the finalized head in the private execution journal before upload or catalog admission |
 | Validation or review is replayed against another change | Both receipts bind the complete checkpoint-backed work-product identity, including head and patch digest |
 | Validation command changes uncommitted work while preserving Git HEAD | Custody archive digest is recomputed before and after each no-shell command and includes tracked plus approved-untracked state |
 | Issue text injects a shell pipeline as validation | Repository adapter supplies reviewed argv recipes with absolute physical executables; issue prose is never executed |

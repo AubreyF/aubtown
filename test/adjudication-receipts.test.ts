@@ -85,6 +85,7 @@ describe("post-worker adjudication receipts", () => {
       qualification: report(),
       authorityTaskId: "github-issue-1234",
       accountId: "codex-pro-1",
+      baseHead: "a".repeat(40),
       issuedAt: "2026-08-13T18:00:00.000Z",
     });
     expect(

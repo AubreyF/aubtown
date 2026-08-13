@@ -629,7 +629,7 @@ export function createHostGateway(
                       workspace,
                       currentClaim,
                       envelope.hostId,
-                    );
+                    ) && workspace?.requirement.baseHead === command.baseHead;
                   } else if (currentClaim !== null) {
                     const restore = await ctx
                       .objectClient(hostRestoreRegistry, envelope.hostId)
@@ -638,7 +638,7 @@ export function createHostGateway(
                       restore,
                       currentClaim,
                       envelope.hostId,
-                    );
+                    ) && restore?.requirement.checkpointBaseHead === command.baseHead;
                   }
                   if (currentClaim === null) {
                     await registry.cancel({

@@ -16,6 +16,7 @@ import type {
   ExecutionCheckpointManager,
   TerminalExecutionStatus,
 } from "./checkpoint-manager.js";
+import type { ExecutionCandidateFinalizer } from "./candidate-finalizer.js";
 
 export interface ExecutorReceiptGateway {
   reportExecutor(
@@ -48,6 +49,7 @@ export class HostExecutionSupervisor {
     private readonly eventSink: (event: ExecutionEvent) => void,
     private readonly now: () => Date = () => new Date(),
     private readonly checkpoints?: ExecutionCheckpointManager,
+    private readonly finalizer?: ExecutionCandidateFinalizer,
   ) {}
 
   async recover(): Promise<void> {
@@ -231,9 +233,40 @@ export class HostExecutionSupervisor {
     handle: WorkerTurnHandle,
     status: TerminalExecutionStatus,
   ): Promise<void> {
+    let terminalStatus = status;
+    if (status === "completed" && this.finalizer !== undefined) {
+      try {
+        const preparation = await this.journal.prepareFinalization(
+          command.commandId,
+        );
+        const candidate = await this.finalizer.finalize(
+          command,
+          preparation.nonce,
+        );
+        await this.journal.candidateFinalized(
+          command.commandId,
+          preparation.nonce,
+          candidate.head,
+        );
+        this.eventSink({
+          event: "executor-candidate-finalized",
+          commandId: command.commandId,
+          turnId: handle.turnId,
+          head: candidate.head,
+        });
+      } catch (error) {
+        terminalStatus = "failed";
+        this.eventSink({
+          event: "executor-candidate-finalization-failed",
+          commandId: command.commandId,
+          turnId: handle.turnId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     const finished = await this.journal.finish(
       command.commandId,
-      status,
+      terminalStatus,
       this.now().toISOString(),
     );
     this.turns.untrack(this.accountId, handle.turnId);
@@ -242,7 +275,7 @@ export class HostExecutionSupervisor {
       event: "executor-turn-finished",
       commandId: command.commandId,
       turnId: handle.turnId,
-      status,
+      status: terminalStatus,
     });
   }
 
@@ -305,6 +338,16 @@ export class HostExecutionSupervisor {
     let checkpoint = current.checkpoint;
     if (checkpoint === undefined) {
       throw new Error("Terminal execution has no captured checkpoint.");
+    }
+    if (
+      current.stage === "completed" &&
+      this.finalizer !== undefined &&
+      (current.finalization?.head === undefined ||
+        checkpoint.manifest.repositoryHead !== current.finalization.head)
+    ) {
+      throw new Error(
+        "Completed execution checkpoint does not match its finalized candidate head.",
+      );
     }
     if (checkpoint.storageReceipt === undefined) {
       const stored = await this.checkpoints.upload({

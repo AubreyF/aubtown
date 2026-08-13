@@ -15,17 +15,19 @@ function command() {
     qualification: report(),
     authorityTaskId: "github-issue-1234",
     accountId: "codex-pro-1",
+    baseHead: "b".repeat(40),
     issuedAt: "2026-08-13T18:00:00.000Z",
   });
 }
 
 describe("executor start commands", () => {
-  it("derives the trusted prompt, root, and five-minute lifetime", () => {
+  it("derives the trusted prompt, root, immutable base, and five-minute lifetime", () => {
     expect(command()).toMatchObject({
       schemaVersion: 1,
       commandId: COMMAND_ID,
       action: "start",
       accountId: "codex-pro-1",
+      baseHead: "b".repeat(40),
       repositoryRoot: "/srv/freedworks/worktrees/freed/1234",
       issuedAt: "2026-08-13T18:00:00.000Z",
       expiresAt: "2026-08-13T18:05:00.000Z",
@@ -94,6 +96,7 @@ describe("executor start commands", () => {
       qualification,
       authorityTaskId: "github-issue-1234",
       accountId: "codex-pro-1",
+      baseHead: "b".repeat(40),
       issuedAt: "2026-08-13T18:00:00.000Z",
     });
     expect(() =>

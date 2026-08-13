@@ -94,6 +94,7 @@ export const executorStartCommandSchema = z.object({
   accountId: z.string().min(1),
   prompt: z.string().min(1).max(256 * 1_024),
   repositoryRoot: z.string().startsWith("/"),
+  baseHead: z.string().regex(/^[0-9a-f]{40}$/u),
   issuedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
 });
@@ -150,6 +151,7 @@ export function createExecutorStartCommand(input: {
   readonly qualification: QualificationReport;
   readonly authorityTaskId: string;
   readonly accountId: string;
+  readonly baseHead: string;
   readonly issuedAt: string;
 }): ExecutorStartCommand {
   const issuedAt = Date.parse(input.issuedAt);
@@ -170,6 +172,7 @@ export function createExecutorStartCommand(input: {
       authorityTaskId: input.authorityTaskId,
     }),
     repositoryRoot: input.claim.worktree,
+    baseHead: input.baseHead,
     issuedAt: new Date(issuedAt).toISOString(),
     expiresAt: new Date(issuedAt + 5 * 60 * 1_000).toISOString(),
   });

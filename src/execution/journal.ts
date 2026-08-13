@@ -32,6 +32,11 @@ const handleSchema: z.ZodType<WorkerTurnHandle> = z.object({
   startedAt: z.iso.datetime(),
 });
 
+const finalizationStateSchema = z.object({
+  nonce: z.uuid(),
+  head: z.string().regex(/^[0-9a-f]{40}$/u).optional(),
+});
+
 const executionRecordSchema = z.object({
   schemaVersion: z.literal(1),
   command: executorStartCommandSchema,
@@ -44,6 +49,7 @@ const executionRecordSchema = z.object({
   ]),
   acceptedAt: z.iso.datetime(),
   handle: handleSchema.optional(),
+  finalization: finalizationStateSchema.optional(),
   finishedAt: z.iso.datetime().optional(),
   checkpoint: checkpointStateSchema.optional(),
   reportedAt: z.iso.datetime().optional(),
@@ -54,6 +60,11 @@ export type HostExecutionRecord = z.infer<typeof executionRecordSchema>;
 export interface HostExecutionAcceptance {
   readonly record: HostExecutionRecord;
   readonly acceptedNow: boolean;
+}
+
+export interface HostExecutionFinalizationPreparation {
+  readonly record: HostExecutionRecord;
+  readonly nonce: string;
 }
 
 const TERMINAL = new Set<HostExecutionRecord["stage"]>([
@@ -121,6 +132,55 @@ export class HostExecutionJournal {
         ...current,
         stage: "started",
         handle,
+      });
+      await this.#write(next);
+      return next;
+    });
+  }
+
+  prepareFinalization(
+    commandId: string,
+  ): Promise<HostExecutionFinalizationPreparation> {
+    return this.#serialize(async () => {
+      const current = await this.#required(commandId);
+      if (current.stage !== "started" || current.handle === undefined) {
+        throw new Error("Only a started execution can prepare finalization.");
+      }
+      if (current.finalization !== undefined) {
+        return { record: current, nonce: current.finalization.nonce };
+      }
+      const nonce = randomUUID();
+      const next = executionRecordSchema.parse({
+        ...current,
+        finalization: { nonce },
+      });
+      await this.#write(next);
+      return { record: next, nonce };
+    });
+  }
+
+  candidateFinalized(
+    commandId: string,
+    nonce: string,
+    head: string,
+  ): Promise<HostExecutionRecord> {
+    return this.#serialize(async () => {
+      const current = await this.#required(commandId);
+      if (current.stage !== "started" || current.handle === undefined) {
+        throw new Error("Only a started execution can record finalization.");
+      }
+      if (current.finalization?.nonce !== nonce) {
+        throw new Error("Candidate finalization nonce does not match the journal.");
+      }
+      if (current.finalization.head !== undefined) {
+        if (current.finalization.head !== head) {
+          throw new Error("Host execution journal already records another candidate head.");
+        }
+        return current;
+      }
+      const next = executionRecordSchema.parse({
+        ...current,
+        finalization: { nonce, head },
       });
       await this.#write(next);
       return next;

@@ -153,6 +153,11 @@ COMPOSE_ARGS=(
   -f "${ROOT_DIR}/deploy/compose.yaml"
   -f "${ROOT_DIR}/deploy/compose.integration.yaml"
 )
+# Integration state is disposable. Starting clean prevents a failed prior run's
+# durable claims from changing the next proof while restart checks still happen
+# inside this run.
+docker compose "${COMPOSE_ARGS[@]}" --profile checkpoint-transfer down \
+  --volumes --remove-orphans >/dev/null 2>&1 || true
 docker compose "${COMPOSE_ARGS[@]}" --profile checkpoint-transfer up -d --build --force-recreate control-plane host-edge checkpoint-edge
 register_deployment
 wait_for_host_edge
@@ -306,7 +311,7 @@ jq -n \
   --arg now "$NOW" \
   --slurpfile claim "${TMP_DIR}/grant-claim.json" \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
-  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", issuedAt: $now}' \
+  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", baseHead: ("b" * 40), issuedAt: $now}' \
   > "${TMP_DIR}/executor-command-input.json"
 EXPIRES_AT="$(node -e 'process.stdout.write(new Date(Date.parse(process.argv[1]) + 300000).toISOString())' "$NOW")"
 jq -n \
@@ -776,7 +781,7 @@ jq -n \
   --arg now "$NOW" \
   --slurpfile claim "${TMP_DIR}/linux-claim.json" \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
-  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", issuedAt: $now}' \
+  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", baseHead: ("b" * 40), issuedAt: $now}' \
   > "${TMP_DIR}/linux-executor-command-input.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" \
   "${ROOT_DIR}/src/cli/build-executor-command.ts" \

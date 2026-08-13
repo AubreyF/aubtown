@@ -285,7 +285,7 @@ jq -n \
   --slurpfile claim "${TMP_DIR}/workflow-custody-claim.json" \
   --slurpfile fixture "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
   --slurpfile admitted "${TMP_DIR}/admitted.json" \
-  '{commandId: $commandId, claim: $claim[0], qualification: $admitted[0].qualification, authorityTaskId: $fixture[0].authorityTask.id, accountId: "codex-pro-1", issuedAt: "2026-08-13T07:55:00.000Z"}' \
+  '{commandId: $commandId, claim: $claim[0], qualification: $admitted[0].qualification, authorityTaskId: $fixture[0].authorityTask.id, accountId: "codex-pro-1", baseHead: ("b" * 40), issuedAt: "2026-08-13T07:55:00.000Z"}' \
   > "${TMP_DIR}/workflow-offline-command-input.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" \
   "${ROOT_DIR}/src/cli/build-executor-command.ts" \

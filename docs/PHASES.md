@@ -51,6 +51,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Execute reviewed no-shell validation recipes and prove complete Git state is unchanged after every command.
 - [x] Run structured independent review in a fresh read-only, network-disabled Codex thread.
 - [x] Persist one immutable checkpoint-keyed validation and review handoff through Restate.
+- [x] Finalize each completed candidate as one host-receipted local commit before checkpointing.
 
 ## Phase 3: one Freed issue
 

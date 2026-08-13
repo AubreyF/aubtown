@@ -32,6 +32,7 @@ function command() {
     qualification: report(),
     authorityTaskId: "github-issue-1234",
     accountId: "codex-pro-1",
+    baseHead: "b".repeat(40),
     issuedAt: "2026-08-13T18:00:00.000Z",
   });
 }
@@ -89,6 +90,73 @@ function checkpointManager(): ExecutionCheckpointManager {
 }
 
 describe("HostExecutionSupervisor", () => {
+  it("persists a host receipt before checkpointing the finalized candidate", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    const completion = deferred<"completed" | "interrupted" | "failed">();
+    const reports: string[] = [];
+    let observedNonce = "";
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      {
+        id: "fake",
+        capabilities: {
+          hostLanes: ["linux"],
+          canInterrupt: true,
+          canReadSubscriptionUsage: true,
+          publicationCeiling: "none",
+        },
+        start: async () => handle,
+        recover: async () => "running" as const,
+        wait: async () => await completion.promise,
+        interrupt: async () => {},
+      },
+      journal,
+      {
+        reportExecutor: async (receipt) => {
+          reports.push(receipt.stage);
+          return {
+            kind: "executor-receipt",
+            hostId: "linux-control-1",
+            sequence: reports.length,
+            acceptedAt: "2026-08-13T18:00:04.000Z",
+            commandId: receipt.commandId,
+            stage: receipt.stage,
+            ...(receipt.stage === "started"
+              ? {}
+              : { checkpointReference: receipt.checkpointReference }),
+          };
+        },
+        reconcileExecutor: async () => {
+          throw new Error("should not reconcile");
+        },
+      },
+      { track: () => {}, untrack: () => {} },
+      () => {},
+      () => new Date("2026-08-13T18:00:04.000Z"),
+      checkpointManager(),
+      {
+        finalize: async (_command, nonce) => {
+          observedNonce = nonce;
+          return { head: "a".repeat(40) };
+        },
+      },
+    );
+    await supervisor.accept(command());
+    completion.resolve("completed");
+    for (let attempt = 0; attempt < 20 && reports.length < 2; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(observedNonce).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(reports).toEqual(["started", "completed"]);
+    await expect(journal.read()).resolves.toMatchObject({
+      stage: "completed",
+      finalization: { nonce: observedNonce, head: "a".repeat(40) },
+      checkpoint: { manifest: { repositoryHead: "a".repeat(40) } },
+    });
+  });
+
   it("starts once, records before reporting, and persists completion", async () => {
     const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
     roots.push(root);
@@ -429,6 +497,73 @@ describe("HostExecutionSupervisor", () => {
       },
       reportedAt: "2026-08-13T18:00:04.000Z",
     });
+  });
+
+  it("downgrades completion to failure when trusted finalization fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    const completion = deferred<"completed" | "interrupted" | "failed">();
+    const reports: string[] = [];
+    const events: Array<Record<string, unknown>> = [];
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      {
+        id: "fake",
+        capabilities: {
+          hostLanes: ["linux"],
+          canInterrupt: true,
+          canReadSubscriptionUsage: true,
+          publicationCeiling: "none",
+        },
+        start: async () => handle,
+        recover: async () => "running" as const,
+        wait: async () => await completion.promise,
+        interrupt: async () => {},
+      },
+      journal,
+      {
+        reportExecutor: async (receipt) => {
+          reports.push(receipt.stage);
+          return {
+            kind: "executor-receipt",
+            hostId: "linux-control-1",
+            sequence: reports.length,
+            acceptedAt: "2026-08-13T18:00:04.000Z",
+            commandId: receipt.commandId,
+            stage: receipt.stage,
+            ...(receipt.stage === "started"
+              ? {}
+              : { checkpointReference: receipt.checkpointReference }),
+          };
+        },
+        reconcileExecutor: async () => {
+          throw new Error("should not reconcile");
+        },
+      },
+      { track: () => {}, untrack: () => {} },
+      (event) => events.push(event),
+      () => new Date("2026-08-13T18:00:04.000Z"),
+      checkpointManager(),
+      {
+        finalize: async () => {
+          throw new Error("outside qualified ownership");
+        },
+      },
+    );
+    await supervisor.accept(command());
+    completion.resolve("completed");
+    for (let attempt = 0; attempt < 20 && reports.length < 2; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(reports).toEqual(["started", "failed"]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        event: "executor-candidate-finalization-failed",
+        message: "outside qualified ownership",
+      }),
+    );
+    await expect(journal.read()).resolves.toMatchObject({ stage: "failed" });
   });
 
   it("fails closed when a crash leaves the start outcome ambiguous", async () => {

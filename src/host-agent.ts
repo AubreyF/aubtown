@@ -19,6 +19,7 @@ import { RemoteExecutionCheckpointManager } from "./execution/checkpoint-manager
 import { HostRestoreSupervisor } from "./execution/restore-supervisor.js";
 import { FreedWorkspaceManager } from "./execution/workspace-manager.js";
 import { HostWorkspaceSupervisor } from "./execution/workspace-supervisor.js";
+import { GitExecutionCandidateFinalizer } from "./execution/candidate-finalizer.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -141,6 +142,10 @@ const workspace = new HostWorkspaceSupervisor(
   workspaceManager,
   governor,
 );
+const candidateFinalizer = new GitExecutionCandidateFinalizer(
+  commandRunner,
+  gitExecutable,
+);
 const execution = new HostExecutionSupervisor(
   accountId,
   worker,
@@ -150,6 +155,7 @@ const execution = new HostExecutionSupervisor(
   (event) => process.stdout.write(`${JSON.stringify(event)}\n`),
   () => new Date(),
   checkpointManager,
+  candidateFinalizer,
 );
 await execution.recover();
 

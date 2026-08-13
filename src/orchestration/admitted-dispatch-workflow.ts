@@ -194,6 +194,7 @@ export const admittedDispatchWorkflow = restate.workflow({
           qualification: input.qualification,
           authorityTaskId: input.authorityTask.id,
           accountId: input.accountId,
+          baseHead,
           issuedAt: input.now,
         });
         await ctx

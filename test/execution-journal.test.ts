@@ -21,6 +21,7 @@ function command(commandId = "50e13459-412e-41f7-809f-0d91dc660d52") {
     qualification: report(),
     authorityTaskId: "github-issue-1234",
     accountId: "codex-pro-1",
+    baseHead: "b".repeat(40),
     issuedAt: "2026-08-13T18:00:00.000Z",
   });
 }
@@ -38,10 +39,24 @@ describe("HostExecutionJournal", () => {
       turnId: "turn-1",
       startedAt: "2026-08-13T18:00:02.000Z",
     });
+    const preparation = await journal.prepareFinalization(command().commandId);
+    const retriedPreparation = await journal.prepareFinalization(
+      command().commandId,
+    );
+    expect(retriedPreparation.nonce).toBe(preparation.nonce);
+    await journal.candidateFinalized(
+      command().commandId,
+      preparation.nonce,
+      "1111111111111111111111111111111111111111",
+    );
     const replacement = new HostExecutionJournal(file);
     await expect(replacement.read()).resolves.toMatchObject({
       stage: "started",
       handle: { threadId: "thread-1", turnId: "turn-1" },
+      finalization: {
+        nonce: preparation.nonce,
+        head: "1111111111111111111111111111111111111111",
+      },
     });
     await replacement.finish(
       command().commandId,
