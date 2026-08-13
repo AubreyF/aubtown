@@ -100,7 +100,8 @@ export class GitHubAppBroker {
   }): Promise<InstallationTokenReceipt> {
     if (
       !input.plan.allowed ||
-      (input.plan.action !== "create-draft" && input.plan.action !== "update-draft")
+      (input.plan.action !== "create-draft" && input.plan.action !== "update-draft") ||
+      input.plan.repository !== input.repository
     ) {
       throw new Error("Draft Publisher token requires an admitted draft publication plan.");
     }

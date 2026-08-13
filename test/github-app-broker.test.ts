@@ -70,6 +70,20 @@ describe("GitHubAppBroker", () => {
     ).rejects.toThrow("admitted draft publication plan");
   });
 
+  it("does not mint a publisher token for a repository substituted after planning", async () => {
+    await expect(
+      broker().broker.mintDraftPublisher({
+        repository: "freed-project/freed",
+        plan: {
+          allowed: true,
+          action: "create-draft",
+          reasons: [],
+          repository: "another/repository",
+        },
+      }),
+    ).rejects.toThrow("admitted draft publication plan");
+  });
+
   it("rejects repositories outside the selected installation set", async () => {
     await expect(
       broker().broker.mintCoordinatorRead("another/repository"),

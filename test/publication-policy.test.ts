@@ -26,6 +26,7 @@ const workProduct: WorkProductIdentity = {
   worktree: claim().worktree,
   commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
   checkpointReference: "d".repeat(64),
+  baseHead: "a".repeat(40),
   head,
   patchDigest: "e".repeat(64),
   implementation: {
@@ -94,7 +95,12 @@ function plan(overrides: Partial<Parameters<typeof planDraftPublication>[0]> = {
 describe("draft publication policy", () => {
   it("plans only a draft with AI-prefixed external bodies", () => {
     const result = plan();
-    expect(result).toMatchObject({ allowed: true, action: "create-draft" });
+    expect(result).toMatchObject({
+      allowed: true,
+      action: "create-draft",
+      repository: "freed-project/freed",
+      workProduct,
+    });
     expect(result.body?.startsWith("(AI Generated).\n\n")).toBe(true);
     expect(result.projection?.commentBody.startsWith("(AI Generated).\n\n")).toBe(true);
   });
@@ -133,5 +139,24 @@ describe("draft publication policy", () => {
     });
     expect(result).toMatchObject({ allowed: false, action: "none" });
     expect(result.reasons).toContain("existing-pull-request-conflict");
+  });
+
+  it("binds a draft update to the observed pull request number and head", () => {
+    expect(
+      plan({
+        existingPullRequest: {
+          number: 42,
+          branch: claim().branch,
+          head: "b".repeat(40),
+          draft: true,
+          state: "open",
+        },
+      }),
+    ).toMatchObject({
+      allowed: true,
+      action: "update-draft",
+      pullRequestNumber: 42,
+      expectedRemoteHead: "b".repeat(40),
+    });
   });
 });

@@ -32,7 +32,11 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Worker moves the local remote-tracking branch to redefine its base | Executor command carries the immutable admitted base SHA; finalization never derives authority from a worker-writable Git ref |
 | Host crashes after committing but before terminal journaling | Persisted finalization nonce lets restart accept only the exact one-commit head and receipt; any other clean commit fails closed |
 | Checkpoint captures a head other than the trusted finalization | Completed checkpoint head must equal the finalized head in the private execution journal before upload or catalog admission |
-| Validation or review is replayed against another change | Both receipts bind the complete checkpoint-backed work-product identity, including head and patch digest |
+| Validation or review is replayed against another change | Both receipts bind the complete checkpoint-backed work-product identity, including immutable base, head, and patch digest |
+| Publication token leaks through process arguments or Git remote | Private askpass helper supplies the token from the publisher environment; arguments contain only the credential-free HTTPS repository URL |
+| Remote branch changes after publication planning | Exact force-with-lease binds new branches to absence and updates to the observed prior head; GitHub must then report the planned head |
+| Publisher crash creates a duplicate pull request | Retry reconciles the exact remote branch and one exact open draft before any write; publication registry accepts only one plan and receipt |
+| Ready or unrelated pull request is overwritten | Publisher accepts only the observed open draft number and branch, and refuses duplicate open pull requests or any create-time mismatch |
 | Validation command changes uncommitted work while preserving Git HEAD | Custody archive digest is recomputed before and after each no-shell command and includes tracked plus approved-untracked state |
 | Issue text injects a shell pipeline as validation | Repository adapter supplies reviewed argv recipes with absolute physical executables; issue prose is never executed |
 | Implementation context approves its own work | Independent review requires a different thread and structured verdict; implementation-thread reuse is rejected |

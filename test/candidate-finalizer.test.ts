@@ -65,7 +65,7 @@ describe("GitExecutionCandidateFinalizer", () => {
       await git(root, ["rev-list", "--count", `${command.baseHead}..HEAD`]),
     ).toBe("1");
     expect(await git(root, ["show", "-s", "--format=%B", first.head])).toBe(
-      `fix: resolve issue #1234\n\nExecution-Receipt: ${finalizationNonce}`,
+      `fix: resolve issue #1234\n\n(AI Generated).\n\nExecution-Receipt: ${finalizationNonce}`,
     );
   });
 

@@ -51,7 +51,7 @@ export class GitWorkProductStateInspector implements WorkProductStateInspector {
     const state = await this.custody.inspect({
       repositoryRoot: workProduct.worktree,
       branch: workProduct.branch,
-      baseRef: `origin/${workProduct.repository.defaultBranch}`,
+      baseRef: workProduct.baseHead,
     });
     return {
       head: state.repositoryHead,

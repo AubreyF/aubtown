@@ -30,6 +30,7 @@ export const workProductIdentitySchema = z.object({
   worktree: z.string().startsWith("/"),
   commandId: z.uuid(),
   checkpointReference: digestSchema,
+  baseHead: gitShaSchema,
   head: gitShaSchema,
   patchDigest: digestSchema,
   implementation: turnIdentitySchema,
@@ -53,6 +54,7 @@ export function createWorkProductIdentity(input: {
     checkpoint.claimId !== claim.claimId ||
     checkpoint.custodyEpoch !== claim.custodyEpoch ||
     checkpoint.sourceHostId !== claim.hostId ||
+    checkpoint.baseHead !== input.command.baseHead ||
     !checkpoint.validationReceipts.includes(
       `executor-command:${input.command.commandId}`,
     ) ||
@@ -73,6 +75,7 @@ export function createWorkProductIdentity(input: {
     worktree: claim.worktree,
     commandId: input.command.commandId,
     checkpointReference: input.checkpointReference,
+    baseHead: checkpoint.baseHead,
     head: checkpoint.repositoryHead,
     patchDigest: checkpoint.patchDigest,
     implementation: input.implementation,

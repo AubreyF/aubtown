@@ -22,6 +22,7 @@ const workProduct: WorkProductIdentity = {
   worktree: "/worktrees/1234",
   commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
   checkpointReference: "d".repeat(64),
+  baseHead: "a".repeat(40),
   head: "c".repeat(40),
   patchDigest: "e".repeat(64),
   implementation: {

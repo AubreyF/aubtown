@@ -30,10 +30,14 @@ export interface PublicationPlan {
   readonly allowed: boolean;
   readonly action: "none" | "create-draft" | "update-draft";
   readonly reasons: readonly string[];
+  readonly repository?: string;
   readonly title?: string;
   readonly branch?: string;
   readonly head?: string;
   readonly body?: string;
+  readonly workProduct?: WorkProductIdentity;
+  readonly expectedRemoteHead?: string;
+  readonly pullRequestNumber?: number;
   readonly projection?: StatusProjection;
 }
 
@@ -146,10 +150,18 @@ export function planDraftPublication(input: {
     allowed: true,
     action: existing === undefined ? "create-draft" : "update-draft",
     reasons: [],
+    repository: `${input.repository.owner}/${input.repository.name}`,
     title: input.title,
     branch: input.claim.branch,
     head: input.head,
     body,
+    workProduct: input.workProduct,
+    ...(existing === undefined
+      ? {}
+      : {
+          expectedRemoteHead: existing.head,
+          pullRequestNumber: existing.number,
+        }),
     projection: buildStatusProjection({
       state: "human-review",
       summary: `Draft pull request prepared at exact head ${input.head}.`,

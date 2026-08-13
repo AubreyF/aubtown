@@ -107,7 +107,7 @@ jq -e '. == []' "${TMP_DIR}/scheduler-after-workflow.json" > /dev/null
 jq -n \
   --arg reference "$CHECKPOINT_REFERENCE" \
   --slurpfile fixture "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
-  '{schemaVersion: 1, repository: $fixture[0].claim.repository, issueNumber: $fixture[0].claim.issueNumber, claimId: $fixture[0].claim.claimId, custodyEpoch: $fixture[0].claim.custodyEpoch, hostId: $fixture[0].claim.hostId, branch: $fixture[0].claim.branch, worktree: $fixture[0].claim.worktree, commandId: "50e13459-412e-41f7-809f-0d91dc660d52", checkpointReference: $reference, head: ("c" * 40), patchDigest: ("d" * 64), implementation: {driverId: "codex-app-server-v1", threadId: "implementation-thread", turnId: "implementation-turn"}}' \
+  '{schemaVersion: 1, repository: $fixture[0].claim.repository, issueNumber: $fixture[0].claim.issueNumber, claimId: $fixture[0].claim.claimId, custodyEpoch: $fixture[0].claim.custodyEpoch, hostId: $fixture[0].claim.hostId, branch: $fixture[0].claim.branch, worktree: $fixture[0].claim.worktree, commandId: "50e13459-412e-41f7-809f-0d91dc660d52", checkpointReference: $reference, baseHead: ("b" * 40), head: ("c" * 40), patchDigest: ("d" * 64), implementation: {driverId: "codex-app-server-v1", threadId: "implementation-thread", turnId: "implementation-turn"}}' \
   > "${TMP_DIR}/handoff-work-product.json"
 harness_file \
   initializeHandoff \
@@ -140,6 +140,32 @@ harness_file \
 jq -e '.stage == "ready" and .reasons == []' "${TMP_DIR}/handoff-reviewed.json" >/dev/null
 harness_key readHandoff "$CHECKPOINT_REFERENCE" "${TMP_DIR}/handoff-read.json"
 jq -e '.stage == "ready" and .validation.passed == true and .review.verdict == "pass"' "${TMP_DIR}/handoff-read.json" >/dev/null
+
+jq -n \
+  --slurpfile workProduct "${TMP_DIR}/handoff-work-product.json" \
+  '{allowed: true, action: "create-draft", reasons: [], repository: "freed-project/freed", title: "fix: make validation deterministic", branch: $workProduct[0].branch, head: $workProduct[0].head, body: "(AI Generated).\n\nMakes validation deterministic.", workProduct: $workProduct[0]}' \
+  > "${TMP_DIR}/publication-plan.json"
+harness_file \
+  initializePublication \
+  "$CHECKPOINT_REFERENCE" \
+  plan \
+  "${TMP_DIR}/publication-plan.json" \
+  "${TMP_DIR}/publication-planned.json"
+jq -e '.stage == "planned"' "${TMP_DIR}/publication-planned.json" >/dev/null
+jq -n \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --slurpfile workProduct "${TMP_DIR}/handoff-work-product.json" \
+  '{schemaVersion: 1, repository: "freed-project/freed", checkpointReference: $reference, branch: $workProduct[0].branch, head: $workProduct[0].head, pullRequestNumber: 42, pullRequestUrl: "https://github.com/freed-project/freed/pull/42", draft: true, publishedAt: "2026-08-13T08:01:00.000Z", tokenExpiresAt: "2026-08-13T09:00:00.000Z"}' \
+  > "${TMP_DIR}/publication-receipt.json"
+harness_file \
+  recordPublication \
+  "$CHECKPOINT_REFERENCE" \
+  receipt \
+  "${TMP_DIR}/publication-receipt.json" \
+  "${TMP_DIR}/publication-recorded.json"
+jq -e '.stage == "published" and .receipt.draft == true' "${TMP_DIR}/publication-recorded.json" >/dev/null
+harness_key readPublication "$CHECKPOINT_REFERENCE" "${TMP_DIR}/publication-read.json"
+jq -e '.stage == "published" and .plan.action == "create-draft" and .receipt.pullRequestNumber == 42' "${TMP_DIR}/publication-read.json" >/dev/null
 
 jq -n \
   --slurpfile fixture "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
@@ -493,4 +519,4 @@ jq -e \
   "${TMP_DIR}/reconciliation-result.json" \
   > /dev/null
 
-echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, validation and fresh review advanced one durable handoff, unauthenticated checkpoint rejected, canonical 24-hour failover superseded the offline turn, custody transferred behind a restore fence, restart state reconciled, claims released."
+echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, validation and fresh review advanced one durable handoff, exact draft publication persisted, unauthenticated checkpoint rejected, canonical 24-hour failover superseded the offline turn, custody transferred behind a restore fence, restart state reconciled, claims released."

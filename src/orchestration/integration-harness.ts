@@ -51,6 +51,9 @@ import type {
   IndependentReviewReceipt,
   WorkProductIdentity,
 } from "../adjudication/receipts.js";
+import { publicationRegistry } from "./publication-registry.js";
+import type { PublicationPlan } from "../publication/policy.js";
+import type { DraftPublicationReceipt } from "../publication/draft-publisher.js";
 
 interface KeyedInput<T> {
   readonly key: string;
@@ -122,6 +125,14 @@ interface ValidationReceiptInput extends KeyOnlyInput {
 
 interface ReviewReceiptInput extends KeyOnlyInput {
   readonly review: IndependentReviewReceipt;
+}
+
+interface PublicationPlanInput extends KeyOnlyInput {
+  readonly plan: PublicationPlan;
+}
+
+interface PublicationReceiptInput extends KeyOnlyInput {
+  readonly receipt: DraftPublicationReceipt;
 }
 
 /**
@@ -199,6 +210,22 @@ export const integrationHarness = restate.service({
         .recordReview(request.review),
     readHandoff: async (ctx: restate.Context, request: KeyOnlyInput) =>
       await ctx.objectClient(handoffRegistry, request.key).read(),
+    initializePublication: async (
+      ctx: restate.Context,
+      request: PublicationPlanInput,
+    ) =>
+      await ctx
+        .objectClient(publicationRegistry, request.key)
+        .initialize(request.plan),
+    recordPublication: async (
+      ctx: restate.Context,
+      request: PublicationReceiptInput,
+    ) =>
+      await ctx
+        .objectClient(publicationRegistry, request.key)
+        .record(request.receipt),
+    readPublication: async (ctx: restate.Context, request: KeyOnlyInput) =>
+      await ctx.objectClient(publicationRegistry, request.key).read(),
     requireWorkspace: async (
       ctx: restate.Context,
       request: WorkspaceRequirementInput,

@@ -82,7 +82,7 @@ export class GitExecutionCandidateFinalizer
         "-m",
         title,
         "-m",
-        `Execution-Receipt: ${finalizationNonce}`,
+        `(AI Generated).\n\nExecution-Receipt: ${finalizationNonce}`,
       ],
       cwd: root,
       timeoutMs: 60_000,
@@ -122,7 +122,7 @@ export class GitExecutionCandidateFinalizer
       "--format=%B",
       input.head,
     ]);
-    const expectedMessage = `${input.title}\n\nExecution-Receipt: ${input.finalizationNonce}`;
+    const expectedMessage = `${input.title}\n\n(AI Generated).\n\nExecution-Receipt: ${input.finalizationNonce}`;
     if (count !== "1" || message !== expectedMessage) {
       throw new Error("Candidate is not the one trusted finalizer commit.");
     }

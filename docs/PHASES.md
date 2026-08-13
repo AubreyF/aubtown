@@ -52,6 +52,8 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Run structured independent review in a fresh read-only, network-disabled Codex thread.
 - [x] Persist one immutable checkpoint-keyed validation and review handoff through Restate.
 - [x] Finalize each completed candidate as one host-receipted local commit before checkpointing.
+- [x] Push an exact reviewed head and create or update one draft through a repository-scoped host credential without exposing it to the worker.
+- [x] Reconcile publication crash retries and persist one immutable checkpoint-keyed publication receipt.
 
 ## Phase 3: one Freed issue
 
