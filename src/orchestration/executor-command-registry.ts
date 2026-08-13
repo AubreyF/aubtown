@@ -14,7 +14,8 @@ export type ExecutorCommandStage =
   | "completed"
   | "interrupted"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "superseded";
 
 export interface ExecutorCommandState {
   readonly command: ExecutorStartCommand;
@@ -43,6 +44,11 @@ const executorTransferReleaseSchema = executorTransferFenceSchema.pick({
   custodyEpoch: true,
 });
 
+const executorOfflineTransferFenceSchema = executorTransferFenceSchema.extend({
+  sourceLastHeartbeatAt: z.iso.datetime(),
+  offlineSeconds: z.number().min(24 * 60 * 60),
+});
+
 interface RegistryState {
   command: ExecutorCommandState;
   transferFence: ExecutorTransferFence;
@@ -53,6 +59,7 @@ const TERMINAL_STAGES = new Set<ExecutorCommandStage>([
   "interrupted",
   "failed",
   "cancelled",
+  "superseded",
 ]);
 
 export const executorCommandRegistry = restate.object({
@@ -125,6 +132,47 @@ export const executorCommandRegistry = restate.object({
       }
       ctx.set("transferFence", requested);
       return requested;
+    },
+    prepareOfflineTransfer: async (
+      ctx: restate.ObjectContext<RegistryState>,
+      rawRequest: ExecutorTransferFence & {
+        readonly sourceLastHeartbeatAt: string;
+        readonly offlineSeconds: number;
+      },
+    ): Promise<ExecutorTransferFence> => {
+      const requested = executorOfflineTransferFenceSchema.parse(rawRequest);
+      const existing = await ctx.get("transferFence");
+      if (existing !== null) {
+        if (
+          existing.claimId === requested.claimId &&
+          existing.custodyEpoch === requested.custodyEpoch
+        ) {
+          return existing;
+        }
+        throw new restate.TerminalError(
+          "Executor host already has another custody transfer fence.",
+        );
+      }
+      const current = await ctx.get("command");
+      if (
+        current !== null &&
+        current.command.claim.claimId === requested.claimId &&
+        !TERMINAL_STAGES.has(current.stage)
+      ) {
+        ctx.set("command", {
+          ...current,
+          stage: "superseded",
+          finishedAt: requested.preparedAt,
+          reason: `Source host offline for ${requested.offlineSeconds.toLocaleString("en-US")} seconds since ${requested.sourceLastHeartbeatAt}.`,
+        });
+      }
+      const fence: ExecutorTransferFence = {
+        claimId: requested.claimId,
+        custodyEpoch: requested.custodyEpoch,
+        preparedAt: requested.preparedAt,
+      };
+      ctx.set("transferFence", fence);
+      return fence;
     },
     releaseTransfer: async (
       ctx: restate.ObjectContext<RegistryState>,

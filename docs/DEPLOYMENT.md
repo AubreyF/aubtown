@@ -52,7 +52,7 @@ Set `FREEDWORKS_CODEX_MODEL` only after the account advertises that model as cal
 
 Do not point two host agents at the same `CODEX_HOME`. One execution account profile belongs to one host agent. Future extra subscriptions use separate OS users, credential directories, account IDs, and app-server processes.
 
-Each executor sends a heartbeat to the durable host registry. A heartbeat older than 120 seconds removes the host from new routing. Custody alerts remain at 1 hour and 12 hours, with automatic portable-work transfer at 24 hours.
+Each executor sends a heartbeat to the durable host registry. A heartbeat older than 120 seconds removes the host from new routing. Custody alerts remain at 1 hour and 12 hours, with automatic portable-work transfer at 24 hours. The failover workflow rereads canonical source and destination heartbeats, the exact current claim, and the encrypted checkpoint before it supersedes the old command or advances custody.
 
 Every envelope includes the host ID, kind, payload, issued time, and a monotonically increasing sequence under an Ed25519 signature. Restate retains idempotent submissions for 8 days. A normal HTTP retry uses the same idempotency key. A reused sequence under another request identity is rejected, including after coordinator restart. Re-enrollment is required if a host changes lanes, keys, or account scope.
 

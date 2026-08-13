@@ -28,6 +28,9 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Poll retry or host restart starts a second turn | One Restate command per host plus a mode-0600 local execution journal and app-server thread resume |
 | Returning stale host resumes work after failover | Signed startup reconciliation requires the exact current claim epoch, command, thread, turn, enrolled account, and quota headroom before app-server resume |
 | Custody moves while the old host may still write | Per-host transfer fence cancels only unoffered commands and blocks offered, started, or ambiguous commands until terminal adjudication |
+| Caller lies that a host is offline | Failover rereads canonical source and candidate heartbeats from ingress-private Restate state and requires at least 24 hours offline |
+| Caller downgrades macOS-only work to Linux | Scheduler persists the qualified host lane with the claim and failover rejects any caller-supplied lane mismatch |
+| Offline source command never reports interruption | Validated 24-hour failover marks it superseded before epoch transfer; startup adjudication quarantines the old turn when that host returns |
 | Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
 | Checkpoint manifest is changed | Manifest is authenticated as XChaCha20-Poly1305 associated data |
 | Checkpoint restore overwrites destination work | Clean exact-base requirement and exclusive untracked-file creation |

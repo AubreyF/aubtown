@@ -19,7 +19,14 @@ import {
 } from "./qualification-workflow.js";
 import { reconciliationWorkflow } from "./reconciliation-workflow.js";
 import { executorCommandRegistry } from "./executor-command-registry.js";
-import type { ExecutorStartCommand } from "../execution/command.js";
+import type {
+  ExecutorCommandReceipt,
+  ExecutorStartCommand,
+} from "../execution/command.js";
+import {
+  hostRegistry,
+  type HostHeartbeat,
+} from "./host-registry.js";
 import {
   schedulerRegistry,
   type SchedulerAcquireInput,
@@ -57,6 +64,20 @@ interface ExecutorTransferInput extends KeyOnlyInput {
   readonly claimId: string;
   readonly custodyEpoch: number;
   readonly preparedAt: string;
+}
+
+interface ExecutorOfferInput extends KeyOnlyInput {
+  readonly commandId: string;
+  readonly offeredAt: string;
+}
+
+interface ExecutorRecordInput extends KeyOnlyInput {
+  readonly receipt: ExecutorCommandReceipt;
+  readonly acceptedAt: string;
+}
+
+interface HostHeartbeatInput extends KeyOnlyInput {
+  readonly heartbeat: HostHeartbeat;
 }
 
 /**
@@ -115,6 +136,22 @@ export const integrationHarness = restate.service({
         .enqueue(request.command),
     readExecutorCommand: async (ctx: restate.Context, request: KeyOnlyInput) =>
       await ctx.objectClient(executorCommandRegistry, request.key).read(),
+    offerExecutorCommand: async (
+      ctx: restate.Context,
+      request: ExecutorOfferInput,
+    ) =>
+      await ctx.objectClient(executorCommandRegistry, request.key).offer({
+        commandId: request.commandId,
+        offeredAt: request.offeredAt,
+      }),
+    recordExecutorCommand: async (
+      ctx: restate.Context,
+      request: ExecutorRecordInput,
+    ) =>
+      await ctx.objectClient(executorCommandRegistry, request.key).record({
+        receipt: request.receipt,
+        acceptedAt: request.acceptedAt,
+      }),
     prepareExecutorTransfer: async (
       ctx: restate.Context,
       request: ExecutorTransferInput,
@@ -132,5 +169,9 @@ export const integrationHarness = restate.service({
         claimId: request.claimId,
         custodyEpoch: request.custodyEpoch,
       }),
+    heartbeatHost: async (
+      ctx: restate.Context,
+      request: HostHeartbeatInput,
+    ) => await ctx.objectClient(hostRegistry, request.key).heartbeat(request.heartbeat),
   },
 });

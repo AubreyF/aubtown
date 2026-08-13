@@ -37,6 +37,8 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Add signed claim-bound command polling, durable host execution journaling, app-server turn recovery, and idempotent result reporting.
 - [x] Fence custody transfer against offered, running, and ambiguous executor commands.
 - [x] Require signed coordinator adjudication before a restarted host resumes a persisted turn.
+- [x] Supersede stale source turns only after canonical 24-hour offline evidence and checkpoint validation.
+- [x] Bind failover routing to the scheduler-owned qualified host lane.
 
 ## Phase 3: one Freed issue
 

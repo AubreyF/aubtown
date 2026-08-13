@@ -53,6 +53,11 @@ export const schedulerRegistry = restate.object({
         (entry) => entry.claim.claimId === input.claim.claimId,
       );
       if (existing !== undefined) {
+        if (existing.hostLane !== input.qualification.hostLane) {
+          throw new restate.TerminalError(
+            "Existing scheduler claim has another qualified host lane.",
+          );
+        }
         return {
           admitted: true,
           decision: { allowed: true, reason: "allowed", conflicts: [] },
@@ -80,7 +85,11 @@ export const schedulerRegistry = restate.object({
       }
       const next = [
         ...active,
-        { claim: input.claim, workLane: input.qualification.workLane },
+        {
+          claim: input.claim,
+          workLane: input.qualification.workLane,
+          hostLane: input.qualification.hostLane,
+        },
       ];
       ctx.set("active", next);
       return { admitted: true, decision, active: next };

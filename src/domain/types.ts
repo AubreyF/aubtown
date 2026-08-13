@@ -123,6 +123,7 @@ export interface HostRecord {
 export interface ActiveDispatch {
   readonly claim: DispatchClaim;
   readonly workLane: WorkLane;
+  readonly hostLane: HostLane;
 }
 
 export interface HostRoute {
