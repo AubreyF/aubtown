@@ -16,6 +16,7 @@ import { LocalCheckpointStore } from "./checkpoints/local-store.js";
 import { GitCustodyCheckpointService } from "./checkpoints/git-custody.js";
 import { CheckpointTransferClient } from "./clients/checkpoint-transfer.js";
 import { RemoteExecutionCheckpointManager } from "./execution/checkpoint-manager.js";
+import { HostRestoreSupervisor } from "./execution/restore-supervisor.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -100,21 +101,34 @@ const checkpointCipher = new XChaChaCheckpointCipher(
     checkpointKeyReference,
   ),
 );
-const checkpointManager = new RemoteExecutionCheckpointManager(
-  new GitCustodyCheckpointService(
-    new ProcessCommandRunner(),
-    checkpointCipher,
-    checkpointStore,
-    requiredAbsoluteEnvironment("FREEDWORKS_GIT_EXECUTABLE"),
-  ),
+const commandRunner = new ProcessCommandRunner();
+const custodyService = new GitCustodyCheckpointService(
+  commandRunner,
+  checkpointCipher,
   checkpointStore,
-  new CheckpointTransferClient(
-    requiredEnvironment("FREEDWORKS_CHECKPOINT_EDGE_URL"),
-    hostId,
-    privateKey,
-  ),
+  requiredAbsoluteEnvironment("FREEDWORKS_GIT_EXECUTABLE"),
+);
+const checkpointTransfer = new CheckpointTransferClient(
+  requiredEnvironment("FREEDWORKS_CHECKPOINT_EDGE_URL"),
+  hostId,
+  privateKey,
+);
+const checkpointManager = new RemoteExecutionCheckpointManager(
+  custodyService,
+  checkpointStore,
+  checkpointTransfer,
   governor,
   checkpointKeyReference,
+);
+const restore = new HostRestoreSupervisor(
+  requiredAbsoluteEnvironment("FREED_REPOSITORY_ROOT"),
+  requiredAbsoluteEnvironment("FREEDWORKS_WORKTREE_ROOT"),
+  requiredAbsoluteEnvironment("FREEDWORKS_WORKTREE_HELPER"),
+  commandRunner,
+  custodyService,
+  checkpointStore,
+  checkpointTransfer,
+  governor,
 );
 const execution = new HostExecutionSupervisor(
   accountId,
@@ -192,6 +206,10 @@ async function sample(): Promise<void> {
     const receipt = await monitor.sample(accountId);
     process.stdout.write(`${JSON.stringify({ event: "quota-sampled", ...receipt })}\n`);
     await execution.recover();
+    const restoreStatus = await restore.reconcile();
+    process.stdout.write(
+      `${JSON.stringify({ event: "custody-restore-reconciled", status: restoreStatus })}\n`,
+    );
     if (
       receipt.decision.action === "admit" ||
       receipt.decision.action === "throttle"

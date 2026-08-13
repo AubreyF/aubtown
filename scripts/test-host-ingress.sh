@@ -568,6 +568,23 @@ harness_file \
   request \
   "${TMP_DIR}/claim-transfer.json" \
   /dev/null
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --arg branch "test/checkpoint-grant-${ISSUE_NUMBER}" \
+  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  --argjson issue "$ISSUE_NUMBER" \
+  --argjson contentLength "$CHECKPOINT_LENGTH" \
+  --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
+  '{schemaVersion: 1, repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), priorCustodyEpoch: 1, custodyEpoch: 2, destinationHostId: $host, destinationWorkerId: "integration-linux-worker", destinationWorktree: $worktree, branch: $branch, conflictDomains: $qualification[0].conflictDomains, claimedAt: $now, checkpointReference: $reference, checkpointContentLength: $contentLength, checkpointBaseHead: ("b" * 40), requiredAt: $now}' \
+  > "${TMP_DIR}/restore-requirement.json"
+harness_file \
+  requireRestore \
+  "$LINUX_HOST_ID" \
+  requirement \
+  "${TMP_DIR}/restore-requirement.json" \
+  /dev/null
 harness_executor_transfer \
   releaseExecutorTransfer \
   "$HOST_ID" \
@@ -579,17 +596,88 @@ harness_executor_transfer \
 jq -n \
   --arg host "$LINUX_HOST_ID" \
   --arg now "$NOW" \
+  '{schemaVersion: 1, hostId: $host, sequence: 2, issuedAt: $now, kind: "restore-poll", payload: {}}' \
+  > "${TMP_DIR}/restore-poll-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/restore-poll-unsigned.json" \
+  > "${TMP_DIR}/restore-poll-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-restore-poll-2' \
+  --data-binary "@${TMP_DIR}/restore-poll-envelope.json" \
+  | jq -e \
+    --arg reference "$CHECKPOINT_REFERENCE" \
+    '.kind == "restore-poll" and .reason == "required" and .requirement.checkpointReference == $reference and .requirement.custodyEpoch == 2' \
+  >/dev/null
+
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  '{schemaVersion: 1, hostId: $host, sequence: 3, issuedAt: $now, kind: "quota-observation", payload: {observation: {accountId: "codex-pro-integration", observedAt: $now, primary: {usedPercent: 30, windowDurationMinutes: 10080, resetsAt: "2026-08-20T08:00:00.000Z"}, activeTurnIds: []}}}' \
+  > "${TMP_DIR}/linux-quota-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/linux-quota-unsigned.json" \
+  > "${TMP_DIR}/linux-quota-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-linux-quota-3' \
+  --data-binary "@${TMP_DIR}/linux-quota-envelope.json" \
+  >/dev/null
+
+jq \
+  --arg host "$LINUX_HOST_ID" \
+  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  '.custodyEpoch = 2 | .hostId = $host | .workerId = "integration-linux-worker" | .worktree = $worktree' \
+  "${TMP_DIR}/grant-claim.json" \
+  > "${TMP_DIR}/linux-claim.json"
+LINUX_COMMAND_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+jq -n \
+  --arg commandId "$LINUX_COMMAND_ID" \
+  --arg authorityTaskId "integration-task-${ISSUE_NUMBER}" \
+  --arg now "$NOW" \
+  --slurpfile claim "${TMP_DIR}/linux-claim.json" \
+  --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
+  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", issuedAt: $now}' \
+  > "${TMP_DIR}/linux-executor-command-input.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" \
+  "${ROOT_DIR}/src/cli/build-executor-command.ts" \
+  "${TMP_DIR}/linux-executor-command-input.json" \
+  > "${TMP_DIR}/linux-executor-command.json"
+harness_file \
+  enqueueExecutorCommand \
+  "$LINUX_HOST_ID" \
+  command \
+  "${TMP_DIR}/linux-executor-command.json" \
+  /dev/null
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  '{schemaVersion: 1, hostId: $host, sequence: 4, issuedAt: $now, kind: "executor-poll", payload: {accountId: "codex-pro-integration"}}' \
+  > "${TMP_DIR}/linux-executor-poll-fenced-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/linux-executor-poll-fenced-unsigned.json" \
+  > "${TMP_DIR}/linux-executor-poll-fenced-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-linux-executor-fenced-4' \
+  --data-binary "@${TMP_DIR}/linux-executor-poll-fenced-envelope.json" \
+  | jq -e '.kind == "executor-poll" and .reason == "restore-required" and .command == null' \
+  >/dev/null
+
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
   --arg reference "$CHECKPOINT_REFERENCE" \
   --argjson issue "$ISSUE_NUMBER" \
   --argjson contentLength "$CHECKPOINT_LENGTH" \
-  '{schemaVersion: 1, hostId: $host, sequence: 1, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 2, checkpointEpoch: 1, operation: "download", reference: $reference, contentLength: $contentLength}}' \
+  '{schemaVersion: 1, hostId: $host, sequence: 5, issuedAt: $now, kind: "checkpoint-grant", payload: {repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 2, checkpointEpoch: 1, operation: "download", reference: $reference, contentLength: $contentLength}}' \
   > "${TMP_DIR}/download-grant-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/download-grant-unsigned.json" \
   > "${TMP_DIR}/download-grant-envelope.json"
 curl --fail --silent --show-error \
   -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
   -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-checkpoint-download-grant-1' \
+  -H 'idempotency-key: integration-checkpoint-download-grant-5' \
   --data-binary "@${TMP_DIR}/download-grant-envelope.json" \
   | jq '.grant' \
   > "${TMP_DIR}/download-grant.json"
@@ -611,6 +699,43 @@ curl --fail --silent --show-error \
   -H "x-freedworks-host-proof: ${DOWNLOAD_PROOF_HEADER}" \
   -o "${TMP_DIR}/downloaded-checkpoint.json"
 cmp "${TMP_DIR}/checkpoint-payload.json" "${TMP_DIR}/downloaded-checkpoint.json"
+
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  --arg claimId "integration-claim-${ISSUE_NUMBER}" \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  '{schemaVersion: 1, hostId: $host, sequence: 6, issuedAt: $now, kind: "restore-receipt", payload: {schemaVersion: 1, claimId: $claimId, custodyEpoch: 2, destinationHostId: $host, destinationWorktree: $worktree, checkpointReference: $reference, checkpointBaseHead: ("b" * 40), restoredAt: $now}}' \
+  > "${TMP_DIR}/restore-receipt-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/restore-receipt-unsigned.json" \
+  > "${TMP_DIR}/restore-receipt-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-restore-receipt-6' \
+  --data-binary "@${TMP_DIR}/restore-receipt-envelope.json" \
+  | jq -e \
+    --arg reference "$CHECKPOINT_REFERENCE" \
+    '.kind == "restore-receipt" and .checkpointReference == $reference and .custodyEpoch == 2' \
+  >/dev/null
+
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  '{schemaVersion: 1, hostId: $host, sequence: 7, issuedAt: $now, kind: "executor-poll", payload: {accountId: "codex-pro-integration"}}' \
+  > "${TMP_DIR}/linux-executor-poll-restored-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/linux-executor-poll-restored-unsigned.json" \
+  > "${TMP_DIR}/linux-executor-poll-restored-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-linux-executor-restored-7' \
+  --data-binary "@${TMP_DIR}/linux-executor-poll-restored-envelope.json" \
+  | jq -e \
+    --arg commandId "$LINUX_COMMAND_ID" \
+    '.kind == "executor-poll" and .reason == "offered" and .command.commandId == $commandId' \
+  >/dev/null
 
 docker compose "${COMPOSE_ARGS[@]}" --profile checkpoint-transfer restart restate control-plane host-edge checkpoint-edge >/dev/null
 register_deployment
@@ -635,7 +760,7 @@ harness_file \
   "${TMP_DIR}/claim-release.json" \
   /dev/null
 
-jq '.sequence = 2' "${TMP_DIR}/download-grant-unsigned.json" > "${TMP_DIR}/grant-without-claim-unsigned.json"
+jq '.sequence = 8' "${TMP_DIR}/download-grant-unsigned.json" > "${TMP_DIR}/grant-without-claim-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/grant-without-claim-unsigned.json" \
   > "${TMP_DIR}/grant-without-claim.json"
 NO_CLAIM_STATUS="$(curl --silent --show-error \
@@ -643,7 +768,7 @@ NO_CLAIM_STATUS="$(curl --silent --show-error \
   -w '%{http_code}' \
   -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
   -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-checkpoint-no-claim-2' \
+  -H 'idempotency-key: integration-checkpoint-no-claim-8' \
   --data-binary "@${TMP_DIR}/grant-without-claim.json")"
 if [[ "$NO_CLAIM_STATUS" != "409" ]]; then
   echo "Expected checkpoint grant without active custody to return 409, received ${NO_CLAIM_STATUS}." >&2
@@ -662,4 +787,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."

@@ -7,6 +7,7 @@ import { fakeWorker } from "./fake-worker.js";
 import { executorCommandRegistry } from "./executor-command-registry.js";
 import { checkpointCatalog } from "./checkpoint-catalog.js";
 import { hostRegistry } from "./host-registry.js";
+import { hostRestoreRegistry } from "./host-restore-registry.js";
 import { createHostGateway } from "./host-gateway.js";
 import { integrationHarness } from "./integration-harness.js";
 import { qualificationWorkflow } from "./qualification-workflow.js";
@@ -27,6 +28,7 @@ export function controlPlaneServices(
     qualificationWorkflow,
     schedulerRegistry,
     hostRegistry,
+    hostRestoreRegistry,
     custodyTransferWorkflow,
     reconciliationWorkflow,
     hostGateway,

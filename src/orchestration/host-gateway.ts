@@ -1,5 +1,5 @@
 import * as restate from "@restatedev/restate-sdk";
-import type { HostRecord } from "../domain/types.js";
+import type { DispatchClaim, HostRecord } from "../domain/types.js";
 import type { QuotaDecision } from "../policy/quota.js";
 import type { HostEnrollments } from "../security/host-enrollment.js";
 import {
@@ -26,6 +26,11 @@ import {
   type SignedCheckpointStorageReceipt,
 } from "../checkpoints/receipt.js";
 import { checkpointCatalog } from "./checkpoint-catalog.js";
+import { hostRestoreRegistry } from "./host-restore-registry.js";
+import type {
+  CustodyRestoreRequirement,
+  CustodyRestoreState,
+} from "../execution/restore.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -66,6 +71,23 @@ export type HostGatewayReceipt =
       readonly storedAt: string;
     }
   | {
+      readonly kind: "restore-poll";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly requirement: CustodyRestoreRequirement | null;
+      readonly reason: "required" | "no-restore" | "restored" | "claim-stale";
+    }
+  | {
+      readonly kind: "restore-receipt";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly claimId: string;
+      readonly custodyEpoch: number;
+      readonly checkpointReference: string;
+    }
+  | {
       readonly kind: "executor-poll";
       readonly hostId: string;
       readonly sequence: number;
@@ -76,6 +98,7 @@ export type HostGatewayReceipt =
         | "no-command"
         | "quota-unavailable"
         | "quota-blocked"
+        | "restore-required"
         | "claim-stale";
     }
   | {
@@ -97,12 +120,47 @@ export type HostGatewayReceipt =
         | "current"
         | "command-stale"
         | "claim-stale"
+        | "restore-required"
         | "quota-unavailable"
         | "quota-blocked";
     };
 
 function terminal(message: string, errorCode = 403): never {
   throw new restate.TerminalError(message, { errorCode });
+}
+
+function restoreRequirementMatchesClaim(
+  requirement: CustodyRestoreRequirement,
+  claim: DispatchClaim,
+  hostId: string,
+): boolean {
+  return (
+    requirement.repository.owner === claim.repository.owner &&
+    requirement.repository.name === claim.repository.name &&
+    requirement.repository.defaultBranch === claim.repository.defaultBranch &&
+    requirement.issueNumber === claim.issueNumber &&
+    requirement.claimId === claim.claimId &&
+    requirement.custodyEpoch === claim.custodyEpoch &&
+    requirement.destinationHostId === hostId &&
+    requirement.destinationHostId === claim.hostId &&
+    requirement.destinationWorkerId === claim.workerId &&
+    requirement.destinationWorktree === claim.worktree &&
+    requirement.branch === claim.branch &&
+    requirement.claimedAt === claim.claimedAt &&
+    JSON.stringify([...requirement.conflictDomains].sort()) ===
+      JSON.stringify([...claim.conflictDomains].sort())
+  );
+}
+
+function restoreStateSatisfiesClaim(
+  restore: CustodyRestoreState | null,
+  claim: DispatchClaim,
+  hostId: string,
+): boolean {
+  return (
+    restore?.stage === "restored" &&
+    restoreRequirementMatchesClaim(restore.requirement, claim, hostId)
+  );
 }
 
 export function createHostGateway(
@@ -287,6 +345,91 @@ export function createHostGateway(
               reference: stored.reference,
               storedAt: stored.storedAt,
             };
+          } else if (envelope.kind === "restore-poll") {
+            const restore = await ctx
+              .objectClient(hostRestoreRegistry, envelope.hostId)
+              .read();
+            if (restore === null) {
+              receipt = {
+                kind: "restore-poll",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                requirement: null,
+                reason: "no-restore",
+              };
+            } else if (restore.stage === "restored") {
+              receipt = {
+                kind: "restore-poll",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                requirement: null,
+                reason: "restored",
+              };
+            } else {
+              const required = restore.requirement;
+              const claimKey = `${required.repository.owner}/${required.repository.name}#${required.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+              const currentClaim = await ctx
+                .objectClient(claimRegistry, claimKey)
+                .read();
+              const current =
+                currentClaim !== null &&
+                restoreRequirementMatchesClaim(
+                  required,
+                  currentClaim,
+                  envelope.hostId,
+                );
+              receipt = {
+                kind: "restore-poll",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                requirement: current ? required : null,
+                reason: current ? "required" : "claim-stale",
+              };
+            }
+          } else if (envelope.kind === "restore-receipt") {
+            const reported = envelope.payload;
+            if (reported.destinationHostId !== envelope.hostId) {
+              return terminal("Custody restore receipt targets another host", 409);
+            }
+            const restore = await ctx
+              .objectClient(hostRestoreRegistry, envelope.hostId)
+              .read();
+            if (restore === null) {
+              return terminal("Host has no custody restore requirement", 409);
+            }
+            const required = restore.requirement;
+            const claimKey = `${required.repository.owner}/${required.repository.name}#${required.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+            const currentClaim = await ctx
+              .objectClient(claimRegistry, claimKey)
+              .read();
+            if (
+              currentClaim === null ||
+              !restoreRequirementMatchesClaim(
+                required,
+                currentClaim,
+                envelope.hostId,
+              )
+            ) {
+              return terminal(
+                "Custody restore receipt does not match current claim custody",
+                409,
+              );
+            }
+            const recorded = await ctx
+              .objectClient(hostRestoreRegistry, envelope.hostId)
+              .record({ ...reported, restoredAt: acceptedAt });
+            receipt = {
+              kind: "restore-receipt",
+              hostId: envelope.hostId,
+              sequence: envelope.sequence,
+              acceptedAt,
+              claimId: recorded.requirement.claimId,
+              custodyEpoch: recorded.requirement.custodyEpoch,
+              checkpointReference: recorded.requirement.checkpointReference,
+            };
           } else if (envelope.kind === "executor-poll") {
             const accountId = envelope.payload.accountId;
             if (!enrollment.accountIds.includes(accountId)) {
@@ -332,36 +475,24 @@ export function createHostGateway(
                   const command = state.command;
                   const claimKey = `${command.claim.repository.owner}/${command.claim.repository.name}#${command.claim.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
                   const currentClaim = await ctx.objectClient(claimRegistry, claimKey).read();
-                  try {
-                    if (currentClaim === null) {
-                      throw new Error("Executor command has no current claim.");
-                    }
-                    assertCommandMatchesCurrentClaim({
-                      command,
+                  let restoreSatisfied = false;
+                  if (currentClaim?.custodyEpoch === 1) {
+                    restoreSatisfied = true;
+                  } else if (currentClaim !== null) {
+                    const restore = await ctx
+                      .objectClient(hostRestoreRegistry, envelope.hostId)
+                      .read();
+                    restoreSatisfied = restoreStateSatisfiesClaim(
+                      restore,
                       currentClaim,
-                      requestingHostId: envelope.hostId,
-                      accountId,
-                      hostLane: enrollment.lane,
-                      now: acceptedAt,
-                    });
-                    await registry.offer({
-                      commandId: command.commandId,
-                      offeredAt: acceptedAt,
-                    });
-                    receipt = {
-                      kind: "executor-poll",
-                      hostId: envelope.hostId,
-                      sequence: envelope.sequence,
-                      acceptedAt,
-                      command,
-                      reason: "offered",
-                    };
-                  } catch (error) {
+                      envelope.hostId,
+                    );
+                  }
+                  if (currentClaim === null) {
                     await registry.cancel({
                       commandId: command.commandId,
                       cancelledAt: acceptedAt,
-                      reason:
-                        error instanceof Error ? error.message : "Executor command is stale.",
+                      reason: "Executor command has no current claim.",
                     });
                     receipt = {
                       kind: "executor-poll",
@@ -371,6 +502,55 @@ export function createHostGateway(
                       command: null,
                       reason: "claim-stale",
                     };
+                  } else if (!restoreSatisfied) {
+                    receipt = {
+                      kind: "executor-poll",
+                      hostId: envelope.hostId,
+                      sequence: envelope.sequence,
+                      acceptedAt,
+                      command: null,
+                      reason: "restore-required",
+                    };
+                  } else {
+                    try {
+                      assertCommandMatchesCurrentClaim({
+                        command,
+                        currentClaim,
+                        requestingHostId: envelope.hostId,
+                        accountId,
+                        hostLane: enrollment.lane,
+                        now: acceptedAt,
+                      });
+                      await registry.offer({
+                        commandId: command.commandId,
+                        offeredAt: acceptedAt,
+                      });
+                      receipt = {
+                        kind: "executor-poll",
+                        hostId: envelope.hostId,
+                        sequence: envelope.sequence,
+                        acceptedAt,
+                        command,
+                        reason: "offered",
+                      };
+                    } catch (error) {
+                      await registry.cancel({
+                        commandId: command.commandId,
+                        cancelledAt: acceptedAt,
+                        reason:
+                          error instanceof Error
+                            ? error.message
+                            : "Executor command is stale.",
+                      });
+                      receipt = {
+                        kind: "executor-poll",
+                        hostId: envelope.hostId,
+                        sequence: envelope.sequence,
+                        acceptedAt,
+                        command: null,
+                        reason: "claim-stale",
+                      };
+                    }
                   }
                 }
               }
@@ -381,6 +561,7 @@ export function createHostGateway(
               reason:
                 | "command-stale"
                 | "claim-stale"
+                | "restore-required"
                 | "quota-unavailable"
                 | "quota-blocked",
             ): HostGatewayReceipt => ({
@@ -433,28 +614,47 @@ export function createHostGateway(
               if (!claimCurrent) {
                 receipt = quarantine("claim-stale");
               } else {
-                const account = await ctx
-                  .objectClient(accountGovernor, requested.accountId)
-                  .status();
-                if (account.snapshot === null) {
-                  receipt = quarantine("quota-unavailable");
+                const restore =
+                  currentClaim !== null && currentClaim.custodyEpoch > 1
+                    ? await ctx
+                        .objectClient(hostRestoreRegistry, envelope.hostId)
+                        .read()
+                    : null;
+                const restoreSatisfied =
+                  currentClaim?.custodyEpoch === 1 ||
+                  (currentClaim !== null &&
+                    restoreStateSatisfiesClaim(
+                      restore,
+                      currentClaim,
+                      envelope.hostId,
+                    ));
+                if (!restoreSatisfied) {
+                  receipt = quarantine("restore-required");
                 } else {
-                  const decision = decideQuota({
-                    snapshot: account.snapshot,
-                    now: acceptedAt,
-                  });
-                  receipt =
-                    decision.action === "admit" || decision.action === "throttle"
-                      ? {
-                          kind: "executor-reconcile",
-                          hostId: envelope.hostId,
-                          sequence: envelope.sequence,
-                          acceptedAt,
-                          commandId: requested.commandId,
-                          action: "resume",
-                          reason: "current",
-                        }
-                      : quarantine("quota-blocked");
+                  const account = await ctx
+                    .objectClient(accountGovernor, requested.accountId)
+                    .status();
+                  if (account.snapshot === null) {
+                    receipt = quarantine("quota-unavailable");
+                  } else {
+                    const decision = decideQuota({
+                      snapshot: account.snapshot,
+                      now: acceptedAt,
+                    });
+                    receipt =
+                      decision.action === "admit" ||
+                      decision.action === "throttle"
+                        ? {
+                            kind: "executor-reconcile",
+                            hostId: envelope.hostId,
+                            sequence: envelope.sequence,
+                            acceptedAt,
+                            commandId: requested.commandId,
+                            action: "resume",
+                            reason: "current",
+                          }
+                        : quarantine("quota-blocked");
+                  }
                 }
               }
             }

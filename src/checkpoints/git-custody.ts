@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, lstat, mkdtemp, open, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -48,6 +49,7 @@ export class GitCustodyCheckpointService {
     readonly keyReference: string;
     readonly createdAt: string;
   }): Promise<CapturedCheckpoint> {
+    await this.#assertBranch(input.repositoryRoot, input.claim.branch);
     const repositoryHead = await this.#gitLine(input.repositoryRoot, ["rev-parse", "HEAD"]);
     const baseHead = await this.#gitLine(input.repositoryRoot, [
       "merge-base",
@@ -126,24 +128,11 @@ export class GitCustodyCheckpointService {
     readonly claim: DispatchClaim;
     readonly destinationRoot: string;
   }): Promise<CustodyCheckpoint> {
-    const encrypted = await this.store.get(input.reference);
-    if (encrypted === undefined) {
-      throw new Error("Checkpoint reference was not found.");
-    }
-    if (
-      encrypted.manifest.repository.owner !== input.claim.repository.owner ||
-      encrypted.manifest.repository.name !== input.claim.repository.name ||
-      encrypted.manifest.repository.defaultBranch !== input.claim.repository.defaultBranch ||
-      encrypted.manifest.issueNumber !== input.claim.issueNumber ||
-      encrypted.manifest.claimId !== input.claim.claimId ||
-      encrypted.manifest.custodyEpoch + 1 !== input.claim.custodyEpoch
-    ) {
-      throw new Error("Checkpoint does not authorize this destination custody epoch.");
-    }
-    const archiveBytes = await this.cipher.decrypt(encrypted);
-    const archive = archiveSchema.parse(
-      JSON.parse(new TextDecoder().decode(archiveBytes)),
+    const { manifest, archive } = await this.#readAuthorizedArchive(
+      input.reference,
+      input.claim,
     );
+    await this.#assertBranch(input.destinationRoot, input.claim.branch);
     const destinationHead = await this.#gitLine(input.destinationRoot, [
       "rev-parse",
       "HEAD",
@@ -199,7 +188,97 @@ export class GitCustodyCheckpointService {
         await handle.close();
       }
     }
-    return encrypted.manifest;
+    await this.verifyRestored(input);
+    return manifest;
+  }
+
+  async verifyRestored(input: {
+    readonly reference: string;
+    readonly claim: DispatchClaim;
+    readonly destinationRoot: string;
+  }): Promise<CustodyCheckpoint> {
+    const { manifest, archive } = await this.#readAuthorizedArchive(
+      input.reference,
+      input.claim,
+    );
+    await this.#assertBranch(input.destinationRoot, input.claim.branch);
+    const destinationHead = await this.#gitLine(input.destinationRoot, [
+      "rev-parse",
+      "HEAD",
+    ]);
+    if (destinationHead !== archive.baseHead) {
+      throw new Error("Restored worktree is not based on the checkpoint base head.");
+    }
+    const patch = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["diff", "--binary", "--full-index", archive.baseHead, "--", "."],
+        cwd: input.destinationRoot,
+        maxBufferBytes: MAX_ARCHIVE_BYTES,
+      })
+    ).stdout;
+    if (patch !== archive.patch) {
+      throw new Error("Restored tracked work does not match the checkpoint archive.");
+    }
+    const untrackedOutput = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["ls-files", "--others", "--exclude-standard", "-z"],
+        cwd: input.destinationRoot,
+        maxBufferBytes: 16 * 1_024 * 1_024,
+      })
+    ).stdout;
+    const actualPaths = untrackedOutput.split("\0").filter(Boolean).sort();
+    const expectedPaths = archive.untracked.map((entry) => entry.path).sort();
+    if (JSON.stringify(actualPaths) !== JSON.stringify(expectedPaths)) {
+      throw new Error("Restored untracked paths do not match the checkpoint archive.");
+    }
+    for (const entry of archive.untracked) {
+      const file = await this.#physicalRepositoryFile(
+        input.destinationRoot,
+        entry.path,
+      );
+      const stats = await lstat(file);
+      const content = await readFile(file);
+      if (
+        content.toString("base64") !== entry.contentBase64 ||
+        ((stats.mode & 0o100) !== 0) !== entry.executable
+      ) {
+        throw new Error(`Restored file does not match its checkpoint: ${entry.path}`);
+      }
+    }
+    return manifest;
+  }
+
+  async #readAuthorizedArchive(
+    reference: string,
+    claim: DispatchClaim,
+  ): Promise<{ readonly manifest: CustodyCheckpoint; readonly archive: GitCheckpointArchive }> {
+    const encrypted = await this.store.get(reference);
+    if (encrypted === undefined) {
+      throw new Error("Checkpoint reference was not found.");
+    }
+    if (
+      encrypted.manifest.repository.owner !== claim.repository.owner ||
+      encrypted.manifest.repository.name !== claim.repository.name ||
+      encrypted.manifest.repository.defaultBranch !== claim.repository.defaultBranch ||
+      encrypted.manifest.issueNumber !== claim.issueNumber ||
+      encrypted.manifest.claimId !== claim.claimId ||
+      encrypted.manifest.custodyEpoch + 1 !== claim.custodyEpoch
+    ) {
+      throw new Error("Checkpoint does not authorize this destination custody epoch.");
+    }
+    const archiveBytes = await this.cipher.decrypt(encrypted);
+    if (
+      createHash("sha256").update(archiveBytes).digest("hex") !==
+      encrypted.manifest.patchDigest
+    ) {
+      throw new Error("Checkpoint archive digest does not match its manifest.");
+    }
+    const archive = archiveSchema.parse(
+      JSON.parse(new TextDecoder().decode(archiveBytes)),
+    );
+    return { manifest: encrypted.manifest, archive };
   }
 
   async #gitLine(root: string, args: readonly string[]): Promise<string> {
@@ -210,6 +289,19 @@ export class GitCustodyCheckpointService {
       throw new Error(`Git did not return one SHA for ${args.join(" ")}.`);
     }
     return value;
+  }
+
+  async #assertBranch(root: string, expected: string): Promise<void> {
+    const branch = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        cwd: root,
+      })
+    ).stdout.trim();
+    if (branch !== expected) {
+      throw new Error("Checkpoint worktree is checked out on another branch.");
+    }
   }
 
   async #physicalRepositoryFile(root: string, relativePath: string): Promise<string> {

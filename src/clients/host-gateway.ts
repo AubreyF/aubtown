@@ -28,6 +28,11 @@ import {
   signedCheckpointStorageReceiptSchema,
   type SignedCheckpointStorageReceipt,
 } from "../checkpoints/receipt.js";
+import {
+  custodyRestoreReceiptSchema,
+  custodyRestoreRequirementSchema,
+  type CustodyRestoreReceipt,
+} from "../execution/restore.js";
 
 const quotaDecisionSchema = z.object({
   action: z.enum(["admit", "throttle", "stop-admission", "interrupt"]),
@@ -91,6 +96,23 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
     storedAt: z.iso.datetime(),
   }),
   z.object({
+    kind: z.literal("restore-poll"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    requirement: custodyRestoreRequirementSchema.nullable(),
+    reason: z.enum(["required", "no-restore", "restored", "claim-stale"]),
+  }),
+  z.object({
+    kind: z.literal("restore-receipt"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    claimId: z.string().min(1),
+    custodyEpoch: z.number().int().positive(),
+    checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u),
+  }),
+  z.object({
     kind: z.literal("executor-poll"),
     hostId: z.string().min(1),
     sequence: z.number().int().positive().safe(),
@@ -101,6 +123,7 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
       "no-command",
       "quota-unavailable",
       "quota-blocked",
+      "restore-required",
       "claim-stale",
     ]),
   }),
@@ -123,6 +146,7 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
       "current",
       "command-stale",
       "claim-stale",
+      "restore-required",
       "quota-unavailable",
       "quota-blocked",
     ]),
@@ -209,6 +233,48 @@ export class HostGatewayClient implements DurableUsageGovernor {
       receipt.storedAt !== stored.storedAt
     ) {
       throw new Error("Host gateway checkpoint receipt does not match storage proof.");
+    }
+    return receipt;
+  }
+
+  async pollRestore(): Promise<
+    Extract<HostGatewayReceipt, { readonly kind: "restore-poll" }>
+  > {
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "restore-poll",
+      payload: {},
+    });
+    if (receipt.kind !== "restore-poll") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    return receipt;
+  }
+
+  async reportRestore(
+    input: CustodyRestoreReceipt,
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "restore-receipt" }>> {
+    const restored = custodyRestoreReceiptSchema.parse(input);
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "restore-receipt",
+      payload: restored,
+    });
+    if (receipt.kind !== "restore-receipt") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    if (
+      receipt.claimId !== restored.claimId ||
+      receipt.custodyEpoch !== restored.custodyEpoch ||
+      receipt.checkpointReference !== restored.checkpointReference
+    ) {
+      throw new Error("Host gateway restore receipt does not match its request.");
     }
     return receipt;
   }

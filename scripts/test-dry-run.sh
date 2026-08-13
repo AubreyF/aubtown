@@ -389,6 +389,14 @@ jq -e \
   .transferredClaim.worktree == "/srv/freedworks/worktrees/freed/1234-epoch-2"
 ' "${TMP_DIR}/workflow-custody-result.json" > /dev/null
 
+harness_key readRestore "$DESTINATION_HOST_ID" "${TMP_DIR}/workflow-restore-required.json"
+jq -e \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --arg destination "$DESTINATION_HOST_ID" \
+  '.stage == "pending" and .requirement.checkpointReference == $reference and .requirement.destinationHostId == $destination and .requirement.custodyEpoch == 2' \
+  "${TMP_DIR}/workflow-restore-required.json" \
+  >/dev/null
+
 harness_key readExecutorCommand "$SOURCE_HOST_ID" "${TMP_DIR}/workflow-offline-command-superseded.json"
 jq -e \
   --arg commandId "$OFFLINE_COMMAND_ID" \
@@ -448,4 +456,4 @@ jq -e \
   "${TMP_DIR}/reconciliation-result.json" \
   > /dev/null
 
-echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, unauthenticated checkpoint rejected, canonical 24-hour failover superseded the offline turn, custody transferred, restart state reconciled, claims released."
+echo "Dry-run workflow passed: duplicate rejected, quota blocked, conflict fenced, unauthenticated checkpoint rejected, canonical 24-hour failover superseded the offline turn, custody transferred behind a restore fence, restart state reconciled, claims released."

@@ -192,4 +192,89 @@ describe("HostGatewayClient", () => {
     });
     expect(verifyHostEnvelope(envelope, hostKeys.publicKey)).toBe(true);
   });
+
+  it("polls and reports a destination custody restore through signed envelopes", async () => {
+    const keys = keyPair();
+    const requests: RequestInit[] = [];
+    let call = 0;
+    const reference = "d".repeat(64);
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080",
+      "linux-control-1",
+      keys.privateKey,
+      { next: async () => 11 + call },
+      async (_input, init) => {
+        requests.push(init ?? {});
+        call += 1;
+        if (call === 1) {
+          return Response.json({
+            kind: "restore-poll",
+            hostId: "linux-control-1",
+            sequence: 11,
+            acceptedAt: "2026-08-13T18:00:02.000Z",
+            reason: "required",
+            requirement: {
+              schemaVersion: 1,
+              repository: {
+                owner: "freed-project",
+                name: "freed",
+                defaultBranch: "dev",
+              },
+              issueNumber: 1_234,
+              claimId: "claim-1234",
+              priorCustodyEpoch: 1,
+              custodyEpoch: 2,
+              destinationHostId: "linux-control-1",
+              destinationWorkerId: "worker-linux-1",
+              destinationWorktree: "/srv/freedworks/worktrees/freed/1234",
+              branch: "fix/deterministic-validation",
+              conflictDomains: ["logical:tooling-validation"],
+              claimedAt: "2026-08-13T18:00:00.000Z",
+              checkpointReference: reference,
+              checkpointContentLength: 1_024,
+              checkpointBaseHead: "a".repeat(40),
+              requiredAt: "2026-08-13T18:00:01.000Z",
+            },
+          });
+        }
+        return Response.json({
+          kind: "restore-receipt",
+          hostId: "linux-control-1",
+          sequence: 12,
+          acceptedAt: "2026-08-13T18:00:03.000Z",
+          claimId: "claim-1234",
+          custodyEpoch: 2,
+          checkpointReference: reference,
+        });
+      },
+      () => new Date("2026-08-13T18:00:02.000Z"),
+    );
+
+    await expect(client.pollRestore()).resolves.toMatchObject({
+      reason: "required",
+      requirement: { checkpointReference: reference },
+    });
+    await expect(
+      client.reportRestore({
+        schemaVersion: 1,
+        claimId: "claim-1234",
+        custodyEpoch: 2,
+        destinationHostId: "linux-control-1",
+        destinationWorktree: "/srv/freedworks/worktrees/freed/1234",
+        checkpointReference: reference,
+        checkpointBaseHead: "a".repeat(40),
+        restoredAt: "2026-08-13T18:00:03.000Z",
+      }),
+    ).resolves.toMatchObject({ kind: "restore-receipt" });
+    const envelopes = requests.map((request) =>
+      parseSignedHostEnvelope(JSON.parse(String(request.body))),
+    );
+    expect(envelopes.map((envelope) => envelope.kind)).toEqual([
+      "restore-poll",
+      "restore-receipt",
+    ]);
+    for (const envelope of envelopes) {
+      expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+    }
+  });
 });

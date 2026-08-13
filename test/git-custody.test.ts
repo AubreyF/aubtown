@@ -36,6 +36,8 @@ describe("GitCustodyCheckpointService", () => {
     await git(source, ["branch", "origin/dev"]);
     const baseHead = await git(source, ["rev-parse", "HEAD"]);
     await runner.run({ executable: "git", args: ["clone", source, destination], cwd: testRoot });
+    await git(destination, ["switch", "-c", "fix/deterministic-validation", baseHead]);
+    await git(source, ["switch", "-c", "fix/deterministic-validation", baseHead]);
     await writeFile(path.join(source, "tracked.txt"), "after\n");
     await writeFile(path.join(source, "notes.txt"), "unpublished\n");
 

@@ -29,6 +29,8 @@ import {
 } from "./host-registry.js";
 import { checkpointCatalog } from "./checkpoint-catalog.js";
 import type { SignedCheckpointStorageReceipt } from "../checkpoints/receipt.js";
+import { hostRestoreRegistry } from "./host-restore-registry.js";
+import type { CustodyRestoreRequirement } from "../execution/restore.js";
 import {
   schedulerRegistry,
   type SchedulerAcquireInput,
@@ -86,6 +88,10 @@ interface CheckpointReceiptInput extends KeyOnlyInput {
   readonly receipt: SignedCheckpointStorageReceipt;
 }
 
+interface RestoreRequirementInput extends KeyOnlyInput {
+  readonly requirement: CustodyRestoreRequirement;
+}
+
 /**
  * Local integration ingress for black-box tests. Production never binds this
  * service. All durable factory services remain ingress-private.
@@ -118,6 +124,15 @@ export const integrationHarness = restate.service({
       await ctx.objectClient(claimRegistry, request.key).claim(request.claim),
     readClaim: async (ctx: restate.Context, request: KeyOnlyInput) =>
       await ctx.objectClient(claimRegistry, request.key).read(),
+    readRestore: async (ctx: restate.Context, request: KeyOnlyInput) =>
+      await ctx.objectClient(hostRestoreRegistry, request.key).read(),
+    requireRestore: async (
+      ctx: restate.Context,
+      request: RestoreRequirementInput,
+    ) =>
+      await ctx
+        .objectClient(hostRestoreRegistry, request.key)
+        .require(request.requirement),
     releaseClaim: async (ctx: restate.Context, request: ClaimReleaseInput) =>
       await ctx.objectClient(claimRegistry, request.key).release(request.expected),
     transferClaim: async (ctx: restate.Context, request: ClaimTransferInput) =>

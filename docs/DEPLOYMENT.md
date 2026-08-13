@@ -52,13 +52,15 @@ Set `FREEDWORKS_CHECKPOINT_LOCAL_STORE_ROOT`, `FREEDWORKS_CHECKPOINT_KEY_FILE`, 
 
 Set `FREEDWORKS_GIT_EXECUTABLE` to the reviewed absolute Git binary used for custody capture and restore. The service never resolves Git from its ambient `PATH`.
 
+Set `FREED_REPOSITORY_ROOT` to the physical Freed checkout, `FREEDWORKS_WORKTREE_ROOT` to the host-owned root permitted to contain factory worktrees, and `FREEDWORKS_WORKTREE_HELPER` to Freed's absolute `scripts/worktree-add.sh` path. Provision the worktree root as a physical directory before the agent starts. The agent resolves physical paths, rejects destinations outside that root, and requires the helper to be a physical executable inside the configured repository. A transferred claim is never offered to a worker until the host agent creates or verifies the destination worktree, restores the authenticated prior-epoch checkpoint, verifies the complete result from disk, and records its signed restore receipt.
+
 Set `FREEDWORKS_CODEX_EXECUTABLE` to the reviewed absolute binary path and `FREEDWORKS_CODEX_VERSION` to the exact output of that binary's `--version` command. Startup resolves the physical binary, rejects group-writable or non-executable files, generates its version-specific app-server schema, and verifies the governed protocol surface before starting app-server. Review and update the pin after every Codex upgrade. Do not point a service at an unpinned executable found through `PATH`.
 
 Set `FREEDWORKS_CODEX_MODEL` only after the account advertises that model as callable. Freedworks has no fallback model guess.
 
 Do not point two host agents at the same `CODEX_HOME`. One execution account profile belongs to one host agent. Future extra subscriptions use separate OS users, credential directories, account IDs, and app-server processes.
 
-Each executor sends a heartbeat to the durable host registry. A heartbeat older than 120 seconds removes the host from new routing. Custody alerts remain at 1 hour and 12 hours, with automatic portable-work transfer at 24 hours. The failover workflow rereads canonical source and destination heartbeats, the exact current claim, and the encrypted checkpoint before it supersedes the old command or advances custody.
+Each executor sends a heartbeat to the durable host registry. A heartbeat older than 120 seconds removes the host from new routing. Custody alerts remain at 1 hour and 12 hours, with automatic portable-work transfer at 24 hours. The failover workflow rereads canonical source and destination heartbeats, the exact current claim, and the authenticated checkpoint receipt before it supersedes the old command or advances custody. The destination host then owns restoration. Merely advancing the epoch does not grant execution.
 
 Every envelope includes the host ID, kind, payload, issued time, and a monotonically increasing sequence under an Ed25519 signature. Restate retains idempotent submissions for 8 days. A normal HTTP retry uses the same idempotency key. A reused sequence under another request identity is rejected, including after coordinator restart. Re-enrollment is required if a host changes lanes, keys, or account scope.
 

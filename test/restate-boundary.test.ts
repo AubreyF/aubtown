@@ -9,6 +9,7 @@ import { dryRunWorkflow } from "../src/orchestration/dry-run-workflow.js";
 import { fakeWorker } from "../src/orchestration/fake-worker.js";
 import { executorCommandRegistry } from "../src/orchestration/executor-command-registry.js";
 import { hostRegistry } from "../src/orchestration/host-registry.js";
+import { hostRestoreRegistry } from "../src/orchestration/host-restore-registry.js";
 import { createHostGateway } from "../src/orchestration/host-gateway.js";
 import { qualificationWorkflow } from "../src/orchestration/qualification-workflow.js";
 import { reconciliationWorkflow } from "../src/orchestration/reconciliation-workflow.js";
@@ -25,6 +26,7 @@ describe("Restate ingress boundary", () => {
       fakeWorker,
       executorCommandRegistry,
       hostRegistry,
+      hostRestoreRegistry,
       qualificationWorkflow,
       reconciliationWorkflow,
       schedulerRegistry,

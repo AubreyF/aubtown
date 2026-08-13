@@ -10,6 +10,7 @@ import { schedulerRegistry } from "./scheduler-registry.js";
 import { executorCommandRegistry } from "./executor-command-registry.js";
 import { hostRegistry } from "./host-registry.js";
 import { checkpointCatalog } from "./checkpoint-catalog.js";
+import { hostRestoreRegistry } from "./host-restore-registry.js";
 
 function claimMatches(left: DispatchClaim, right: DispatchClaim): boolean {
   return (
@@ -171,6 +172,26 @@ export const custodyTransferWorkflow = restate.workflow({
       });
       const transferredClaim = await registry.transfer(transfer);
       await scheduler.transfer(transfer);
+      await ctx
+        .objectClient(hostRestoreRegistry, decision.destinationHostId)
+        .require({
+          schemaVersion: 1,
+          repository: activeClaim.repository,
+          issueNumber: activeClaim.issueNumber,
+          claimId: activeClaim.claimId,
+          priorCustodyEpoch: activeClaim.custodyEpoch,
+          custodyEpoch: decision.nextCustodyEpoch,
+          destinationHostId: decision.destinationHostId,
+          destinationWorkerId: destination.workerId,
+          destinationWorktree: destination.worktree,
+          branch: activeClaim.branch,
+          conflictDomains: [...activeClaim.conflictDomains],
+          claimedAt: activeClaim.claimedAt,
+          checkpointReference: storedCheckpoint.reference,
+          checkpointContentLength: storedCheckpoint.contentLength,
+          checkpointBaseHead: storedCheckpoint.manifest.baseHead,
+          requiredAt: input.now,
+        });
       await executor.releaseTransfer({
         claimId: activeClaim.claimId,
         custodyEpoch: activeClaim.custodyEpoch,

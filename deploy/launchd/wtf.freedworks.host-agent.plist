@@ -49,6 +49,12 @@
     <string>/Users/freedworks/Library/Application Support/Freedworks/state/host-envelope.sequence</string>
     <key>FREEDWORKS_QUOTA_SAMPLE_SECONDS</key>
     <string>60</string>
+    <key>FREED_REPOSITORY_ROOT</key>
+    <string>/Users/freedworks/Repositories/freed</string>
+    <key>FREEDWORKS_WORKTREE_HELPER</key>
+    <string>/Users/freedworks/Repositories/freed/scripts/worktree-add.sh</string>
+    <key>FREEDWORKS_WORKTREE_ROOT</key>
+    <string>/Users/freedworks/Worktrees/freed</string>
   </dict>
   <key>KeepAlive</key>
   <true/>
