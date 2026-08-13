@@ -6,6 +6,7 @@ import { QuotaMonitor } from "./supervision/quota-monitor.js";
 import { loadHostPrivateKey } from "./security/host-enrollment.js";
 import { DurableSequenceStore } from "./security/sequence-store.js";
 import type { HostLane } from "./domain/types.js";
+import { verifyCodexCompatibility } from "./drivers/codex/compatibility.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -39,9 +40,22 @@ if (!["low", "medium", "high", "xhigh"].includes(effortValue)) {
   throw new Error("FREEDWORKS_CODEX_EFFORT must be low, medium, high, or xhigh.");
 }
 const effort = effortValue as "low" | "medium" | "high" | "xhigh";
+const codexCompatibility = await verifyCodexCompatibility({
+  executable: requiredEnvironment("FREEDWORKS_CODEX_EXECUTABLE"),
+  expectedVersion: requiredEnvironment("FREEDWORKS_CODEX_VERSION"),
+});
 
-const transport = new StdioJsonRpcTransport();
+const transport = new StdioJsonRpcTransport({ command: codexCompatibility.executable });
 const client = new CodexAppServerClient(transport);
+const advertisedModel = await client.assertModelCallable({ model, effort });
+process.stdout.write(
+  `${JSON.stringify({
+    event: "codex-compatibility-verified",
+    ...codexCompatibility,
+    model: advertisedModel.model,
+    effort,
+  })}\n`,
+);
 const usage = new CodexQuotaSource(client);
 const worker = new CodexDriver(client, {
   model,

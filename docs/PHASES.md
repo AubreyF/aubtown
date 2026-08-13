@@ -33,6 +33,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Make every durable internal Restate service ingress-private and omit the local integration harness from production.
 - [x] Prove tamper rejection, private internal services, replay rejection, and replay persistence across a full restart.
 - [x] Prove Mac-to-Linux encrypted checkpoint transfer, persistent restart recovery, and post-release grant denial.
+- [x] Pin each executor to an absolute Codex binary, exact version, generated app-server protocol, advertised model, and advertised reasoning effort.
 
 ## Phase 3: one Freed issue
 

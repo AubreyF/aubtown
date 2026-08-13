@@ -34,6 +34,21 @@ class FakeTransport implements JsonRpcTransport {
     if (method === "account/usage/read") {
       return { summary: null, dailyUsageBuckets: null };
     }
+    if (method === "model/list") {
+      return {
+        data: [
+          {
+            id: "gpt-5.6-sol",
+            model: "gpt-5.6-sol",
+            hidden: false,
+            supportedReasoningEfforts: [
+              { reasoningEffort: "high", description: "High" },
+            ],
+          },
+        ],
+        nextCursor: null,
+      };
+    }
     if (method === "thread/start") {
       return { thread: { id: "thread-1" } };
     }
@@ -127,6 +142,19 @@ describe("Codex app-server integration", () => {
       method: "turn/interrupt",
       params: { threadId: "thread-1", turnId: "turn-1" },
     });
+  });
+
+  it("requires the exact model and reasoning effort advertised by app-server", async () => {
+    const client = new CodexAppServerClient(new FakeTransport());
+    await expect(
+      client.assertModelCallable({ model: "gpt-5.6-sol", effort: "high" }),
+    ).resolves.toMatchObject({ model: "gpt-5.6-sol" });
+    await expect(
+      client.assertModelCallable({ model: "gpt-5.6-sol", effort: "xhigh" }),
+    ).rejects.toThrow("did not advertise reasoning effort xhigh");
+    await expect(
+      client.assertModelCallable({ model: "future-model", effort: "high" }),
+    ).rejects.toThrow("did not advertise future-model as callable");
   });
 
   it("starts one workspace-scoped worker thread and preserves completion", async () => {

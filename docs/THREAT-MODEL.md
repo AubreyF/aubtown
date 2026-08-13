@@ -24,6 +24,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Nightly runner and factory race | Proposed task-scoped claim must make the existing runner skip claimed work before the first writer is enabled |
 | Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
+| Codex update changes the worker or quota protocol | Absolute executable, exact version, generated-schema compatibility check, and advertised model and effort gate before host admission |
 | Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
 | Checkpoint manifest is changed | Manifest is authenticated as XChaCha20-Poly1305 associated data |
 | Checkpoint restore overwrites destination work | Clean exact-base requirement and exclusive untracked-file creation |

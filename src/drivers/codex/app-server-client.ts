@@ -169,8 +169,25 @@ const turnStartResponseSchema = z.object({
   }).passthrough(),
 }).passthrough();
 
+const modelListResponseSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string().min(1),
+      model: z.string().min(1),
+      hidden: z.boolean(),
+      supportedReasoningEfforts: z.array(
+        z.object({
+          reasoningEffort: z.string().min(1),
+        }).passthrough(),
+      ),
+    }).passthrough(),
+  ),
+  nextCursor: z.string().nullable().optional(),
+}).passthrough();
+
 export type CodexRateLimits = z.infer<typeof rateLimitsResponseSchema>;
 export type CodexUsage = z.infer<typeof usageResponseSchema>;
+export type CodexModel = z.infer<typeof modelListResponseSchema>["data"][number];
 
 export class CodexAppServerClient {
   #initialized = false;
@@ -215,6 +232,52 @@ export class CodexAppServerClient {
     return usageResponseSchema.parse(
       await this.transport.send({ method: "account/usage/read" }),
     );
+  }
+
+  async listModels(): Promise<readonly CodexModel[]> {
+    await this.initialize();
+    const models: CodexModel[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 100; page += 1) {
+      const response = modelListResponseSchema.parse(
+        await this.transport.send({
+          method: "model/list",
+          params: {
+            cursor,
+            limit: 100,
+            includeHidden: true,
+          },
+        }),
+      );
+      models.push(...response.data);
+      cursor = response.nextCursor ?? null;
+      if (cursor === null) {
+        return models;
+      }
+    }
+    throw new Error("Codex model catalog exceeded the pagination safety limit.");
+  }
+
+  async assertModelCallable(input: {
+    readonly model: string;
+    readonly effort: string;
+  }): Promise<CodexModel> {
+    const advertised = (await this.listModels()).find(
+      (candidate) => candidate.model === input.model,
+    );
+    if (advertised === undefined) {
+      throw new Error(`Codex did not advertise ${input.model} as callable.`);
+    }
+    if (
+      !advertised.supportedReasoningEfforts.some(
+        (candidate) => candidate.reasoningEffort === input.effort,
+      )
+    ) {
+      throw new Error(
+        `Codex model ${input.model} did not advertise reasoning effort ${input.effort}.`,
+      );
+    }
+    return advertised;
   }
 
   async startThread(input: {

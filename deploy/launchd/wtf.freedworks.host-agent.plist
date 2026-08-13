@@ -19,8 +19,12 @@
     <string>replace-account-id</string>
     <key>FREEDWORKS_CODEX_EFFORT</key>
     <string>high</string>
+    <key>FREEDWORKS_CODEX_EXECUTABLE</key>
+    <string>replace-with-absolute-codex-executable</string>
     <key>FREEDWORKS_CODEX_MODEL</key>
     <string>replace-with-advertised-callable-model</string>
+    <key>FREEDWORKS_CODEX_VERSION</key>
+    <string>replace-with-exact-codex-version-output</string>
     <key>FREEDWORKS_HOST_GATEWAY_URL</key>
     <string>https://replace-private-linux-host-name</string>
     <key>FREEDWORKS_HOST_ID</key>

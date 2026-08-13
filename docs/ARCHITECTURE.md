@@ -77,6 +77,8 @@ The daily value is the increase from the Los Angeles day baseline within the sam
 
 Codex telemetry and interruption use the documented `account/rateLimits/read`, `account/usage/read`, and `turn/interrupt` app-server methods. The host agent submits the resulting observation through its signed gateway identity. See [Codex app-server](https://developers.openai.com/codex/app-server).
 
+Before sending a heartbeat, each host resolves an absolute, non-group-writable Codex executable, checks the exact configured `codex --version` output, generates that binary's app-server JSON Schema bundle, and verifies every method and field Freedworks consumes. It then calls `model/list` and requires an exact advertised model and reasoning effort. A binary update, protocol drift, unadvertised model, or unadvertised effort stops that executor before it can consume subscription capacity.
+
 The worker driver and usage source are separate interfaces. A future metered API driver can report a money or token budget through another usage source without changing claims, routing, custody, authority, or publication. Multiple subscriptions remain isolated by host profile. Routing chooses an enabled host and account with measured headroom. Credentials never migrate with work.
 
 ## Repository adapters
