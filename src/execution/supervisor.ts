@@ -37,6 +37,7 @@ export type ExecutionEvent = Readonly<Record<string, unknown>> & {
 
 export class HostExecutionSupervisor {
   #watchingTurnId: string | undefined;
+  #watchingCompletion: Promise<void> | undefined;
 
   constructor(
     private readonly accountId: string,
@@ -146,6 +147,47 @@ export class HostExecutionSupervisor {
       : [];
   }
 
+  async shutdown(timeoutMs = 120_000): Promise<void> {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+      throw new Error("Executor shutdown timeout must be a positive integer.");
+    }
+    const record = await this.journal.read();
+    if (record?.stage === "accepted") {
+      throw new Error(
+        "Executor shutdown cannot adjudicate an ambiguous start outcome.",
+      );
+    }
+    if (record?.stage === "started") {
+      const handle = this.#requiredHandle(record);
+      this.#watch(record.command, handle);
+      await this.worker.interrupt(handle);
+      const completion = this.#watchingCompletion;
+      if (completion === undefined) {
+        throw new Error("Executor shutdown has no active completion watcher.");
+      }
+      await Promise.race([
+        completion,
+        new Promise<never>((_resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error("Executor shutdown timed out before checkpointing.")),
+            timeoutMs,
+          );
+          timer.unref();
+        }),
+      ]);
+    }
+    await this.flush();
+    const final = await this.journal.read();
+    if (
+      final !== null &&
+      (final.stage === "accepted" ||
+        final.stage === "started" ||
+        final.reportedAt === undefined)
+    ) {
+      throw new Error("Executor shutdown did not reach a reported terminal state.");
+    }
+  }
+
   async #resumeExisting(record: HostExecutionRecord): Promise<void> {
     if (record.stage === "started") {
       const handle = this.#requiredHandle(record);
@@ -164,7 +206,7 @@ export class HostExecutionSupervisor {
       return;
     }
     this.#watchingTurnId = handle.turnId;
-    void this.worker
+    const completion = this.worker
       .wait(handle)
       .then(async (status) => await this.#finish(command, handle, status))
       .catch((error: unknown) => {
@@ -178,8 +220,10 @@ export class HostExecutionSupervisor {
       .finally(() => {
         if (this.#watchingTurnId === handle.turnId) {
           this.#watchingTurnId = undefined;
+          this.#watchingCompletion = undefined;
         }
       });
+    this.#watchingCompletion = completion;
   }
 
   async #finish(

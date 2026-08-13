@@ -187,6 +187,71 @@ describe("HostExecutionSupervisor", () => {
     });
   });
 
+  it("interrupts and drains an active turn during planned shutdown", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    const completion = deferred<"completed" | "interrupted" | "failed">();
+    let interruptions = 0;
+    const worker = {
+      id: "fake",
+      capabilities: {
+        hostLanes: ["linux"],
+        canInterrupt: true,
+        canReadSubscriptionUsage: true,
+        publicationCeiling: "none",
+      },
+      start: async () => handle,
+      recover: async () => "running" as const,
+      wait: async () => await completion.promise,
+      interrupt: async () => {
+        interruptions += 1;
+        completion.resolve("interrupted");
+      },
+    } satisfies WorkerDriver;
+    const reports: string[] = [];
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      worker,
+      journal,
+      {
+        reportExecutor: async (receipt) => {
+          reports.push(receipt.stage);
+          return {
+            kind: "executor-receipt",
+            hostId: "linux-control-1",
+            sequence: reports.length,
+            acceptedAt: "2026-08-13T18:00:02.000Z",
+            commandId: receipt.commandId,
+            stage: receipt.stage,
+          };
+        },
+        reconcileExecutor: async (request) => ({
+          kind: "executor-reconcile",
+          hostId: "linux-control-1",
+          sequence: 1,
+          acceptedAt: "2026-08-13T18:00:02.000Z",
+          commandId: request.commandId,
+          action: "resume",
+          reason: "current",
+        }),
+      },
+      { track: () => {}, untrack: () => {} },
+      () => {},
+      () => new Date("2026-08-13T18:00:02.000Z"),
+    );
+
+    await supervisor.accept(command());
+    await supervisor.shutdown(1_000);
+
+    expect(interruptions).toBe(1);
+    expect(reports).toEqual(["started", "interrupted"]);
+    await expect(journal.read()).resolves.toMatchObject({
+      stage: "interrupted",
+      reportedAt: "2026-08-13T18:00:02.000Z",
+    });
+  });
+
   it("persists capture and storage before retrying catalog admission and terminal reporting", async () => {
     const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
     roots.push(root);

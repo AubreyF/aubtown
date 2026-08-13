@@ -91,7 +91,7 @@ The initial Freed bridge remains fail-closed until the authority extension in [F
 
 ## Custody
 
-Every terminal worker turn creates an encrypted checkpoint before the host may report completion, interruption, or failure. Capture, remote storage, and catalog admission are separate durable journal stages, so a retry does not rerun the worker or repeat an already persisted stage. Checkpoints include Git state, approved untracked files, validation receipts, and custody metadata. They exclude credentials, ignored files, dependencies, arbitrary untracked files, and authentication caches. A planned host shutdown must interrupt and drain an active turn through this same terminal path before the first real writer pilot.
+Every terminal worker turn creates an encrypted checkpoint before the host may report completion, interruption, or failure. Capture, remote storage, and catalog admission are separate durable journal stages, so a retry does not rerun the worker or repeat an already persisted stage. Checkpoints include Git state, approved untracked files, validation receipts, and custody metadata. They exclude credentials, ignored files, dependencies, arbitrary untracked files, and authentication caches. On planned shutdown, the host interrupts an active turn and refuses to close app-server until the same checkpoint and terminal-report path drains successfully.
 
 The pilot checkpoint implementation uses XChaCha20-Poly1305 with the manifest as authenticated associated data. A content-addressed atomic store retains encrypted archives. Restore requires a clean destination at the exact base head and advances custody before execution resumes. See [CHECKPOINT-CUSTODY.md](CHECKPOINT-CUSTODY.md).
 

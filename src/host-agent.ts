@@ -136,11 +136,30 @@ async function stop(signal: string): Promise<void> {
     return;
   }
   stopped = true;
+  const hadScheduledSample = timer !== undefined;
   if (timer !== undefined) {
     clearTimeout(timer);
+    timer = undefined;
   }
-  await client.close();
-  process.stdout.write(`${JSON.stringify({ event: "host-agent-stopped", signal })}\n`);
+  try {
+    await execution.shutdown();
+    await client.close();
+    process.exitCode = 0;
+    process.stdout.write(`${JSON.stringify({ event: "host-agent-stopped", signal })}\n`);
+  } catch (error) {
+    process.stderr.write(
+      `${JSON.stringify({
+        event: "host-agent-stop-blocked",
+        signal,
+        message: error instanceof Error ? error.message : String(error),
+      })}\n`,
+    );
+    process.exitCode = 1;
+    stopped = false;
+    if (hadScheduledSample) {
+      timer = setTimeout(() => void sample(), 1_000);
+    }
+  }
 }
 
 async function sample(): Promise<void> {
