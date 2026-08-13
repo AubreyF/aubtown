@@ -15,6 +15,7 @@ import { claim, FREED_REPOSITORY, report } from "./helpers.js";
 class FakeTransport implements JsonRpcTransport {
   readonly messages: unknown[] = [];
   readonly listeners = new Set<(message: unknown) => void>();
+  readonly failureListeners = new Set<(error: Error) => void>();
 
   async send(message: unknown): Promise<unknown> {
     this.messages.push(message);
@@ -80,9 +81,20 @@ class FakeTransport implements JsonRpcTransport {
     return () => this.listeners.delete(listener);
   }
 
+  onFailure(listener: (error: Error) => void): () => void {
+    this.failureListeners.add(listener);
+    return () => this.failureListeners.delete(listener);
+  }
+
   emit(message: unknown): void {
     for (const listener of this.listeners) {
       listener(message);
+    }
+  }
+
+  fail(error: Error): void {
+    for (const listener of this.failureListeners) {
+      listener(error);
     }
   }
 
@@ -212,6 +224,25 @@ describe("Codex app-server integration", () => {
       params: { turn: { id: "turn-1", status: "completed" } },
     });
     await expect(driver.wait(handle)).resolves.toBe("completed");
+  });
+
+  it("rejects an active turn waiter when app-server fails", async () => {
+    const transport = new FakeTransport();
+    const driver = new CodexDriver(new CodexAppServerClient(transport), {
+      model: "gpt-5.6-sol",
+      effort: "high",
+    });
+    const handle = await driver.start({
+      claim: claim(),
+      qualification: report(),
+      prompt: "Implement the qualified issue.",
+      repositoryRoot: "/worktrees/1234",
+    });
+    const completion = driver.wait(handle);
+    transport.fail(new Error("app-server child exited unexpectedly"));
+    await expect(completion).rejects.toThrow(
+      "app-server child exited unexpectedly",
+    );
   });
 
   it("runs independent review in a fresh read-only structured thread", async () => {

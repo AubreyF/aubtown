@@ -6,6 +6,7 @@ export interface JsonRpcTransport {
   send(message: unknown): Promise<unknown>;
   notify(message: unknown): Promise<void>;
   onNotification(listener: (message: unknown) => void): () => void;
+  onFailure?(listener: (error: Error) => void): () => void;
   close(): Promise<void>;
 }
 
@@ -19,10 +20,13 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
   readonly #process: ChildProcessWithoutNullStreams;
   readonly #pending = new Map<number, PendingRequest>();
   readonly #notificationListeners = new Set<(message: unknown) => void>();
+  readonly #failureListeners = new Set<(error: Error) => void>();
   readonly #requestTimeoutMs: number;
   readonly #closeTimeoutMs: number;
   #nextId = 1;
   #closed = false;
+  #failure: Error | undefined;
+  #failureKillTimer: NodeJS.Timeout | undefined;
 
   constructor(options?: {
     readonly command?: string;
@@ -50,9 +54,13 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
     this.#process.stderr.on("data", (chunk: string) => {
       options?.onStderr?.(chunk);
     });
-    this.#process.on("error", (error) => this.#rejectAll(error));
+    this.#process.on("error", (error) => this.#fail(error));
     this.#process.on("exit", (code, signal) => {
-      this.#rejectAll(
+      if (this.#failureKillTimer !== undefined) {
+        clearTimeout(this.#failureKillTimer);
+        this.#failureKillTimer = undefined;
+      }
+      this.#fail(
         new Error(`Codex app-server exited with code ${String(code)} and signal ${String(signal)}.`),
       );
     });
@@ -72,10 +80,10 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
     const envelope = { ...record, id };
     return await new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
-        if (!this.#pending.delete(id)) {
+        if (!this.#pending.has(id)) {
           return;
         }
-        reject(
+        this.#fail(
           new Error(
             `Codex app-server request ${method} timed out after ${this.#requestTimeoutMs.toLocaleString()} ms.`,
           ),
@@ -90,6 +98,7 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
             this.#pending.delete(id);
           }
           reject(error);
+          this.#fail(error);
         }
       });
     });
@@ -106,6 +115,7 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
       this.#process.stdin.write(`${JSON.stringify(message)}\n`, (error) => {
         if (error !== null && error !== undefined) {
           reject(error);
+          this.#fail(error);
           return;
         }
         resolve();
@@ -116,6 +126,15 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
   onNotification(listener: (message: unknown) => void): () => void {
     this.#notificationListeners.add(listener);
     return () => this.#notificationListeners.delete(listener);
+  }
+
+  onFailure(listener: (error: Error) => void): () => void {
+    if (this.#failure !== undefined) {
+      listener(this.#failure);
+      return () => {};
+    }
+    this.#failureListeners.add(listener);
+    return () => this.#failureListeners.delete(listener);
   }
 
   async close(): Promise<void> {
@@ -209,6 +228,29 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
     this.#pending.clear();
   }
 
+  #fail(error: Error): void {
+    if (this.#closed) {
+      return;
+    }
+    this.#closed = true;
+    this.#failure = error;
+    this.#rejectAll(error);
+    for (const listener of this.#failureListeners) {
+      listener(error);
+    }
+    this.#failureListeners.clear();
+    if (
+      this.#process.exitCode === null &&
+      this.#process.signalCode === null
+    ) {
+      this.#process.kill("SIGTERM");
+      this.#failureKillTimer = setTimeout(() => {
+        this.#process.kill("SIGKILL");
+        this.#failureKillTimer = undefined;
+      }, this.#closeTimeoutMs);
+    }
+  }
+
   #rejectServerRequest(id: number, method: string): void {
     this.#process.stdin.write(
       `${JSON.stringify({
@@ -220,7 +262,7 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
       })}\n`,
       (error) => {
         if (error !== null && error !== undefined) {
-          this.#rejectAll(error);
+          this.#fail(error);
         }
       },
     );
@@ -312,11 +354,16 @@ export class CodexAppServerClient {
   readonly #finalMessages = new Map<string, string>();
   readonly #turnWaiters = new Map<
     string,
-    Set<(status: "completed" | "interrupted" | "failed") => void>
+    Set<{
+      readonly resolve: (status: "completed" | "interrupted" | "failed") => void;
+      readonly reject: (error: Error) => void;
+    }>
   >();
+  #transportFailure: Error | undefined;
 
   constructor(private readonly transport: JsonRpcTransport) {
     this.transport.onNotification((message) => this.#acceptNotification(message));
+    this.transport.onFailure?.((error) => this.#failTurns(error));
   }
 
   async initialize(): Promise<void> {
@@ -524,9 +571,12 @@ export class CodexAppServerClient {
     if (completed !== undefined) {
       return completed;
     }
-    return await new Promise((resolve) => {
+    if (this.#transportFailure !== undefined) {
+      throw this.#transportFailure;
+    }
+    return await new Promise((resolve, reject) => {
       const waiters = this.#turnWaiters.get(input.turnId) ?? new Set();
-      waiters.add(resolve);
+      waiters.add({ resolve, reject });
       this.#turnWaiters.set(input.turnId, waiters);
     });
   }
@@ -560,6 +610,7 @@ export class CodexAppServerClient {
 
   async close(): Promise<void> {
     await this.transport.close();
+    this.#failTurns(new Error("Codex app-server client closed."));
   }
 
   #acceptNotification(message: unknown): void {
@@ -607,8 +658,21 @@ export class CodexAppServerClient {
       return;
     }
     this.#turnWaiters.delete(id);
-    for (const resolve of waiters) {
-      resolve(status);
+    for (const waiter of waiters) {
+      waiter.resolve(status);
     }
+  }
+
+  #failTurns(error: Error): void {
+    if (this.#transportFailure !== undefined) {
+      return;
+    }
+    this.#transportFailure = error;
+    for (const waiters of this.#turnWaiters.values()) {
+      for (const waiter of waiters) {
+        waiter.reject(error);
+      }
+    }
+    this.#turnWaiters.clear();
   }
 }

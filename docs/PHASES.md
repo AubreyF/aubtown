@@ -35,6 +35,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Prove Mac-to-Linux encrypted checkpoint transfer, persistent restart recovery, and post-release grant denial.
 - [x] Pin each executor to an absolute Codex binary, exact version, generated app-server protocol, advertised model, and advertised reasoning effort.
 - [x] Bound app-server requests and shutdown, drain diagnostics, and reject colliding server-initiated requests without corrupting pending client calls.
+- [x] Propagate unexpected app-server exit through active turns and restart the host agent without discarding its durable execution journal.
 - [x] Add signed claim-bound command polling, durable host execution journaling, app-server turn recovery, and idempotent result reporting.
 - [x] Fence custody transfer against offered, running, and ambiguous executor commands.
 - [x] Require signed coordinator adjudication before a restarted host resumes a persisted turn.

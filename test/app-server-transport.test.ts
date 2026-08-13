@@ -27,6 +27,18 @@ lines.on("line", (line) => {
 `;
 
 describe("Codex app-server stdio transport", () => {
+  it("reports an unexpected child exit to late failure subscribers", async () => {
+    const transport = new StdioJsonRpcTransport({
+      command: process.execPath,
+      args: ["-e", "process.exit(7)"],
+    });
+    const failure = await new Promise<Error>((resolve) => {
+      transport.onFailure(resolve);
+    });
+    expect(failure.message).toContain("exited with code 7");
+    await transport.close();
+  });
+
   it("drains stderr and rejects colliding server requests without resolving the client request", async () => {
     let stderr = "";
     const transport = new StdioJsonRpcTransport({
@@ -53,6 +65,28 @@ describe("Codex app-server stdio transport", () => {
     await expect(transport.send({ method: "never/responds" })).rejects.toThrow(
       "request never/responds timed out after 25 ms",
     );
+    let failure: Error | undefined;
+    transport.onFailure((error) => {
+      failure = error;
+    });
+    expect(failure?.message).toContain("request never/responds timed out");
+    await transport.close();
+  });
+
+  it("terminates a child after an RPC deadline even when SIGTERM is ignored", async () => {
+    const transport = new StdioJsonRpcTransport({
+      command: process.execPath,
+      args: [
+        "-e",
+        'process.on("SIGTERM",()=>{}); process.stdin.resume()',
+      ],
+      requestTimeoutMs: 25,
+      closeTimeoutMs: 25,
+    });
+    await expect(transport.send({ method: "wedged" })).rejects.toThrow(
+      "request wedged timed out",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 75));
     await transport.close();
   });
 

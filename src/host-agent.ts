@@ -162,6 +162,25 @@ await execution.recover();
 let stopped = false;
 let timer: NodeJS.Timeout | undefined;
 
+transport.onFailure((error) => {
+  if (stopped) {
+    return;
+  }
+  stopped = true;
+  if (timer !== undefined) {
+    clearTimeout(timer);
+    timer = undefined;
+  }
+  process.exitCode = 1;
+  process.stderr.write(
+    `${JSON.stringify({
+      event: "codex-app-server-failed",
+      message: error.message,
+      recovery: "service-manager-restart",
+    })}\n`,
+  );
+});
+
 async function stop(signal: string): Promise<void> {
   if (stopped) {
     return;
