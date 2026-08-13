@@ -93,5 +93,24 @@ export const hostWorkspaceRegistry = restate.object({
       ctx.set("workspace", next);
       return next;
     },
+    clear: async (
+      ctx: restate.ObjectContext<HostWorkspaceState>,
+      expected: { readonly claimId: string; readonly custodyEpoch: 1 },
+    ): Promise<boolean> => {
+      const current = await ctx.get("workspace");
+      if (current === null) {
+        return false;
+      }
+      if (
+        current.requirement.claimId !== expected.claimId ||
+        expected.custodyEpoch !== 1
+      ) {
+        throw new restate.TerminalError(
+          "Only the current initial workspace requirement may be cleared.",
+        );
+      }
+      ctx.clear("workspace");
+      return true;
+    },
   },
 });

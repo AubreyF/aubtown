@@ -41,6 +41,10 @@ import {
   routePlannerApi,
   type RoutePlannerRequest,
 } from "./route-planner.js";
+import {
+  admittedDispatchWorkflow,
+  type AdmittedDispatchInput,
+} from "./admitted-dispatch-workflow.js";
 
 interface KeyedInput<T> {
   readonly key: string;
@@ -111,6 +115,13 @@ export const integrationHarness = restate.service({
   handlers: {
     runDryRun: async (ctx: restate.Context, request: KeyedInput<DryRunInput>) =>
       await ctx.workflowClient(dryRunWorkflow, request.key).run(request.input),
+    runAdmittedDispatch: async (
+      ctx: restate.Context,
+      request: KeyedInput<AdmittedDispatchInput>,
+    ) =>
+      await ctx
+        .workflowClient(admittedDispatchWorkflow, request.key)
+        .run(request.input),
     runQualification: async (
       ctx: restate.Context,
       request: KeyedInput<QualificationWorkflowInput>,

@@ -41,6 +41,7 @@ Use a short-lived Coordinator App installation token in deployment. The token st
 - `src/domain`: portable work, host, authority, quota, and custody contracts
 - `src/policy`: deterministic admission, conflict, quota, and failover decisions
 - `src/adapters/freed`: the stronger Freed authority bridge
+- `src/adapters/execution-admission.ts`: the portable exact-dispatch binding after repository authority
 - `src/drivers`: replaceable worker interfaces, beginning with Codex app-server
 - `src/orchestration`: durable Restate services
 - `src/supervision`: host-side quota and worker lifecycle monitors

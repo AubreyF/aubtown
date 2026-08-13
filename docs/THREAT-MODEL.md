@@ -20,7 +20,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | --- | --- |
 | Duplicate dispatch after crash | Restate keyed claim, startup reconciliation, deterministic claim ID |
 | Stale host publishes after transfer | Monotonic custody epoch checked before every write and publication |
-| Label grants accidental authority | Exact active authority task and short-lived repository lease are also required |
+| Label grants accidental authority | Exact active authority task and task-scoped repository execution claim are also required |
 | Nightly runner and factory race | Proposed task-scoped claim must make the existing runner skip claimed work before the first writer is enabled |
 | Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
@@ -41,6 +41,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Checkpoint restore overwrites destination work | Clean exact-base requirement and exclusive untracked-file creation |
 | Provider-visible change runs unattended | Provider lane cap is zero and qualification is blocking |
 | Repository adapter broadens authority | Adapter conformance tests and supported command allowlist |
+| Dispatch input substitutes a host, account, branch, base, or task revision after authority | Short-lived admission digest binds the complete dispatch, then the workflow rechecks the canonical route before any Restate claim mutation |
 | Tracker token reaches worker | Host-side GitHub App broker only |
 | App token has unnecessary authority | One enrolled repository and operation-specific installation permissions |
 | Malicious issue prompt changes policy | Issue text is data, fixed system policy remains outside worker input |
@@ -69,6 +70,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 - No account selection without an enabled account and a compatible host.
 - No execution at custody epoch two or later without the matching destination restore receipt.
 - No execution at custody epoch one without the matching initial workspace receipt.
+- No admitted dispatch workflow call from an unverified repository authority bridge.
 
 ## Deferred risks
 

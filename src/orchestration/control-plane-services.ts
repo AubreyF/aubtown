@@ -15,6 +15,7 @@ import { qualificationWorkflow } from "./qualification-workflow.js";
 import { reconciliationWorkflow } from "./reconciliation-workflow.js";
 import { schedulerRegistry } from "./scheduler-registry.js";
 import { createRoutePlanner, routePlannerApi } from "./route-planner.js";
+import { admittedDispatchWorkflow } from "./admitted-dispatch-workflow.js";
 
 export function controlPlaneServices(
   hostGateway: ReturnType<typeof createHostGateway>,
@@ -23,6 +24,7 @@ export function controlPlaneServices(
 ): ServeOptions["services"] {
   return [
     accountGovernor,
+    admittedDispatchWorkflow,
     claimRegistry,
     dryRunWorkflow,
     fakeWorker,

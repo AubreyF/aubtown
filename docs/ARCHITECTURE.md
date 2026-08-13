@@ -44,6 +44,8 @@ Restate is the initial durable runtime. The `ClaimRegistry` virtual object seria
 
 Restate state is operational state, not a second backlog. A startup reconciler compares durable claims against GitHub, Freed tasks, leases, branches, worktrees, and pull requests before dispatch or retry.
 
+The ingress-private `AdmittedDispatchWorkflow` is the transaction boundary after repository authority. It accepts only a short-lived admission bound to the exact task revision, qualification, claim, selected account, base commit, and workspace target. It rechecks the current durable route, acquires the repository conflict slot and issue claim, creates the host workspace requirement, and enqueues one claim-bound command. It compensates those Restate records if enqueue fails. The binding digest prevents accidental substitution but is not an authority signature. Only a repository bridge that has already verified and acquired the repository-owned authority receipt may call this workflow. No such production caller is installed before the Freed authority extension is approved.
+
 The production deployment pins Restate 1.7.3 and TypeScript SDK 1.16.5. The server data directory lives on durable storage. Upgrades are reviewed and pinned.
 
 References:

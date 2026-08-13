@@ -259,37 +259,6 @@ curl --fail --silent --show-error \
   | jq -e '.kind == "quota-observation" and .sequence == 2 and .decision.action == "admit" and .decision.observedAt == .acceptedAt' \
   >/dev/null
 
-jq -n \
-  --arg host "$LINUX_HOST_ID" \
-  --arg now "$NOW" \
-  '{schemaVersion: 1, hostId: $host, sequence: 1, issuedAt: $now, kind: "heartbeat", payload: {hostId: $host, lane: "linux", observedAt: $now, activeClaims: [], accountIds: ["codex-pro-integration"]}}' \
-  > "${TMP_DIR}/linux-heartbeat-unsigned.json"
-"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/linux-heartbeat-unsigned.json" \
-  > "${TMP_DIR}/linux-heartbeat.json"
-curl --fail --silent --show-error \
-  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
-  -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-linux-heartbeat-1' \
-  --data-binary "@${TMP_DIR}/linux-heartbeat.json" \
-  | jq -e '.kind == "heartbeat" and .host.lane == "linux"' \
-  >/dev/null
-
-jq -n --arg now "$NOW" '{requiredLane: "linux", now: $now}' \
-  | curl --fail --silent --show-error \
-      -X POST "${HARNESS}/planRoute" \
-      -H 'content-type: application/json' \
-      --data-binary @- \
-  | jq -e --arg host "$LINUX_HOST_ID" '.reason == "selected" and .route.hostId == $host and .route.accountId == "codex-pro-integration"' \
-  >/dev/null
-
-jq -n --arg now "$NOW" '{requiredLane: "macos", now: $now}' \
-  | curl --fail --silent --show-error \
-      -X POST "${HARNESS}/planRoute" \
-      -H 'content-type: application/json' \
-      --data-binary @- \
-  | jq -e --arg host "$HOST_ID" '.reason == "selected" and .route.hostId == $host and .route.accountId == "codex-pro-integration"' \
-  >/dev/null
-
 REPLAY_STATUS="$(curl --silent --show-error \
   -o "${TMP_DIR}/replay.json" \
   -w '%{http_code}' \
@@ -329,22 +298,6 @@ jq -n \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
   '{repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, hostId: $host, workerId: "integration-worker", branch: ("test/checkpoint-grant-" + ($issue | tostring)), worktree: ("/tmp/freedworks-integration-" + ($issue | tostring)), conflictDomains: $qualification[0].conflictDomains, claimedAt: $now}' \
   > "${TMP_DIR}/grant-claim.json"
-harness_file claim "freed-project/freed#${ISSUE_NUMBER}" claim "${TMP_DIR}/grant-claim.json" /dev/null
-jq -n \
-  --arg host "$HOST_ID" \
-  --arg now "$NOW" \
-  --arg branch "test/checkpoint-grant-${ISSUE_NUMBER}" \
-  --arg worktree "/tmp/freedworks-integration-${ISSUE_NUMBER}" \
-  --argjson issue "$ISSUE_NUMBER" \
-  --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
-  '{schemaVersion: 1, repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, hostId: $host, workerId: "integration-worker", worktree: $worktree, branch: $branch, conflictDomains: $qualification[0].conflictDomains, claimedAt: $now, baseHead: ("b" * 40), target: "shared", requiredAt: $now}' \
-  > "${TMP_DIR}/workspace-requirement.json"
-harness_file \
-  requireWorkspace \
-  "$HOST_ID" \
-  requirement \
-  "${TMP_DIR}/workspace-requirement.json" \
-  /dev/null
 
 COMMAND_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 jq -n \
@@ -355,17 +308,71 @@ jq -n \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
   '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", issuedAt: $now}' \
   > "${TMP_DIR}/executor-command-input.json"
+EXPIRES_AT="$(node -e 'process.stdout.write(new Date(Date.parse(process.argv[1]) + 300000).toISOString())' "$NOW")"
+jq -n \
+  --arg now "$NOW" \
+  --arg expiresAt "$EXPIRES_AT" \
+  --slurpfile claim "${TMP_DIR}/grant-claim.json" \
+  --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
+  --slurpfile qualifiedInput "${TMP_DIR}/executor-qualification-input.json" \
+  '{binding: {qualification: $qualification[0], authorityTask: $qualifiedInput[0].authorityTask, claim: $claim[0], accountId: "codex-pro-integration", baseHead: ("b" * 40), target: "shared"}, admission: {schemaVersion: 1, bridgeId: "integration-authority-v1", authorityClaimId: ("integration-authority-" + ($claim[0].issueNumber | tostring)), taskId: $qualifiedInput[0].authorityTask.id, taskRevision: $qualifiedInput[0].authorityTask.revision, authorizedAt: $now, expiresAt: $expiresAt}}' \
+  > "${TMP_DIR}/execution-admission-input.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" \
-  "${ROOT_DIR}/src/cli/build-executor-command.ts" \
-  "${TMP_DIR}/executor-command-input.json" \
-  > "${TMP_DIR}/executor-command.json"
+  "${ROOT_DIR}/src/cli/build-execution-admission.ts" \
+  "${TMP_DIR}/execution-admission-input.json" \
+  > "${TMP_DIR}/execution-admission.json"
+jq -n \
+  --arg commandId "$COMMAND_ID" \
+  --arg now "$NOW" \
+  --slurpfile claim "${TMP_DIR}/grant-claim.json" \
+  --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
+  --slurpfile qualifiedInput "${TMP_DIR}/executor-qualification-input.json" \
+  --slurpfile admission "${TMP_DIR}/execution-admission.json" \
+  '{qualification: $qualification[0], authorityTask: $qualifiedInput[0].authorityTask, admission: $admission[0], claim: $claim[0], accountId: "codex-pro-integration", baseHead: ("b" * 40), target: "shared", commandId: $commandId, concurrency: "pilot", now: $now}' \
+  > "${TMP_DIR}/admitted-dispatch-input.json"
 harness_file \
-  enqueueExecutorCommand \
-  "$HOST_ID" \
-  command \
-  "${TMP_DIR}/executor-command.json" \
-  "${TMP_DIR}/executor-command-enqueued.json"
-jq -e '.stage == "pending"' "${TMP_DIR}/executor-command-enqueued.json" >/dev/null
+  runAdmittedDispatch \
+  "integration-dispatch-${ISSUE_NUMBER}" \
+  input \
+  "${TMP_DIR}/admitted-dispatch-input.json" \
+  "${TMP_DIR}/admitted-dispatch-result.json"
+jq -e \
+  --arg commandId "$COMMAND_ID" \
+  '.stage == "dispatched" and .reason == "dispatched" and .command.commandId == $commandId' \
+  "${TMP_DIR}/admitted-dispatch-result.json" \
+  >/dev/null
+jq '.command' "${TMP_DIR}/admitted-dispatch-result.json" > "${TMP_DIR}/executor-command.json"
+
+jq -n \
+  --arg host "$LINUX_HOST_ID" \
+  --arg now "$NOW" \
+  '{schemaVersion: 1, hostId: $host, sequence: 1, issuedAt: $now, kind: "heartbeat", payload: {hostId: $host, lane: "linux", observedAt: $now, activeClaims: [], accountIds: ["codex-pro-integration"]}}' \
+  > "${TMP_DIR}/linux-heartbeat-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/linux-heartbeat-unsigned.json" \
+  > "${TMP_DIR}/linux-heartbeat.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${LINUX_HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-linux-heartbeat-1' \
+  --data-binary "@${TMP_DIR}/linux-heartbeat.json" \
+  | jq -e '.kind == "heartbeat" and .host.lane == "linux"' \
+  >/dev/null
+
+jq -n --arg now "$NOW" '{requiredLane: "linux", now: $now}' \
+  | curl --fail --silent --show-error \
+      -X POST "${HARNESS}/planRoute" \
+      -H 'content-type: application/json' \
+      --data-binary @- \
+  | jq -e --arg host "$LINUX_HOST_ID" '.reason == "selected" and .route.hostId == $host and .route.accountId == "codex-pro-integration"' \
+  >/dev/null
+
+jq -n --arg now "$NOW" '{requiredLane: "macos", now: $now}' \
+  | curl --fail --silent --show-error \
+      -X POST "${HARNESS}/planRoute" \
+      -H 'content-type: application/json' \
+      --data-binary @- \
+  | jq -e --arg host "$HOST_ID" '.reason == "selected" and .route.hostId == $host and .route.accountId == "codex-pro-integration"' \
+  >/dev/null
 
 jq -n \
   --arg host "$HOST_ID" \
@@ -667,6 +674,12 @@ harness_file \
   request \
   "${TMP_DIR}/claim-transfer.json" \
   /dev/null
+harness_file \
+  transferScheduler \
+  "freed-project/freed" \
+  request \
+  "${TMP_DIR}/claim-transfer.json" \
+  /dev/null
 jq -n \
   --arg host "$LINUX_HOST_ID" \
   --arg now "$NOW" \
@@ -858,6 +871,12 @@ harness_file \
   expected \
   "${TMP_DIR}/claim-release.json" \
   /dev/null
+harness_file \
+  releaseScheduler \
+  "freed-project/freed" \
+  expected \
+  "${TMP_DIR}/claim-release.json" \
+  /dev/null
 
 jq '.sequence = 8' "${TMP_DIR}/download-grant-unsigned.json" > "${TMP_DIR}/grant-without-claim-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/grant-without-claim-unsigned.json" \
@@ -886,4 +905,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, Linux and macOS routing used durable quota and heartbeat state, initial execution stayed fenced until signed workspace receipt, claim-bound executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound authority admission dispatched through durable routing, Linux and macOS routing used quota and heartbeat state, initial execution stayed fenced until signed workspace receipt, executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."
