@@ -1,4 +1,8 @@
 import type { AuthorityTask, QualificationReport } from "../domain/types.js";
+import type {
+  ExecutionAdmission,
+  ExecutionAdmissionBinding,
+} from "./execution-admission.js";
 
 export interface AuthorityInspection {
   readonly task?: AuthorityTask;
@@ -6,16 +10,12 @@ export interface AuthorityInspection {
   readonly reason: string;
 }
 
-export interface ExecutionAuthorityLease {
-  readonly actor: string;
-  readonly leaseName: string;
-  readonly token: string;
-  readonly expiresAt: string;
-}
-
 export interface AuthorityBridge {
   readonly id: string;
   inspect(report: QualificationReport): Promise<AuthorityInspection>;
-  acquire(report: QualificationReport, workerId: string): Promise<ExecutionAuthorityLease>;
-  release(lease: ExecutionAuthorityLease): Promise<void>;
+  acquire(input: {
+    readonly binding: ExecutionAdmissionBinding;
+    readonly now: string;
+  }): Promise<ExecutionAdmission>;
+  release(admission: ExecutionAdmission): Promise<void>;
 }

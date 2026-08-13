@@ -1,12 +1,11 @@
-import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import type {
-  AuthorityBridge,
-  AuthorityInspection,
-  ExecutionAuthorityLease,
-} from "../authority.js";
+import type { AuthorityBridge, AuthorityInspection } from "../authority.js";
 import type { CommandRunner } from "../command-runner.js";
 import type { AuthorityTask, QualificationReport } from "../../domain/types.js";
+import type {
+  ExecutionAdmission,
+  ExecutionAdmissionBinding,
+} from "../execution-admission.js";
 
 const freedTaskSchema = z.object({
   taskId: z.string(),
@@ -48,8 +47,6 @@ export interface FreedAuthorityBridgeOptions {
   readonly repositoryRoot: string;
   readonly stateRoot: string;
   readonly nodeExecutable: string;
-  readonly workerActor?: string;
-  readonly workerLeaseName?: string;
 }
 
 export class FreedAuthorityBridge implements AuthorityBridge {
@@ -88,66 +85,19 @@ export class FreedAuthorityBridge implements AuthorityBridge {
   }
 
   async acquire(
-    report: QualificationReport,
-    workerId: string,
-  ): Promise<ExecutionAuthorityLease> {
-    const actor = this.options.workerActor;
-    const leaseName = this.options.workerLeaseName;
-    if (actor === undefined || leaseName === undefined) {
-      throw new Error(
-        "Freed worker-specific authority is not provisioned. Do not overload nightly-writer.",
-      );
-    }
-    if (!report.eligible) {
-      throw new Error("An ineligible issue cannot acquire execution authority.");
-    }
-    const token = randomBytes(32).toString("base64url");
-    const operationId = randomUUID();
-    const output = await this.runner.run({
-      executable: "npm",
-      args: [
-        "run",
-        "--silent",
-        "automation:actors",
-        "--",
-        "acquire",
-        "--actor",
-        actor,
-      ],
-      cwd: this.options.repositoryRoot,
-      env: {
-        ...process.env,
-        FREEDWORKS_WORKER_ID: workerId,
-        FREEDWORKS_ISSUE_NUMBER: String(report.issue.number),
-        FREED_AUTOMATION_LEASE_OPERATION_ID: operationId,
-        FREED_AUTOMATION_LEASE_TOKEN: token,
-      },
-    });
-    const acquired = z
-      .object({ expiresAt: z.iso.datetime() })
-      .passthrough()
-      .parse(JSON.parse(output.stdout));
-    return { actor, leaseName, token, expiresAt: acquired.expiresAt };
+    _input: {
+      readonly binding: ExecutionAdmissionBinding;
+      readonly now: string;
+    },
+  ): Promise<ExecutionAdmission> {
+    throw new Error(
+      "Freed task-scoped execution claims are not implemented. Do not overload nightly-writer or provision worker-specific actors.",
+    );
   }
 
-  async release(lease: ExecutionAuthorityLease): Promise<void> {
-    await this.runner.run({
-      executable: this.options.nodeExecutable,
-      args: [
-        "scripts/automation-control.mjs",
-        "lease",
-        "release",
-        "--state-root",
-        this.options.stateRoot,
-        "--name",
-        lease.leaseName,
-      ],
-      cwd: this.options.repositoryRoot,
-      env: {
-        ...process.env,
-        FREED_AUTOMATION_LEASE_OPERATION_ID: randomUUID(),
-        FREED_AUTOMATION_LEASE_TOKEN: lease.token,
-      },
-    });
+  async release(_admission: ExecutionAdmission): Promise<void> {
+    throw new Error(
+      "Freed task-scoped execution claims are not implemented. No guessed claim may be released.",
+    );
   }
 }

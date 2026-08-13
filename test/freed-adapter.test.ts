@@ -6,7 +6,7 @@ import type {
 } from "../src/adapters/command-runner.js";
 import { FreedAuthorityBridge } from "../src/adapters/freed/authority-bridge.js";
 import { createFreedWorkspace } from "../src/adapters/freed/workspace.js";
-import { report } from "./helpers.js";
+import { authorityTask, claim, report } from "./helpers.js";
 
 class RecordingRunner implements CommandRunner {
   readonly requests: CommandRequest[] = [];
@@ -67,14 +67,26 @@ describe("Freed adapter", () => {
     });
   });
 
-  it("refuses to overload the nightly writer when worker authority is absent", async () => {
+  it("refuses worker leases until the task-scoped claim contract exists", async () => {
     const bridge = new FreedAuthorityBridge(new RecordingRunner(), {
       repositoryRoot: "/repo/freed",
       stateRoot: "/state/freed",
       nodeExecutable: "/node/bin/node",
     });
-    await expect(bridge.acquire(report(), "worker-1")).rejects.toThrow(
-      "Do not overload nightly-writer",
+    await expect(
+      bridge.acquire({
+        binding: {
+          qualification: report(),
+          authorityTask: authorityTask(),
+          claim: claim(),
+          accountId: "codex-pro-1",
+          baseHead: "b".repeat(40),
+          target: "shared",
+        },
+        now: "2026-08-13T18:00:00.000Z",
+      }),
+    ).rejects.toThrow(
+      "Do not overload nightly-writer or provision worker-specific actors",
     );
   });
 
