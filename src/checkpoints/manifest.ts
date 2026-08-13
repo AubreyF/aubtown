@@ -28,7 +28,9 @@ export function createCheckpointManifest(input: CheckpointInput): CustodyCheckpo
     throw new Error(`Checkpoint path is forbidden: ${invalidPath}`);
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    repository: input.claim.repository,
+    issueNumber: input.claim.issueNumber,
     claimId: input.claim.claimId,
     custodyEpoch: input.claim.custodyEpoch,
     sourceHostId: input.claim.hostId,

@@ -93,6 +93,8 @@ The pilot checkpoint implementation uses XChaCha20-Poly1305 with the manifest as
 
 An offline host triggers alerts at 1 hour and 12 hours. At 24 hours, portable work may transfer to an online compatible host. The coordinator durably increments the custody epoch before the destination resumes. A returning stale host is quarantined until it proves it has no current claim.
 
+Remote transfer uses two separate edges. The host edge mints a five-minute, claim-bound capability only after reading current Restate custody. The checkpoint edge owns the storage credential and consumes that capability plus an enrolled-host signature. Executors receive encrypted bytes, not bucket credentials. The checkpoint manifest binds repository and issue identity as well as claim and epoch. Linux persistent storage is the pilot backend, with a content-compatible S3 adapter for later provider migration.
+
 ## Publication
 
 Phase 1 performs no external writes. Phase 2 may update lifecycle labels and one machine-managed status comment after that write path is enabled. Phase 3 may publish a draft pull request. External bodies begin with `(AI Generated).` and a blank line. Automatic merge, release, deployment, issue closure, provider traffic, signing, secrets, and production migrations remain prohibited.

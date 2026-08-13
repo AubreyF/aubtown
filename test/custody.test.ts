@@ -57,7 +57,9 @@ describe("custody", () => {
       claim: active,
       expectedEpoch: 2,
       checkpoint: {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        repository: active.repository,
+        issueNumber: active.issueNumber,
         claimId: active.claimId,
         custodyEpoch: 0,
         sourceHostId: active.hostId,
@@ -70,6 +72,29 @@ describe("custody", () => {
       },
     });
     expect(result).toEqual({ valid: false, reason: "checkpoint-epoch-mismatch" });
+  });
+
+  it("rejects a checkpoint captured by another source host", () => {
+    const active = claim();
+    const result = validateCheckpointForResume({
+      claim: active,
+      expectedEpoch: 2,
+      checkpoint: {
+        schemaVersion: 2,
+        repository: active.repository,
+        issueNumber: active.issueNumber,
+        claimId: active.claimId,
+        custodyEpoch: active.custodyEpoch,
+        sourceHostId: "another-host",
+        repositoryHead: "a".repeat(40),
+        baseHead: "b".repeat(40),
+        patchDigest: "c".repeat(64),
+        includedUntrackedPaths: [],
+        validationReceipts: [],
+        createdAt: "2026-08-13T08:00:00.000Z",
+      },
+    });
+    expect(result.reason).toBe("checkpoint-source-host-mismatch");
   });
 
   it.each([

@@ -193,7 +193,9 @@ jq -n \
     ],
     requiredLane: "linux",
     checkpoint: {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      repository: $fixture[0].claim.repository,
+      issueNumber: $fixture[0].claim.issueNumber,
       claimId: $fixture[0].claim.claimId,
       custodyEpoch: $fixture[0].claim.custodyEpoch,
       sourceHostId: $fixture[0].claim.hostId,

@@ -89,14 +89,28 @@ export function validateCheckpointForResume(input: {
   readonly claim: DispatchClaim;
   readonly expectedEpoch: number;
 }): { readonly valid: boolean; readonly reason: string } {
+  if (input.checkpoint.schemaVersion !== 2) {
+    return { valid: false, reason: "checkpoint-schema-unsupported" };
+  }
   if (input.checkpoint.claimId !== input.claim.claimId) {
     return { valid: false, reason: "checkpoint-claim-mismatch" };
+  }
+  if (
+    input.checkpoint.repository.owner !== input.claim.repository.owner ||
+    input.checkpoint.repository.name !== input.claim.repository.name ||
+    input.checkpoint.repository.defaultBranch !== input.claim.repository.defaultBranch ||
+    input.checkpoint.issueNumber !== input.claim.issueNumber
+  ) {
+    return { valid: false, reason: "checkpoint-repository-mismatch" };
   }
   if (input.expectedEpoch !== input.claim.custodyEpoch + 1) {
     return { valid: false, reason: "custody-epoch-not-advanced" };
   }
   if (input.checkpoint.custodyEpoch !== input.claim.custodyEpoch) {
     return { valid: false, reason: "checkpoint-epoch-mismatch" };
+  }
+  if (input.checkpoint.sourceHostId !== input.claim.hostId) {
+    return { valid: false, reason: "checkpoint-source-host-mismatch" };
   }
   if (!/^[0-9a-f]{64}$/u.test(input.checkpoint.patchDigest)) {
     return { valid: false, reason: "checkpoint-digest-invalid" };

@@ -40,6 +40,9 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Host message is forged or changed | Per-host Ed25519 signature over canonical identity, sequence, kind, time, and payload |
 | Accepted host message is replayed | Restate idempotency plus a durable monotonic sequence checked before state mutation |
 | Host key silently broadens authority | Enrollment fixes the host lane and allowed execution account IDs |
+| Executor receives object-store credentials | Separate checkpoint edge owns storage and accepts only five-minute claim-bound grants |
+| Stale host substitutes checkpoint content | Content address, schema 2 manifest identity, custody epoch, exact byte length, and host request proof must all match |
+| Grant is stolen or replayed | Grant binds one host and operation, requires that host's signature, and expires after five minutes; upload replay is idempotent and download remains encrypted |
 
 ## Fail-closed invariants
 

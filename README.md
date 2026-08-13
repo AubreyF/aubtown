@@ -46,5 +46,6 @@ Use a short-lived Coordinator App installation token in deployment. The token st
 - `src/supervision`: host-side quota and worker lifecycle monitors
 - `src/security`: host identity, signed envelopes, and durable replay sequences
 - `src/gateway`: the narrow remote-host edge in front of loopback-only Restate ingress
+- `src/checkpoints`: encrypted Git custody, shared storage adapters, transfer grants, and host proofs
 - `src/projection`: deterministic lifecycle label and single-comment plans
 - `docs`: architecture, threat model, deployment, and phase gates

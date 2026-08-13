@@ -7,7 +7,13 @@ export const MAX_STORED_CHECKPOINT_BYTES = 512 * 1024 * 1024;
 export const CHECKPOINT_REFERENCE_PATTERN = /^[0-9a-f]{64}$/u;
 
 const manifestSchema: z.ZodType<CustodyCheckpoint> = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
+  repository: z.object({
+    owner: z.string().min(1),
+    name: z.string().min(1),
+    defaultBranch: z.string().min(1),
+  }),
+  issueNumber: z.number().int().positive(),
   claimId: z.string().min(1),
   custodyEpoch: z.number().int().positive(),
   sourceHostId: z.string().min(1),

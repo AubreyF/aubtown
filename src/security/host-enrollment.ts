@@ -40,15 +40,19 @@ export async function loadHostEnrollments(environment: NodeJS.ProcessEnv): Promi
 }
 
 export async function loadHostPrivateKey(file: string): Promise<string> {
+  return await loadPrivateKeyPem(file, "Host private key");
+}
+
+export async function loadPrivateKeyPem(file: string, purpose: string): Promise<string> {
   if (!file.startsWith("/")) {
-    throw new Error("Host private key path must be absolute.");
+    throw new Error(`${purpose} path must be absolute.`);
   }
   const stats = await lstat(file);
   if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 64 * 1_024) {
-    throw new Error("Host private key must be a small physical file.");
+    throw new Error(`${purpose} must be a small physical file.`);
   }
   if ((stats.mode & 0o077) !== 0) {
-    throw new Error("Host private key cannot be readable or writable by group or other users.");
+    throw new Error(`${purpose} cannot be readable or writable by group or other users.`);
   }
   return await readFile(file, "utf8");
 }

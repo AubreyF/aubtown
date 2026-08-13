@@ -23,7 +23,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Prove quota interruption, custody fencing, and conflict locking.
 - [x] Encrypt, store, transfer, and restore unpublished checkpoint work.
 - [x] Add a vendor-neutral S3-compatible shared checkpoint adapter with content-address and recoverable-retirement checks.
-- [ ] Gate remote checkpoint access through short-lived, claim-bound transfer grants.
+- [x] Gate remote checkpoint access through short-lived, claim-bound transfer grants and enrolled-host request proofs.
 - [x] Prove durable host liveness and 24 hour automatic custody transfer.
 - [x] Prove startup reconciliation against canonical task, issue, branch, and worktree state.
 - [x] Enforce exact-head draft publication planning and scoped GitHub App token minting.
@@ -31,6 +31,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Authenticate Linux and macOS host telemetry with per-host Ed25519 identities and durable replay fencing.
 - [x] Keep general Restate ingress loopback-only and expose only the narrow signed host edge to remote executors.
 - [x] Prove tamper rejection, private internal objects, replay rejection, and replay persistence across a full restart.
+- [x] Prove Mac-to-Linux encrypted checkpoint transfer, persistent restart recovery, and post-release grant denial.
 
 ## Phase 3: one Freed issue
 

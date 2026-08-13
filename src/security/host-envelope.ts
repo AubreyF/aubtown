@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { HostHeartbeat } from "../orchestration/host-registry.js";
 import type { RawAccountUsageObservation } from "../domain/types.js";
 import { canonicalJson } from "./canonical-json.js";
+import { checkpointGrantRequestSchema } from "../checkpoints/grant.js";
 
 const HOST_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
@@ -50,6 +51,14 @@ const unsignedEnvelopeSchema = z.discriminatedUnion("kind", [
     payload: z.object({
       observation: usageObservationSchema,
     }),
+  }),
+  z.object({
+    schemaVersion: z.literal(1),
+    hostId: z.string().regex(HOST_ID),
+    sequence: z.number().int().positive().safe(),
+    issuedAt: z.iso.datetime(),
+    kind: z.literal("checkpoint-grant"),
+    payload: checkpointGrantRequestSchema,
   }),
 ]);
 

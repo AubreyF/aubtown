@@ -9,6 +9,12 @@ import {
 } from "../security/host-envelope.js";
 import { accountGovernor } from "./account-governor.js";
 import { hostRegistry } from "./host-registry.js";
+import {
+  assertCheckpointRequestAuthority,
+  CheckpointGrantIssuer,
+  type SignedCheckpointGrant,
+} from "../checkpoints/grant.js";
+import { claimRegistry } from "./claim-registry.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -32,13 +38,23 @@ export type HostGatewayReceipt =
       readonly sequence: number;
       readonly acceptedAt: string;
       readonly decision: QuotaDecision;
+    }
+  | {
+      readonly kind: "checkpoint-grant";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly grant: SignedCheckpointGrant;
     };
 
 function terminal(message: string, errorCode = 403): never {
   throw new restate.TerminalError(message, { errorCode });
 }
 
-export function createHostGateway(enrollments: HostEnrollments) {
+export function createHostGateway(
+  enrollments: HostEnrollments,
+  checkpointGrantIssuer: CheckpointGrantIssuer | undefined = undefined,
+) {
   return restate.object({
     name: "HostGateway",
     handlers: {
@@ -111,7 +127,7 @@ export function createHostGateway(enrollments: HostEnrollments) {
               acceptedAt,
               host,
             };
-          } else {
+          } else if (envelope.kind === "quota-observation") {
             const hostObservation = envelope.payload.observation;
             if (!enrollment.accountIds.includes(hostObservation.accountId)) {
               return terminal("Quota observation account is outside host enrollment");
@@ -126,6 +142,47 @@ export function createHostGateway(enrollments: HostEnrollments) {
               sequence: envelope.sequence,
               acceptedAt,
               decision,
+            };
+          } else {
+            if (checkpointGrantIssuer === undefined) {
+              return terminal("Checkpoint transfer grants are not configured", 503);
+            }
+            const request = envelope.payload;
+            const claimKey = `${request.repository.owner}/${request.repository.name}#${request.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+            const currentClaim = await ctx.objectClient(claimRegistry, claimKey).read();
+            if (currentClaim === null) {
+              return terminal("Checkpoint transfer request has no active claim", 409);
+            }
+            try {
+              assertCheckpointRequestAuthority({
+                currentClaim,
+                requestingHostId: envelope.hostId,
+                request,
+              });
+            } catch (error) {
+              return terminal(
+                error instanceof Error ? error.message : "Checkpoint transfer request is invalid",
+                409,
+              );
+            }
+            const grant: SignedCheckpointGrant = await ctx.run(
+              "issue-checkpoint-transfer-grant",
+              () =>
+                Promise.resolve(
+                  checkpointGrantIssuer.issue({
+                    currentClaim,
+                    requestingHostId: envelope.hostId,
+                    request,
+                    issuedAt: acceptedAt,
+                  }),
+                ),
+            );
+            receipt = {
+              kind: "checkpoint-grant",
+              hostId: envelope.hostId,
+              sequence: envelope.sequence,
+              acceptedAt,
+              grant,
             };
           }
           ctx.set("lastSequence", envelope.sequence);

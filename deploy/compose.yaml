@@ -34,5 +34,35 @@ services:
     ports:
       - "127.0.0.1:8090:8090"
 
+  checkpoint-data-init:
+    profiles: ["checkpoint-transfer"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    user: "0:0"
+    command: ["sh", "-c", "chown 1000:1000 /checkpoint-data && chmod 700 /checkpoint-data"]
+    restart: "no"
+    volumes:
+      - checkpoint-data:/checkpoint-data
+
+  checkpoint-edge:
+    profiles: ["checkpoint-transfer"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["node", "dist/checkpoint-edge.js"]
+    environment:
+      - PORT=8091
+      - FREEDWORKS_CHECKPOINT_STORE_ROOT=/checkpoint-data
+    restart: unless-stopped
+    depends_on:
+      checkpoint-data-init:
+        condition: service_completed_successfully
+    volumes:
+      - checkpoint-data:/checkpoint-data
+    ports:
+      - "127.0.0.1:8091:8091"
+
 volumes:
   restate-data:
+  checkpoint-data:

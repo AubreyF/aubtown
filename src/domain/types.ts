@@ -165,7 +165,9 @@ export interface ExecutionAccount {
 }
 
 export interface CustodyCheckpoint {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
+  readonly repository: RepositoryRef;
+  readonly issueNumber: number;
   readonly claimId: string;
   readonly custodyEpoch: number;
   readonly sourceHostId: string;

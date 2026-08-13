@@ -9,14 +9,22 @@ import { hostRegistry } from "./orchestration/host-registry.js";
 import { custodyTransferWorkflow } from "./orchestration/custody-transfer-workflow.js";
 import { reconciliationWorkflow } from "./orchestration/reconciliation-workflow.js";
 import { createHostGateway } from "./orchestration/host-gateway.js";
-import { loadHostEnrollments } from "./security/host-enrollment.js";
+import { loadHostEnrollments, loadPrivateKeyPem } from "./security/host-enrollment.js";
+import { CheckpointGrantIssuer } from "./checkpoints/grant.js";
 
 const identityKeys = (process.env.FREEDWORKS_RESTATE_IDENTITY_KEYS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
 const hostEnrollments = await loadHostEnrollments(process.env);
-const hostGateway = createHostGateway(hostEnrollments);
+const checkpointGrantKeyFile = process.env.FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE?.trim();
+const checkpointGrantIssuer =
+  checkpointGrantKeyFile === undefined || checkpointGrantKeyFile.length === 0
+    ? undefined
+    : new CheckpointGrantIssuer(
+        await loadPrivateKeyPem(checkpointGrantKeyFile, "Checkpoint grant private key"),
+      );
+const hostGateway = createHostGateway(hostEnrollments, checkpointGrantIssuer);
 
 const port = await restate.serve({
   services: [

@@ -14,6 +14,8 @@ describe("checkpoint manifest", () => {
       createdAt: "2026-08-13T08:00:00.000Z",
     });
     expect(manifest.patchDigest).toMatch(/^[0-9a-f]{64}$/u);
+    expect(manifest.repository).toEqual(claim().repository);
+    expect(manifest.issueNumber).toBe(claim().issueNumber);
     expect(manifest.includedUntrackedPaths).toEqual(["docs/note.md", "src/new.ts"]);
     expect(manifest.validationReceipts).toEqual(["tests:pass", "typecheck:pass"]);
   });

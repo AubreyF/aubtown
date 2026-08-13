@@ -8,9 +8,9 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/freedworks/current
 EnvironmentFile=/etc/freedworks/control-plane.env
-ExecStart=/usr/bin/docker compose -f deploy/compose.yaml -f deploy/compose.production.yaml up -d --remove-orphans
-ExecReload=/usr/bin/docker compose -f deploy/compose.yaml -f deploy/compose.production.yaml up -d --remove-orphans
-ExecStop=/usr/bin/docker compose -f deploy/compose.yaml -f deploy/compose.production.yaml stop
+ExecStart=/usr/bin/docker compose -f deploy/compose.yaml -f deploy/compose.production.yaml --profile checkpoint-transfer up -d --remove-orphans
+ExecReload=/usr/bin/docker compose -f deploy/compose.yaml -f deploy/compose.production.yaml --profile checkpoint-transfer up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f deploy/compose.yaml -f deploy/compose.production.yaml --profile checkpoint-transfer stop
 TimeoutStartSec=180
 TimeoutStopSec=90
 

@@ -12,6 +12,11 @@ import {
 import type { SequenceSource } from "../security/sequence-store.js";
 import type { DurableUsageGovernor } from "../supervision/quota-monitor.js";
 import { z } from "zod";
+import {
+  checkpointGrantRequestSchema,
+  type CheckpointGrantRequest,
+  type SignedCheckpointGrant,
+} from "../checkpoints/grant.js";
 
 const quotaDecisionSchema = z.object({
   action: z.enum(["admit", "throttle", "stop-admission", "interrupt"]),
@@ -49,6 +54,22 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
     sequence: z.number().int().positive().safe(),
     acceptedAt: z.iso.datetime(),
     decision: quotaDecisionSchema,
+  }),
+  z.object({
+    kind: z.literal("checkpoint-grant"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    grant: z.intersection(
+      checkpointGrantRequestSchema.extend({
+        schemaVersion: z.literal(1),
+        hostId: z.string().min(1),
+        issuedAt: z.iso.datetime(),
+        expiresAt: z.iso.datetime(),
+        nonce: z.uuid(),
+      }),
+      z.object({ signatureBase64: z.string().min(1) }),
+    ),
   }),
 ]);
 
@@ -93,6 +114,23 @@ export class HostGatewayClient implements DurableUsageGovernor {
       throw new Error("Host gateway returned the wrong receipt kind.");
     }
     return receipt.decision;
+  }
+
+  async requestCheckpointGrant(
+    request: CheckpointGrantRequest,
+  ): Promise<SignedCheckpointGrant> {
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "checkpoint-grant",
+      payload: checkpointGrantRequestSchema.parse(request),
+    });
+    if (receipt.kind !== "checkpoint-grant") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    return receipt.grant;
   }
 
   async #submit(unsigned: UnsignedHostEnvelope): Promise<HostGatewayReceipt> {

@@ -130,6 +130,10 @@ export class GitCustodyCheckpointService {
       throw new Error("Checkpoint reference was not found.");
     }
     if (
+      encrypted.manifest.repository.owner !== input.claim.repository.owner ||
+      encrypted.manifest.repository.name !== input.claim.repository.name ||
+      encrypted.manifest.repository.defaultBranch !== input.claim.repository.defaultBranch ||
+      encrypted.manifest.issueNumber !== input.claim.issueNumber ||
       encrypted.manifest.claimId !== input.claim.claimId ||
       encrypted.manifest.custodyEpoch + 1 !== input.claim.custodyEpoch
     ) {
