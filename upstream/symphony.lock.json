@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/openai/symphony.git",
+  "production": {
+    "commit": "8001b52e3062495a16e520e4ceaf8f9de868c4d0",
+    "sourceArchive": "https://github.com/openai/symphony/archive/8001b52e3062495a16e520e4ceaf8f9de868c4d0.tar.gz",
+    "sourceSha256": "1aa4fa1007ae90e48fd392bf352f9754858aa60453a287a02968e75e294787fd"
+  },
+  "tracking": {
+    "ref": "refs/heads/main"
+  },
+  "releaseBaseline": {
+    "tag": "v0.0.2",
+    "commit": "653f8b3cc476db03420479ba6f95b2ed7281c401",
+    "publishedAt": "2026-07-24T15:01:31Z"
+  },
+  "runtime": {
+    "elixir": "1.19.5-otp-28",
+    "erlang": "28",
+    "license": "Apache-2.0"
+  },
+  "reviewedCapabilities": [
+    "github-issues-adapter",
+    "host-side-github-api",
+    "required-labels",
+    "bounded-concurrency",
+    "codex-app-server",
+    "per-issue-workspaces",
+    "ssh-workers",
+    "json-api",
+    "liveview-dashboard",
+    "tracker-token-environment-scrubbing"
+  ],
+  "knownGaps": [
+    "blocked-and-retry-state-is-memory-only",
+    "worker-host-selection-is-load-based-not-lane-aware",
+    "configured-ssh-workers-replace-local-execution-instead-of-forming-one-mixed-pool",
+    "freed-worktrees-require-a-custom-workspace-creation-hook",
+    "rolling-week-subscription-governance-requires-aubtown-policy"
+  ]
+}

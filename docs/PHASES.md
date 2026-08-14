@@ -19,6 +19,10 @@ Status: Phase 1 complete. Phase 2 is being simplified around GitHub-native dispa
 
 ## Phase 2: durable dry run
 
+- [x] Select Symphony as the upstream scheduler and execution runtime instead of maintaining a duplicate scheduler.
+- [x] Record separate immutable production and floating upstream-tracking channels.
+- [x] Pin the first production candidate after its GitHub credential-scrubbing correction.
+- [x] Audit upstream Linux and macOS SSH worker behavior and record the missing capability-aware routing contract.
 - [x] Prove deterministic dispatcher election from immutable, signed GitHub claim comments.
 - [x] Elect the lowest valid GitHub comment ID after a 30 second collection window.
 - [x] Reject spoofed, tampered, unenrolled, cross-issue, and stale replayed claims.
