@@ -626,6 +626,13 @@ jq -e \
   '.stage == "completed" and .checkpointReference == $reference' \
   "${TMP_DIR}/executor-command-finished.json" \
   >/dev/null
+harness_key readHandoff "$CHECKPOINT_REFERENCE" "${TMP_DIR}/executor-handoff.json"
+jq -e \
+  --arg reference "$CHECKPOINT_REFERENCE" \
+  --arg commandId "$COMMAND_ID" \
+  '.stage == "awaiting-validation" and .workProduct.checkpointReference == $reference and .workProduct.commandId == $commandId and .workProduct.implementation.driverId == "codex-app-server-v1"' \
+  "${TMP_DIR}/executor-handoff.json" \
+  >/dev/null
 jq '.sequence = 12' "${TMP_DIR}/executor-reconcile-unsigned.json" > "${TMP_DIR}/executor-reconcile-terminal-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-reconcile-terminal-unsigned.json" \
   > "${TMP_DIR}/executor-reconcile-terminal.json"
@@ -937,4 +944,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound authority admission dispatched through durable routing, Linux and macOS routing used quota and heartbeat state, initial execution stayed fenced until signed workspace receipt, executor lifecycle completed, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound authority admission dispatched through durable routing, Linux and macOS routing used quota and heartbeat state, initial execution stayed fenced until signed workspace receipt, executor lifecycle completed into one durable work-product handoff, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."

@@ -51,6 +51,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Bind the route-selected worker driver through authority admission, executor command, new execution, and restart recovery.
 - [x] Atomically convert a verified, claim-bound authority admission into scheduler, claim, workspace, and executor records.
 - [x] Bind validation and independent-review receipts to the complete authenticated work-product identity.
+- [x] Materialize the exact checkpoint-backed work product durably as part of accepting a successful terminal executor receipt.
 - [x] Execute reviewed no-shell validation recipes and prove complete Git state is unchanged after every command.
 - [x] Run structured independent review in a fresh read-only, network-disabled Codex thread.
 - [x] Persist one immutable checkpoint-keyed validation and review handoff through Restate.

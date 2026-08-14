@@ -36,6 +36,8 @@ import type {
   InitialWorkspaceRequirement,
   InitialWorkspaceState,
 } from "../execution/workspace.js";
+import { createWorkProductIdentity } from "../adjudication/receipts.js";
+import { handoffRegistry } from "./handoff-registry.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -885,6 +887,9 @@ export function createHostGateway(
                 409,
               );
             }
+            let authenticatedCheckpoint:
+              | SignedCheckpointStorageReceipt
+              | undefined;
             if (reported.stage !== "started") {
               const checkpoint = await ctx
                 .objectClient(checkpointCatalog, reported.checkpointReference)
@@ -914,11 +919,42 @@ export function createHostGateway(
                   409,
                 );
               }
+              authenticatedCheckpoint = checkpoint;
             }
             const recorded = await registry.record({
               receipt: { ...reported, observedAt: acceptedAt },
               acceptedAt,
             });
+            if (recorded.stage === "completed") {
+              if (
+                authenticatedCheckpoint === undefined ||
+                recorded.checkpointReference === undefined ||
+                recorded.threadId === undefined ||
+                recorded.turnId === undefined
+              ) {
+                return terminal(
+                  "Completed executor receipt cannot initialize its durable handoff",
+                  409,
+                );
+              }
+              const workProduct = createWorkProductIdentity({
+                command,
+                checkpointReference: recorded.checkpointReference,
+                checkpoint: authenticatedCheckpoint.manifest,
+                implementation: {
+                  driverId: command.driverId,
+                  threadId: recorded.threadId,
+                  turnId: recorded.turnId,
+                  startedAt: recorded.offeredAt ?? command.issuedAt,
+                },
+              });
+              await ctx
+                .objectClient(
+                  handoffRegistry,
+                  workProduct.checkpointReference,
+                )
+                .initialize(workProduct);
+            }
             receipt = {
               kind: "executor-receipt",
               hostId: envelope.hostId,
