@@ -18,6 +18,7 @@ import { createRoutePlanner, routePlannerApi } from "./route-planner.js";
 import { admittedDispatchWorkflow } from "./admitted-dispatch-workflow.js";
 import { handoffRegistry } from "./handoff-registry.js";
 import { publicationRegistry } from "./publication-registry.js";
+import { adjudicationCommandRegistry } from "./adjudication-command-registry.js";
 
 export function controlPlaneServices(
   hostGateway: ReturnType<typeof createHostGateway>,
@@ -26,6 +27,7 @@ export function controlPlaneServices(
 ): ServeOptions["services"] {
   return [
     accountGovernor,
+    adjudicationCommandRegistry,
     admittedDispatchWorkflow,
     claimRegistry,
     dryRunWorkflow,

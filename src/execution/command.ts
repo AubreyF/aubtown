@@ -24,7 +24,7 @@ const claimSchema: z.ZodType<DispatchClaim> = z.object({
   claimedAt: z.iso.datetime(),
 });
 
-const qualificationSchema: z.ZodType<QualificationReport> = z.object({
+export const qualificationReportSchema: z.ZodType<QualificationReport> = z.object({
   repository: repositorySchema,
   issue: z.object({
     number: z.number().int().positive(),
@@ -89,7 +89,7 @@ export const executorStartCommandSchema = z.object({
   commandId: z.uuid(),
   action: z.literal("start"),
   claim: claimSchema,
-  qualification: qualificationSchema,
+  qualification: qualificationReportSchema,
   authorityTaskId: z.string().min(1),
   accountId: z.string().min(1),
   driverId: z.string().min(1),

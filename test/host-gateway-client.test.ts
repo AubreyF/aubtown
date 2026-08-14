@@ -511,4 +511,44 @@ describe("HostGatewayClient", () => {
       expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
     }
   });
+
+  it("polls for a quota-gated adjudication action", async () => {
+    const keys = keyPair();
+    let request: RequestInit | undefined;
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080",
+      "linux-control-1",
+      keys.privateKey,
+      { next: async () => 23 },
+      async (_input, init) => {
+        request = init;
+        return Response.json({
+          kind: "adjudication-poll",
+          hostId: "linux-control-1",
+          sequence: 23,
+          acceptedAt: "2026-08-13T18:00:04.000Z",
+          command: null,
+          action: null,
+          reason: "no-command",
+        });
+      },
+      () => new Date("2026-08-13T18:00:04.000Z"),
+    );
+
+    await expect(
+      client.pollAdjudication(
+        "codex-pro-1",
+        "codex-app-server-review-v1",
+      ),
+    ).resolves.toMatchObject({ reason: "no-command" });
+    const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
+    expect(envelope).toMatchObject({
+      kind: "adjudication-poll",
+      payload: {
+        accountId: "codex-pro-1",
+        reviewerDriverId: "codex-app-server-review-v1",
+      },
+    });
+    expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+  });
 });

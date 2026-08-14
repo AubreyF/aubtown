@@ -42,6 +42,8 @@ import {
 } from "../adjudication/receipts.js";
 import { handoffRegistry } from "./handoff-registry.js";
 import { canonicalJsonEqual } from "../security/canonical-json.js";
+import { adjudicationCommandRegistry } from "./adjudication-command-registry.js";
+import type { AdjudicationCommand } from "../adjudication/command.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -170,6 +172,21 @@ export type HostGatewayReceipt =
       readonly acceptedAt: string;
       readonly checkpointReference: string;
       readonly stage: "ready" | "blocked";
+    }
+  | {
+      readonly kind: "adjudication-poll";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly command: AdjudicationCommand | null;
+      readonly action: "validate" | "review" | null;
+      readonly reason:
+        | "offered"
+        | "no-command"
+        | "command-terminal"
+        | "claim-stale"
+        | "quota-unavailable"
+        | "quota-blocked";
     };
 
 function terminal(message: string, errorCode = 403): never {
@@ -893,6 +910,111 @@ export function createHostGateway(
                 }
               }
             }
+          } else if (envelope.kind === "adjudication-poll") {
+            const { accountId, reviewerDriverId } = envelope.payload;
+            const empty = (
+              reason:
+                | "no-command"
+                | "command-terminal"
+                | "claim-stale"
+                | "quota-unavailable"
+                | "quota-blocked",
+            ): HostGatewayReceipt => ({
+              kind: "adjudication-poll",
+              hostId: envelope.hostId,
+              sequence: envelope.sequence,
+              acceptedAt,
+              command: null,
+              action: null,
+              reason,
+            });
+            if (!enrollment.accountIds.includes(accountId)) {
+              return terminal(
+                "Adjudication poll account is outside host enrollment",
+              );
+            }
+            const account = await ctx
+              .objectClient(accountGovernor, accountId)
+              .status();
+            if (account.snapshot === null) {
+              receipt = empty("quota-unavailable");
+            } else {
+              const decision = decideQuota({
+                snapshot: account.snapshot,
+                now: acceptedAt,
+              });
+              if (
+                decision.action !== "admit" &&
+                decision.action !== "throttle"
+              ) {
+                receipt = empty("quota-blocked");
+              } else {
+                const registry = ctx.objectClient(
+                  adjudicationCommandRegistry,
+                  envelope.hostId,
+                );
+                const state = await registry.read();
+                if (state === null) {
+                  receipt = empty("no-command");
+                } else if (state.stage !== "active") {
+                  receipt = empty("command-terminal");
+                } else {
+                  const command = state.command;
+                  const product = command.workProduct;
+                  const claimKey = `${product.repository.owner}/${product.repository.name}#${product.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+                  const currentClaim = await ctx
+                    .objectClient(claimRegistry, claimKey)
+                    .read();
+                  const currentHandoff = await ctx
+                    .objectClient(
+                      handoffRegistry,
+                      product.checkpointReference,
+                    )
+                    .read();
+                  if (
+                    command.accountId !== accountId ||
+                    command.reviewerDriverId !== reviewerDriverId ||
+                    currentClaim === null ||
+                    !workProductMatchesClaim(
+                      product,
+                      currentClaim,
+                      envelope.hostId,
+                    ) ||
+                    currentHandoff === null ||
+                    !canonicalJsonEqual(
+                      currentHandoff.workProduct,
+                      product,
+                    )
+                  ) {
+                    receipt = empty("claim-stale");
+                  } else if (
+                    currentHandoff.stage === "ready" ||
+                    currentHandoff.stage === "blocked"
+                  ) {
+                    await registry.finish({
+                      commandId: command.commandId,
+                      checkpointReference: product.checkpointReference,
+                      stage: currentHandoff.stage,
+                      finishedAt: acceptedAt,
+                    });
+                    receipt = empty("command-terminal");
+                  } else {
+                    receipt = {
+                      kind: "adjudication-poll",
+                      hostId: envelope.hostId,
+                      sequence: envelope.sequence,
+                      acceptedAt,
+                      command,
+                      action:
+                        currentHandoff.stage === "awaiting-validation"
+                          ? "validate"
+                          : "review",
+                      reason: "offered",
+                    };
+                  }
+                }
+              }
+            }
           } else if (
             envelope.kind === "validation-receipt" ||
             envelope.kind === "review-receipt"
@@ -923,9 +1045,18 @@ export function createHostGateway(
               product.checkpointReference,
             );
             const current = await handoff.read();
+            const adjudication = await ctx
+              .objectClient(adjudicationCommandRegistry, envelope.hostId)
+              .read();
             if (
               current === null ||
-              !canonicalJsonEqual(current.workProduct, product)
+              !canonicalJsonEqual(current.workProduct, product) ||
+              adjudication === null ||
+              adjudication.stage !== "active" ||
+              !canonicalJsonEqual(
+                adjudication.command.workProduct,
+                product,
+              )
             ) {
               return terminal(
                 "Adjudication receipt does not match its durable handoff",
@@ -934,6 +1065,16 @@ export function createHostGateway(
             }
             if (envelope.kind === "validation-receipt") {
               const recorded = await handoff.recordValidation(envelope.payload);
+              if (recorded.stage === "blocked") {
+                await ctx
+                  .objectClient(adjudicationCommandRegistry, envelope.hostId)
+                  .finish({
+                    commandId: adjudication.command.commandId,
+                    checkpointReference: product.checkpointReference,
+                    stage: "blocked",
+                    finishedAt: acceptedAt,
+                  });
+              }
               receipt = {
                 kind: "validation-receipt",
                 hostId: envelope.hostId,
@@ -947,6 +1088,14 @@ export function createHostGateway(
               };
             } else {
               const recorded = await handoff.recordReview(envelope.payload);
+              await ctx
+                .objectClient(adjudicationCommandRegistry, envelope.hostId)
+                .finish({
+                  commandId: adjudication.command.commandId,
+                  checkpointReference: product.checkpointReference,
+                  stage: recorded.stage as "ready" | "blocked",
+                  finishedAt: acceptedAt,
+                });
               receipt = {
                 kind: "review-receipt",
                 hostId: envelope.hostId,

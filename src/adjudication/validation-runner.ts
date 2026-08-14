@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, realpath } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { spawn } from "node:child_process";
+import { z } from "zod";
 import type { GitCustodyCheckpointService } from "../checkpoints/git-custody.js";
 import { canonicalJson } from "../security/canonical-json.js";
 import {
@@ -17,6 +18,12 @@ export interface ValidationCommand {
   readonly args: readonly string[];
   readonly timeoutMs: number;
 }
+
+export const validationCommandSchema: z.ZodType<ValidationCommand> = z.object({
+  executable: z.string().startsWith("/"),
+  args: z.array(z.string().max(32 * 1_024)).max(256),
+  timeoutMs: z.number().int().min(1).max(60 * 60 * 1_000),
+});
 
 export interface ValidationProcessResult {
   readonly executable: string;

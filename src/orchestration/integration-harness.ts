@@ -54,6 +54,8 @@ import type {
 import { publicationRegistry } from "./publication-registry.js";
 import type { PublicationPlan } from "../publication/policy.js";
 import type { DraftPublicationReceipt } from "../publication/draft-publisher.js";
+import { adjudicationCommandRegistry } from "./adjudication-command-registry.js";
+import type { AdjudicationCommand } from "../adjudication/command.js";
 
 interface KeyedInput<T> {
   readonly key: string;
@@ -117,6 +119,10 @@ interface WorkspaceRequirementInput extends KeyOnlyInput {
 
 interface WorkProductInput extends KeyOnlyInput {
   readonly workProduct: WorkProductIdentity;
+}
+
+interface AdjudicationCommandInput extends KeyOnlyInput {
+  readonly command: AdjudicationCommand;
 }
 
 interface ValidationReceiptInput extends KeyOnlyInput {
@@ -210,6 +216,18 @@ export const integrationHarness = restate.service({
         .recordReview(request.review),
     readHandoff: async (ctx: restate.Context, request: KeyOnlyInput) =>
       await ctx.objectClient(handoffRegistry, request.key).read(),
+    enqueueAdjudicationCommand: async (
+      ctx: restate.Context,
+      request: AdjudicationCommandInput,
+    ) =>
+      await ctx
+        .objectClient(adjudicationCommandRegistry, request.key)
+        .enqueue(request.command),
+    readAdjudicationCommand: async (
+      ctx: restate.Context,
+      request: KeyOnlyInput,
+    ) =>
+      await ctx.objectClient(adjudicationCommandRegistry, request.key).read(),
     initializePublication: async (
       ctx: restate.Context,
       request: PublicationPlanInput,

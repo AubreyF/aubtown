@@ -142,6 +142,17 @@ const unsignedEnvelopeSchema = z.discriminatedUnion("kind", [
     hostId: z.string().regex(HOST_ID),
     sequence: z.number().int().positive().safe(),
     issuedAt: z.iso.datetime(),
+    kind: z.literal("adjudication-poll"),
+    payload: z.object({
+      accountId: z.string().min(1),
+      reviewerDriverId: z.literal("codex-app-server-review-v1"),
+    }),
+  }),
+  z.object({
+    schemaVersion: z.literal(1),
+    hostId: z.string().regex(HOST_ID),
+    sequence: z.number().int().positive().safe(),
+    issuedAt: z.iso.datetime(),
     kind: z.literal("validation-receipt"),
     payload: exactValidationReceiptSchema,
   }),

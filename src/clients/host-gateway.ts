@@ -44,6 +44,7 @@ import {
   type ExactValidationReceipt,
   type IndependentReviewReceipt,
 } from "../adjudication/receipts.js";
+import { adjudicationCommandSchema } from "../adjudication/command.js";
 
 const quotaDecisionSchema = z.object({
   action: z.enum(["admit", "throttle", "stop-admission", "interrupt"]),
@@ -178,6 +179,22 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
       "claim-stale",
       "workspace-required",
       "restore-required",
+      "quota-unavailable",
+      "quota-blocked",
+    ]),
+  }),
+  z.object({
+    kind: z.literal("adjudication-poll"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    command: adjudicationCommandSchema.nullable(),
+    action: z.enum(["validate", "review"]).nullable(),
+    reason: z.enum([
+      "offered",
+      "no-command",
+      "command-terminal",
+      "claim-stale",
       "quota-unavailable",
       "quota-blocked",
     ]),
@@ -409,6 +426,24 @@ export class HostGatewayClient implements DurableUsageGovernor {
     }
     if (receipt.checkpointReference !== review.workProduct.checkpointReference) {
       throw new Error("Host gateway review receipt changes its work product.");
+    }
+    return receipt;
+  }
+
+  async pollAdjudication(
+    accountId: string,
+    reviewerDriverId: "codex-app-server-review-v1",
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "adjudication-poll" }>> {
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "adjudication-poll",
+      payload: { accountId, reviewerDriverId },
+    });
+    if (receipt.kind !== "adjudication-poll") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
     }
     return receipt;
   }

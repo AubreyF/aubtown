@@ -18,11 +18,13 @@ import { reconciliationWorkflow } from "../src/orchestration/reconciliation-work
 import { schedulerRegistry } from "../src/orchestration/scheduler-registry.js";
 import { createRoutePlanner } from "../src/orchestration/route-planner.js";
 import { handoffRegistry } from "../src/orchestration/handoff-registry.js";
+import { adjudicationCommandRegistry } from "../src/orchestration/adjudication-command-registry.js";
 
 describe("Restate ingress boundary", () => {
   it("keeps every durable internal service private to Restate calls", () => {
     const internalServices = [
       accountGovernor,
+      adjudicationCommandRegistry,
       admittedDispatchWorkflow,
       checkpointCatalog,
       claimRegistry,
