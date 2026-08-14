@@ -13,6 +13,10 @@ import {
   selectedExecutorReadinessReportSchema,
   type SelectedExecutorReadinessReport,
 } from "../execution/executor-readiness.js";
+import {
+  selectedPublisherReadinessReportSchema,
+  type SelectedPublisherReadinessReport,
+} from "../publication/publisher-readiness.js";
 
 const digestPattern = /^[0-9a-f]{64}$/u;
 const commitPattern = /^[0-9a-f]{40}$/u;
@@ -47,6 +51,7 @@ export interface PilotReadinessPaths {
   readonly accountProfilesFile: string;
   readonly hostWorkspaceRootsFile: string;
   readonly executorReadinessFile: string;
+  readonly publisherReadinessFile: string;
 }
 
 const repositorySchema = z.object({
@@ -197,6 +202,7 @@ export async function auditPilotReadiness(input: {
   readonly repository: string;
   readonly issueNumber: number;
   readonly auditedAt: string;
+  readonly publicationEnabled: boolean;
   readonly paths: PilotReadinessPaths;
 }): Promise<PilotReadinessReport> {
   if (
@@ -217,10 +223,12 @@ export async function auditPilotReadiness(input: {
   let planning: z.infer<typeof planningSchema> | undefined;
   let dispatch: z.infer<typeof dispatchSchema> | undefined;
   let executorReadiness: SelectedExecutorReadinessReport | undefined;
+  let publisherReadiness: SelectedPublisherReadinessReport | undefined;
   let workspacePreparerSha256: string | undefined;
   let workspaceCompleterSha256: string | undefined;
   let workspaceCompletionReaderSha256: string | undefined;
   let workspaceAdjudicatorSha256: string | undefined;
+  let draftPublisherSha256: string | undefined;
   let expectedNodeVersion: string | undefined;
   let planningSource: unknown;
   let dispatchSource: unknown;
@@ -302,6 +310,26 @@ export async function auditPilotReadiness(input: {
       assertFresh(executorReadiness.checkedAt, input.auditedAt, 120);
       return `${executorReadiness.hostId}:${executorReadiness.baseHead}:${executorReadiness.transport.configSha256}`;
     }),
+    check("runtime:publisher-readiness", async () => {
+      publisherReadiness = selectedPublisherReadinessReportSchema.parse(
+        await loadProtectedJsonFile({
+          file: input.paths.publisherReadinessFile,
+          label: "Selected publisher readiness",
+          maxBytes: 1024 * 1024,
+        }),
+      );
+      assertFresh(publisherReadiness.checkedAt, input.auditedAt, 120);
+      if (!publisherReadiness.selectedRepositories.includes(input.repository)) {
+        throw new Error("Selected publisher is not enrolled for the pilot repository.");
+      }
+      return `${publisherReadiness.hostId}:${publisherReadiness.publisher.sha256}:${publisherReadiness.transport.configSha256}`;
+    }),
+    check("policy:lifecycle-projection-gate", () => {
+      if (!input.publicationEnabled) {
+        throw new Error("Lifecycle projection and draft publication remain disabled.");
+      }
+      return "owner-selected pilot write gate enabled";
+    }),
     check("runtime:symphony-executable", async () =>
       await physicalFile({
         file: input.paths.symphonyExecutable,
@@ -378,6 +406,19 @@ export async function auditPilotReadiness(input: {
       workspaceAdjudicatorSha256 = sha256(await readFile(file));
       return workspaceAdjudicatorSha256;
     }),
+    check("runtime:draft-publisher-executable", async () => {
+      const file = await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/publish-draft-local.js",
+        ),
+        label: "AubTown draft publisher",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      });
+      draftPublisherSha256 = sha256(await readFile(file));
+      return draftPublisherSha256;
+    }),
     check("runtime:node-version-contract", async () => {
       const file = await physicalFile({
         file: path.join(input.paths.releaseRoot, ".nvmrc"),
@@ -410,6 +451,28 @@ export async function auditPilotReadiness(input: {
           "dist/cli/probe-executor-readiness-local.js",
         ),
         label: "AubTown host-local executor probe",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      }),
+    ),
+    check("runtime:publisher-probe-client-executable", async () =>
+      await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/probe-publisher-readiness.js",
+        ),
+        label: "AubTown publisher probe client",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      }),
+    ),
+    check("runtime:publisher-probe-host-executable", async () =>
+      await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/probe-publisher-readiness-local.js",
+        ),
+        label: "AubTown host-local publisher probe",
         executable: false,
         maxBytes: 2 * 1_024 * 1_024,
       }),
@@ -578,6 +641,36 @@ export async function auditPilotReadiness(input: {
         );
       }
       return `${executorReadiness.hostId}:${executorReadiness.helper.sha256}:${executorReadiness.preparer.sha256}:${executorReadiness.completer.sha256}:${executorReadiness.completionReader.sha256}:${executorReadiness.adjudicator.sha256}`;
+    }),
+    await check("planning:publisher-coherence", () => {
+      if (
+        dispatch === undefined ||
+        dispatch.status !== "ready" ||
+        executorReadiness === undefined ||
+        publisherReadiness === undefined ||
+        draftPublisherSha256 === undefined ||
+        expectedNodeVersion === undefined
+      ) {
+        throw new Error("Dispatch, executor, and publisher readiness are not all available.");
+      }
+      const hostId = dispatch.intention.candidateInput.intendedClaim.hostId;
+      if (
+        publisherReadiness.hostId !== hostId ||
+        executorReadiness.hostId !== hostId ||
+        publisherReadiness.transport.hostId !== `${hostId}-publisher` ||
+        publisherReadiness.transport.user !== "aubtown-publisher" ||
+        publisherReadiness.publisher.sha256 !== draftPublisherSha256 ||
+        publisherReadiness.node.version !== expectedNodeVersion ||
+        !publisherReadiness.selectedRepositories.includes(input.repository) ||
+        !publisherReadiness.worktreeRoots.includes(
+          executorReadiness.worktreeRoot,
+        )
+      ) {
+        throw new Error(
+          "Publisher readiness disagrees with the selected host, dedicated SSH identity, repository, workspace root, entrypoint, or Node version.",
+        );
+      }
+      return `${publisherReadiness.hostId}:${publisherReadiness.runtime.sha256}:${publisherReadiness.publisher.sha256}`;
     }),
   );
 

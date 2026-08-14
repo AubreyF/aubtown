@@ -64,6 +64,11 @@ async function fixture(): Promise<{
     "state",
     "executor-readiness.json",
   );
+  const publisherReadinessFile = path.join(
+    root,
+    "state",
+    "publisher-readiness.json",
+  );
 
   await protectedFile(patchFile, patchBytes.toString("utf8"));
   await protectedFile(path.join(releaseRoot, ".nvmrc"), "24.14.1\n");
@@ -154,6 +159,18 @@ async function fixture(): Promise<{
   );
   await protectedFile(
     path.join(releaseRoot, "dist/cli/probe-executor-readiness-local.js"),
+    "export {};\n",
+  );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/publish-draft-local.js"),
+    "export {};\n",
+  );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/probe-publisher-readiness.js"),
+    "export {};\n",
+  );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/probe-publisher-readiness-local.js"),
     "export {};\n",
   );
 
@@ -321,6 +338,44 @@ async function fixture(): Promise<{
       },
     })}\n`,
   );
+  await protectedFile(
+    publisherReadinessFile,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      hostId: "linux-control-1",
+      checkedAt: "2026-08-13T20:00:15.000Z",
+      ready: true,
+      runtime: {
+        path: "/etc/aubtown/publisher-runtime.json",
+        sha256: "1".repeat(64),
+      },
+      publisher: {
+        path: "/opt/aubtown/releases/test/dist/cli/publish-draft-local.js",
+        sha256: createHash("sha256").update("export {};\n").digest("hex"),
+      },
+      git: { executable: "/usr/bin/git", version: "git version 2.50.1" },
+      node: {
+        executable: "/opt/aubtown/node/bin/node",
+        version: "v24.14.1",
+      },
+      privateKey: {
+        path: "/etc/aubtown/publisher/draft-publisher-private.pem",
+        ownerUid: 997,
+        mode: "0600",
+      },
+      selectedRepositories: ["freed-project/freed"],
+      worktreeRoots: ["/var/lib/aubtown/workspaces"],
+      transport: {
+        hostId: "linux-control-1-publisher",
+        hostname: "linux-control-1.tailnet.example",
+        user: "aubtown-publisher",
+        identityFile: "/etc/aubtown/ssh/publisher_ed25519",
+        knownHostsFile: "/etc/aubtown/ssh/known_hosts",
+        configSha256: "f".repeat(64),
+        sshExecutableSha256: "e".repeat(64),
+      },
+    })}\n`,
+  );
 
   return {
     paths: {
@@ -336,6 +391,7 @@ async function fixture(): Promise<{
       accountProfilesFile,
       hostWorkspaceRootsFile,
       executorReadinessFile,
+      publisherReadinessFile,
     },
     planning,
     dispatch,
@@ -349,11 +405,26 @@ describe("pilot readiness audit", () => {
       repository: "freed-project/freed",
       issueNumber: 1234,
       auditedAt,
+      publicationEnabled: true,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(true);
     expect(report.blockers).toEqual([]);
     expect(report.checks.every((candidate) => candidate.passed)).toBe(true);
+  });
+
+  it("keeps live publication disabled unless the pilot gate is explicit", async () => {
+    const prepared = await fixture();
+    const report = await auditPilotReadiness({
+      repository: "freed-project/freed",
+      issueNumber: 1234,
+      auditedAt,
+      publicationEnabled: false,
+      paths: prepared.paths,
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers).toContain("policy:lifecycle-projection-gate");
   });
 
   it("fails closed for stale planning and an absent authority broker", async () => {
@@ -367,6 +438,7 @@ describe("pilot readiness audit", () => {
       repository: "freed-project/freed",
       issueNumber: 1234,
       auditedAt,
+      publicationEnabled: true,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(false);
@@ -389,6 +461,7 @@ describe("pilot readiness audit", () => {
       repository: "freed-project/freed",
       issueNumber: 1234,
       auditedAt,
+      publicationEnabled: true,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(false);
@@ -406,6 +479,7 @@ describe("pilot readiness audit", () => {
       repository: "freed-project/freed",
       issueNumber: 1234,
       auditedAt,
+      publicationEnabled: true,
       paths: prepared.paths,
     });
 
@@ -433,6 +507,7 @@ describe("pilot readiness audit", () => {
       repository: "freed-project/freed",
       issueNumber: 1234,
       auditedAt,
+      publicationEnabled: true,
       paths: prepared.paths,
     });
 
@@ -453,6 +528,7 @@ describe("pilot readiness audit", () => {
       repository: "freed-project/freed",
       issueNumber: 1234,
       auditedAt,
+      publicationEnabled: true,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(false);

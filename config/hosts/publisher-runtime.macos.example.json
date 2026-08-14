@@ -2,10 +2,15 @@
   "schemaVersion": 1,
   "hostId": "macos-executor-1",
   "gitExecutable": "/usr/bin/git",
+  "nodeExecutable": "/opt/aubtown/node/bin/node",
+  "nodeVersion": "v24.14.1",
   "appId": "replace-with-draft-publisher-app-id",
   "installationId": 1,
   "privateKeyFile": "/Library/Application Support/AubTown/publisher/draft-publisher-private.pem",
   "selectedRepositories": [
     "freed-project/freed"
+  ],
+  "worktreeRoots": [
+    "/Users/aubtown/Library/Application Support/AubTown/workspaces"
   ]
 }

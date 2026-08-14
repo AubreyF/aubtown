@@ -10,6 +10,7 @@ Group=aubtown-symphony
 WorkingDirectory=/var/lib/aubtown/symphony
 EnvironmentFile=/etc/aubtown/symphony.env
 ExecStartPre=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/probe-executor-readiness.js
+ExecStartPre=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/probe-publisher-readiness.js
 ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/audit-pilot-readiness.js
 StateDirectory=aubtown/coordinator
 StateDirectoryMode=0700

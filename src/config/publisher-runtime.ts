@@ -8,10 +8,15 @@ export const publisherRuntimeSchema = z.object({
   schemaVersion: z.literal(1),
   hostId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u),
   gitExecutable: z.string().refine(path.isAbsolute, "must be absolute"),
+  nodeExecutable: z.string().refine(path.isAbsolute, "must be absolute"),
+  nodeVersion: z.string().regex(/^v[0-9]+\.[0-9]+\.[0-9]+$/u),
   appId: z.union([z.string().min(1), z.number().int().positive()]),
   installationId: z.number().int().positive(),
   privateKeyFile: z.string().refine(path.isAbsolute, "must be absolute"),
   selectedRepositories: z.array(repository).min(1),
+  worktreeRoots: z.array(
+    z.string().refine(path.isAbsolute, "must be absolute"),
+  ).min(1),
 }).strict();
 
 export type PublisherRuntime = z.infer<typeof publisherRuntimeSchema>;

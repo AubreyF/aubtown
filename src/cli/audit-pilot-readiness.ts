@@ -20,11 +20,20 @@ function absolute(name: string): string {
   return value;
 }
 
+function enabled(name: string): boolean {
+  const value = required(name);
+  if (value !== "true" && value !== "false") {
+    throw new Error(`${name} must be true or false.`);
+  }
+  return value === "true";
+}
+
 const issueNumber = Number(required("AUBTOWN_PILOT_ISSUE_NUMBER"));
 const report = await auditPilotReadiness({
   repository: required("GITHUB_REPO"),
   issueNumber,
   auditedAt: new Date().toISOString(),
+  publicationEnabled: enabled("AUBTOWN_LIFECYCLE_PROJECTION_ENABLED"),
   paths: {
     releaseRoot: absolute("AUBTOWN_RELEASE_ROOT"),
     symphonyLockFile: absolute("AUBTOWN_SYMPHONY_LOCK_FILE"),
@@ -40,6 +49,7 @@ const report = await auditPilotReadiness({
     accountProfilesFile: absolute("AUBTOWN_ACCOUNT_PROFILES_FILE"),
     hostWorkspaceRootsFile: absolute("AUBTOWN_HOST_WORKSPACE_ROOTS_FILE"),
     executorReadinessFile: absolute("AUBTOWN_EXECUTOR_READINESS_FILE"),
+    publisherReadinessFile: absolute("AUBTOWN_PUBLISHER_READINESS_FILE"),
   },
 });
 const outputFile = absolute("AUBTOWN_PILOT_READINESS_FILE");

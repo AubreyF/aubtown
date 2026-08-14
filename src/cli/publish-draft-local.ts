@@ -35,6 +35,18 @@ if (
 ) {
   throw new Error("Publisher runtime does not own the admitted work product.");
 }
+const worktree = await realpath(plan.workProduct.worktree);
+const allowedRoots = await Promise.all(
+  runtime.worktreeRoots.map(async (root) => await realpath(root)),
+);
+if (
+  !allowedRoots.some((root) => {
+    const relative = path.relative(root, worktree);
+    return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  })
+) {
+  throw new Error("Publisher runtime does not admit this worktree root.");
+}
 const identity = {
   appId: runtime.appId,
   installationId: runtime.installationId,
@@ -52,3 +64,5 @@ const receipt = await new GitHubDraftPublisher(
   new GitHttpsBranchPublisher(runner, runtime.gitExecutable),
 ).publish(plan);
 process.stdout.write(`${JSON.stringify(receipt)}\n`);
+import { realpath } from "node:fs/promises";
+import path from "node:path";

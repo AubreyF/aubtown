@@ -98,11 +98,17 @@ describe("native Linux deployment", () => {
     });
     expect(publisherRuntime).toMatchObject({
       hostId: "linux-control-1",
+      nodeVersion: "v24.14.1",
       selectedRepositories: ["freed-project/freed"],
+      worktreeRoots: ["/var/lib/aubtown/workspaces"],
     });
     expect(macPublisherRuntime).toMatchObject({
       hostId: "macos-executor-1",
+      nodeVersion: "v24.14.1",
       selectedRepositories: ["freed-project/freed"],
+      worktreeRoots: [
+        "/Users/aubtown/Library/Application Support/AubTown/workspaces",
+      ],
     });
     expect(await fixture("package.json")).toContain(
       '"symphony:publish-draft-local"',
@@ -324,6 +330,7 @@ describe("native Linux deployment", () => {
     expect(service).toContain("Type=oneshot");
     expect(service).toContain("dist/cli/audit-pilot-readiness.js");
     expect(service).toContain("dist/cli/probe-executor-readiness.js");
+    expect(service).toContain("dist/cli/probe-publisher-readiness.js");
     expect(service).toContain(
       "Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service",
     );
@@ -336,11 +343,14 @@ describe("native Linux deployment", () => {
     );
     expect(environment).toContain("AUBTOWN_PILOT_READINESS_FILE=");
     expect(environment).toContain("AUBTOWN_EXECUTOR_READINESS_FILE=");
+    expect(environment).toContain("AUBTOWN_PUBLISHER_READINESS_FILE=");
     expect(environment).toContain("AUBTOWN_REMOTE_EXECUTOR_PROBE=");
+    expect(environment).toContain("AUBTOWN_REMOTE_PUBLISHER_PROBE=");
     expect(environment).toContain("AUBTOWN_SYMPHONY_LOCK_FILE=");
     expect(environment).toContain("AUBTOWN_SYMPHONY_EXECUTABLE=");
     expect(packageJson).toContain('"pilot:audit"');
     expect(packageJson).toContain('"pilot:probe-executor"');
+    expect(packageJson).toContain('"pilot:probe-publisher"');
     expect(`${service}\n${environment}`).not.toMatch(
       /docker|compose|restate/iu,
     );
