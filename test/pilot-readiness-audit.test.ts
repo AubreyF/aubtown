@@ -117,6 +117,7 @@ async function fixture(): Promise<{
         "changed-heartbeat-replay",
         "transfer-replay",
         "stale-epoch-fenced",
+        "historical-operation-reuse-fenced",
         "show-after-transfer",
         "list-after-transfer",
         "release-replay",
@@ -400,6 +401,33 @@ describe("pilot readiness audit", () => {
       prepared.paths.claimBrokerExecutable,
       "#!/bin/sh\nexit 1\n",
       0o700,
+    );
+    const report = await auditPilotReadiness({
+      repository: "freed-project/freed",
+      issueNumber: 1234,
+      auditedAt,
+      paths: prepared.paths,
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers).toContain("authority:broker-conformance");
+  });
+
+  it("rejects a broker proof that omits historical operation fencing", async () => {
+    const prepared = await fixture();
+    const current = JSON.parse(
+      await readFile(prepared.paths.brokerConformanceReportFile, "utf8"),
+    ) as {
+      checks: Array<{ id: string; passed: true; detail: string }>;
+    };
+    await protectedFile(
+      prepared.paths.brokerConformanceReportFile,
+      `${JSON.stringify({
+        ...current,
+        checks: current.checks.filter(
+          (check) => check.id !== "historical-operation-reuse-fenced",
+        ),
+      })}\n`,
     );
     const report = await auditPilotReadiness({
       repository: "freed-project/freed",

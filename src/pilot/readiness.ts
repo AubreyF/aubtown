@@ -449,6 +449,7 @@ export async function auditPilotReadiness(input: {
         "changed-heartbeat-replay",
         "transfer-replay",
         "stale-epoch-fenced",
+        "historical-operation-reuse-fenced",
         "show-after-transfer",
         "list-after-transfer",
         "release-replay",

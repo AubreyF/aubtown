@@ -83,6 +83,7 @@ The conformance command starts a new broker process for every operation and prov
 - rejection of a changed heartbeat replay
 - checkpoint-backed transfer by exactly one custody epoch
 - fencing of the prior epoch
+- permanent fencing of an older operation ID after custody advances
 - exact destination custody after restart
 - complete active-claim listing after acquire and transfer
 - exact release and response-loss replay
