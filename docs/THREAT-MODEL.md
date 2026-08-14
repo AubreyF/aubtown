@@ -24,6 +24,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Coordinator restart dispatches an issue twice | Exclusive append-only prelaunch receipt blocks the same exact claim; startup reconciliation checks GitHub, Freed, worktree, branch, process custody, and draft PR before issuing a replacement claim |
 | Linux and Mac both own one issue | One task-scoped claim and custody epoch, plus a final authoritative reread before worker launch |
 | A stale host resumes after transfer | Claim epoch advances only after checkpoint-backed transfer; old-epoch journal and publication requests are rejected |
+| Offline transfer uses the wrong checkpoint | Coordinator verifies the checkpoint edge signature and binds claim, repository, issue, source host, prior epoch, content address, time order, destination, and exact next epoch before proposing transfer |
 | A host lies about being compatible | Enrolled immutable host capabilities and issue-qualified lane are checked by the scheduler patch and authority receipt |
 | Symphony starts in an empty or foreign directory | Admission waits for helper-created host attestation; `after_create` rejects fallback directories and `before_run` verifies a clean worktree under the enrolled Freed repository |
 | Conflicting tasks run concurrently | Qualified path domains and logical locks are compared against every active claim before admission |

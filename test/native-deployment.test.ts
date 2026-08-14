@@ -152,6 +152,18 @@ describe("native Linux deployment", () => {
     expect(reconciler).not.toContain("FreedAuthorityBridge");
   });
 
+  it("ships a non-authoritative checkpoint-backed custody planner", async () => {
+    const packageJson = await fixture("package.json");
+    const planner = await fixture("src/cli/plan-custody-transfer.ts");
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    expect(packageJson).toContain('"custody:plan"');
+    expect(planner).toContain("parseCustodyTransferPlanningInput");
+    expect(planner).toContain("planCustodyTransfer");
+    expect(planner).toContain("writeProtectedJsonFile");
+    expect(environment).toContain("AUBTOWN_CUSTODY_TRANSFER_PLAN_FILE=");
+    expect(planner).not.toContain("claim-transfer");
+  });
+
   it("keeps coordinator and checkpoint credentials under distinct users", async () => {
     const symphony = await fixture("deploy/systemd/aubtown-symphony.service");
     const checkpoint = await fixture(

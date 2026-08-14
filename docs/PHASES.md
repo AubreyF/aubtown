@@ -64,6 +64,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 
 ## Phase 5: custody and remote operation
 
+- [x] Derive an exact verified-checkpoint transfer and restore plan after 24 hours offline.
 - [ ] Prove encrypted unpublished-work transfer between Mac and Linux.
 - [ ] Transfer eligible custody after 24 hours offline and fence the stale epoch.
 - [ ] Expose the dashboard through Tailscale only.

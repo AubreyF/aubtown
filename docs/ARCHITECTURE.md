@@ -108,6 +108,8 @@ At startup, AubTown reconciles open issues, lifecycle comments, Freed tasks and 
 
 Every unpublished terminal candidate can be captured as an encrypted, content-addressed Git state archive. At 24 hours offline, portable work may move to a compatible host after the old command is fenced, the custody epoch advances, and the destination verifies the exact restored state. Linux cannot satisfy a macOS-only validation requirement.
 
+The coordinator-side transfer planner now turns fresh host evidence plus one verified checkpoint storage receipt into the exact next-epoch claim-transfer request and restore requirement. It rejects missing destination roots, stale destinations, incompatible lanes, bad signatures, wrong source hosts, mismatched claims or epochs, and impossible checkpoint time order. Freed's future `claim-transfer` response remains the authority boundary. A plan alone cannot fence the source or activate the destination.
+
 ## Security and publication
 
 GitHub credentials stay host-side. The Coordinator App receives issue and label permissions. The Draft Publisher App receives repository-scoped contents and pull-request permissions only for an admitted publication plan. Workers receive neither raw credential.

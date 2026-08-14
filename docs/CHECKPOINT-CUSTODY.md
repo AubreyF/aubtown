@@ -25,6 +25,8 @@ Candidate finalization, capture, remote storage, and coordinator acknowledgement
 
 After 24 hours without a source heartbeat, AubTown may transfer only portable work to a compatible online host.
 
+The coordinator now derives the transfer deterministically. It recomputes source and destination heartbeat freshness, requires the exact current claim, verifies the checkpoint edge's Ed25519 storage receipt, checks claim, repository, issue, source host, custody epoch, and time order, advances exactly one epoch, and emits both the proposed Freed claim-transfer request and destination restore requirement. This plan carries no authority. The transfer remains blocked until Freed accepts that exact request through its supported claim command.
+
 The transfer sequence is:
 
 1. Re-read the current GitHub lifecycle state and Freed execution claim.

@@ -26,6 +26,7 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - Exact-head validation and fresh-review handoff contracts
 - Encrypted, content-addressed unpublished-work checkpoints
 - Custody epochs, restoration, and stale-host fencing
+- Deterministic 24-hour offline transfer plans backed by verified checkpoint receipts
 - Host-signed receipts and replay protection
 - GitHub status projection and optional standby-coordinator comment election
 - A pinned Symphony production and upstream-tracking contract

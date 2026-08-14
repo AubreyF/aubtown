@@ -20,6 +20,7 @@
     "host:monitor": "tsx src/host-monitor.ts",
     "pilot:audit": "tsx src/cli/audit-pilot-readiness.ts",
     "planning:collect": "tsx src/cli/collect-planning-snapshot.ts",
+    "custody:plan": "tsx src/cli/plan-custody-transfer.ts",
     "shadow": "tsx src/cli/shadow.ts",
     "shadow:github": "tsx src/cli/shadow-github.ts",
     "test": "vitest run",

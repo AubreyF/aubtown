@@ -48,6 +48,7 @@ The future authority broker runs under its own service identity beside the canon
 - `/var/lib/aubtown/coordinator/planning-snapshot.json`: protected read-only cross-source planning evidence
 - `/var/lib/aubtown/coordinator/dispatch-intention.json`: protected deterministic proposal or blockers
 - `/var/lib/aubtown/coordinator/pilot-readiness.json`: protected live launch-gate report
+- `/var/lib/aubtown/coordinator/custody-transfer-plan.json`: non-authoritative verified-checkpoint transfer proposal
 - `/var/lib/aubtown/admission/candidates`: protected non-authoritative per-issue dispatch requests
 - `/var/lib/aubtown/admission/envelopes`: protected per-issue Freed authority and quota envelopes
 - `/var/lib/aubtown/admission/receipts`: append-only exact-claim prelaunch receipts
