@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "hostId": "linux-control-1",
+  "accountId": "codex-pro-1",
+  "codexExecutable": "/opt/aubtown/codex/bin/codex",
+  "codexHome": "/var/lib/aubtown-executor/codex",
+  "homeDirectory": "/var/lib/aubtown-executor",
+  "model": "replace-with-advertised-model",
+  "effort": "high",
+  "quotaSampleIntervalMs": 30000
+}

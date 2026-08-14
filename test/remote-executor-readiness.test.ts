@@ -31,6 +31,26 @@ const report = {
     path: "/opt/aubtown/releases/test/complete-symphony-workspace.js",
     sha256: "f".repeat(64),
   },
+  completionReader: {
+    path: "/opt/aubtown/releases/test/read-symphony-completion.js",
+    sha256: "9".repeat(64),
+  },
+  adjudicator: {
+    path: "/opt/aubtown/releases/test/adjudicate-symphony-completion.js",
+    sha256: "8".repeat(64),
+  },
+  reviewer: {
+    config: {
+      path: "/etc/aubtown/reviewer-runtime.json",
+      sha256: "7".repeat(64),
+    },
+    accountId: "codex-pro-1",
+    codexExecutable: "/opt/aubtown/codex/bin/codex",
+    codexHome: "/var/lib/aubtown-executor/reviewer/codex",
+    model: "review-model",
+    effort: "high" as const,
+    quotaSampleIntervalMs: 30_000,
+  },
 };
 
 const transport = {
@@ -65,8 +85,11 @@ function probe(runner: CommandRunner): SshExecutorReadinessProbe {
       remoteNodeExecutable: "/opt/aubtown/node/bin/node",
       remoteProbeExecutable: "/opt/aubtown/releases/test/probe.js",
       remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
-    remoteWorkspacePreparer: "/opt/aubtown/releases/test/preparer.js",
-    remoteWorkspaceCompleter: "/opt/aubtown/releases/test/completer.js",
+      remoteReviewerRuntimeConfig: "/etc/aubtown/reviewer-runtime.json",
+      remoteWorkspacePreparer: "/opt/aubtown/releases/test/preparer.js",
+      remoteWorkspaceCompleter: "/opt/aubtown/releases/test/completer.js",
+      remoteCompletionReader: "/opt/aubtown/releases/test/reader.js",
+      remoteAdjudicator: "/opt/aubtown/releases/test/adjudicator.js",
       expectedUser: "aubtown-executor",
       expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
       expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
@@ -92,8 +115,11 @@ describe("remote executor readiness", () => {
         "/opt/aubtown/node/bin/node",
         "/opt/aubtown/releases/test/probe.js",
         "/etc/aubtown/worker-runtime.json",
+        "/etc/aubtown/reviewer-runtime.json",
         "/opt/aubtown/releases/test/preparer.js",
         "/opt/aubtown/releases/test/completer.js",
+        "/opt/aubtown/releases/test/reader.js",
+        "/opt/aubtown/releases/test/adjudicator.js",
       ],
     });
   });

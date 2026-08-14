@@ -64,6 +64,7 @@ export async function completeTrustedSymphonyWorkspace(input: {
     driverId: binding.handoff.driverId,
     baseHead: binding.baseHead,
     head: finalized.head,
+    patchDigest: finalized.patchDigest,
     finalizationNonce: binding.handoff.finalizationNonce,
     completedAt: input.completedAt,
   });

@@ -3,6 +3,7 @@ import { lstat, realpath } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { spawn } from "node:child_process";
 import { z } from "zod";
+import type { CommandRunner } from "../adapters/command-runner.js";
 import type { GitCustodyCheckpointService } from "../checkpoints/git-custody.js";
 import { canonicalJson } from "../security/canonical-json.js";
 import {
@@ -63,6 +64,69 @@ export class GitWorkProductStateInspector implements WorkProductStateInspector {
     return {
       head: state.repositoryHead,
       patchDigest: state.patchDigest,
+    };
+  }
+}
+
+export class GitCommittedWorkProductStateInspector
+  implements WorkProductStateInspector
+{
+  constructor(
+    private readonly runner: CommandRunner,
+    private readonly gitExecutable: string,
+  ) {}
+
+  async inspect(workProduct: WorkProductIdentity): Promise<{
+    readonly head: string;
+    readonly patchDigest: string;
+  }> {
+    const branch = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        cwd: workProduct.worktree,
+      })
+    ).stdout.trim();
+    const head = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["rev-parse", "HEAD"],
+        cwd: workProduct.worktree,
+      })
+    ).stdout.trim();
+    const status = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["status", "--porcelain=v1", "--untracked-files=all"],
+        cwd: workProduct.worktree,
+      })
+    ).stdout.trim();
+    if (
+      branch !== workProduct.branch ||
+      !/^[0-9a-f]{40}$/u.test(head) ||
+      status !== ""
+    ) {
+      throw new Error("Committed work product is not one clean exact branch head.");
+    }
+    const patch = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: [
+          "diff",
+          "--binary",
+          "--full-index",
+          workProduct.baseHead,
+          head,
+          "--",
+          ".",
+        ],
+        cwd: workProduct.worktree,
+        maxBufferBytes: 256 * 1_024 * 1_024,
+      })
+    ).stdout;
+    return {
+      head,
+      patchDigest: createHash("sha256").update(patch, "utf8").digest("hex"),
     };
   }
 }

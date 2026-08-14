@@ -223,7 +223,10 @@ describe("HostExecutionSupervisor", () => {
       {
         finalize: async (_command, nonce) => {
           observedNonce = nonce;
-          return { head: "a".repeat(40) };
+          return {
+            head: "a".repeat(40),
+            patchDigest: "d".repeat(64),
+          };
         },
       },
     );
@@ -636,9 +639,7 @@ describe("HostExecutionSupervisor", () => {
     );
     await supervisor.accept(command());
     completion.resolve("completed");
-    for (let attempt = 0; attempt < 20 && reports.length < 2; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await supervisor.shutdown();
     expect(reports).toEqual(["started", "failed"]);
     expect(events).toContainEqual(
       expect.objectContaining({

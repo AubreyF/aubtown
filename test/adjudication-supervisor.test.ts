@@ -13,7 +13,7 @@ import type {
   IndependentReviewReceipt,
   WorkProductIdentity,
 } from "../src/adjudication/receipts.js";
-import { FREED_REPOSITORY, report } from "./helpers.js";
+import { FREED_REPOSITORY, report, usage } from "./helpers.js";
 
 const roots: string[] = [];
 
@@ -47,6 +47,7 @@ const command = createAdjudicationCommand({
   workProduct,
   qualification: report(),
   accountId: "codex-pro-1",
+  usageAtAdmission: usage(),
   reviewerDriverId: "codex-app-server-review-v1",
   validationCommands: [
     { executable: "/opt/node/bin/npm", args: ["test"], timeoutMs: 60_000 },

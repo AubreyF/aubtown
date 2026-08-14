@@ -58,7 +58,13 @@ The handoff root is outside the worker workspace and mode 0700. Its files are mo
 
 The third Symphony patch adds `hooks.completion` as a required success boundary. Symphony invokes it after all configured Codex turns succeed and before best-effort `after_run` cleanup. Failure or timeout propagates to the orchestrator. The AubTown completion command runs on the selected executor. It reloads the active-workspace pointer, verifies the content digest and exact runtime custody, rejects symbolic or substituted paths, and checks the enrolled repository and branch. It then stages only paths covered by the qualification report and creates one commit carrying the deterministic finalization receipt. An immutable completion receipt binds that head to the manifest, claim, task, account, and driver.
 
-Completion is idempotent. Repeating the hook verifies the existing exact commit and returns the first receipt. If Symphony retries the open issue, the `before_run` guard sees the receipt and fails before starting Codex. The hook has no GitHub or Freed credential and cannot publish. Coordinator reconciliation must still recheck current claim authority, run exact validation, obtain fresh independent review, and invoke the draft-only publisher.
+Completion is idempotent. Repeating the hook verifies the existing exact commit and returns the first receipt. If Symphony retries the open issue, the `before_run` guard sees the receipt and fails before starting Codex. The hook has no GitHub or Freed credential and cannot publish.
+
+The coordinator completion timer reads the exact receipt through the enrolled SSH alias. Before it spends another reviewer turn, it rechecks the open `factory:ready` issue, current Freed task revision, exact broker claim and heartbeat, current quota, and the active implementation thread and turn. It rejects substituted custody, stale authority, or a completion that does not match the admitted handoff. The resulting adjudication command is content-addressed by the completion receipt, so a coordinator restart resolves to the same command.
+
+The custody host runs only validation commands from a protected reviewed repository profile. It checks the clean branch head and binary patch digest before and after every command. A separate Codex app-server process uses a reviewer-specific `CODEX_HOME`, verifies that the configured model is currently callable, and runs one read-only structured review in a thread different from implementation. Quota is reread before review and sampled while the turn runs. A hard daily or rolling-week decision interrupts that exact review turn. The host stores a durable reviewer handle and immutable result. A restart resumes the stored handle. A crash between remote review start and handle persistence is fenced as ambiguous rather than silently starting another paid turn.
+
+The coordinator stores the returned trusted adjudication result under its protected admission state. A passing result still grants no publication authority. Draft publication must reread GitHub, Freed authority, claim custody, and quota again, then bind the exact validation and review receipts to the existing draft-only publisher.
 
 Before pilot readiness trusts that broker, a disposable conformance gate starts a fresh process for every claim operation. It proves durable exact replay, structured conflict rejection, one current claim, checkpoint-backed epoch transfer, stale-epoch fencing, and exact release. The protected result binds the installed executable digest and expires after 10 minutes. This is a launch test, not another scheduler, queue, database, or resident service.
 
@@ -67,8 +73,9 @@ The native pilot audit is the final read-only proof before launch. It binds the 
 The remaining integration work is:
 
 - connect the admission command to Freed's task-scoped claim operations
-- stage and attest deterministic Freed worktrees through `scripts/worktree-add.sh`
-- prove active heartbeat and stale-claim restart reconciliation against the installed broker
+- connect the passing trusted adjudication result to fresh draft publication planning
+- project the final lifecycle state and release the exact claim after handoff
+- prove the complete path against the installed broker and one owner-selected issue
 
 These remain an auditable patch series against the pin. AubTown will not maintain a TypeScript replacement for Symphony during v1.
 

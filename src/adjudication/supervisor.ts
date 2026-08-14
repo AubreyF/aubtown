@@ -29,6 +29,9 @@ export interface IndependentReviewer {
     readonly repositoryRoot: string;
   }): Promise<HostReviewHandle>;
   wait(handle: HostReviewHandle): Promise<IndependentReviewReceipt>;
+  recover?(
+    handle: HostReviewHandle,
+  ): Promise<"running" | "completed" | "interrupted" | "failed">;
 }
 
 export class HostAdjudicationSupervisor {
@@ -185,19 +188,25 @@ export class HostAdjudicationSupervisor {
         starting.command.commandId,
         (current) => ({ ...current, stage: "review-started", reviewHandle: handle }),
       );
-      await this.#finishReview(started);
+      await this.#finishReview(started, false);
     });
   }
 
   #watchReview(record: HostAdjudicationRecord): void {
     this.#watch(record.command.commandId, async () => {
-      await this.#finishReview(record);
+      await this.#finishReview(record, true);
     });
   }
 
-  async #finishReview(record: HostAdjudicationRecord): Promise<void> {
+  async #finishReview(
+    record: HostAdjudicationRecord,
+    recover: boolean,
+  ): Promise<void> {
     if (record.reviewHandle === undefined) {
       throw new Error("Started adjudication review has no durable handle.");
+    }
+    if (recover && this.reviewer.recover !== undefined) {
+      await this.reviewer.recover(record.reviewHandle);
     }
     const receipt = await this.reviewer.wait(record.reviewHandle);
     const reviewed = await this.journal.transition(

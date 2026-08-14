@@ -11,6 +11,12 @@ import {
 import { loadSymphonyAdmissionEnvelope } from "../integrations/symphony/admission-envelope.js";
 import { loadHostEnrollments } from "../security/host-enrollment.js";
 import { heartbeatSymphonyActiveClaim } from "../integrations/symphony/active-claim-heartbeat.js";
+import { SymphonyActiveTurnJournal } from "../integrations/symphony/active-turn-journal.js";
+import { symphonyWorkspaceRequirementFromBinding } from "../integrations/symphony/prepare-admission.js";
+import {
+  executorHandoffManifestDigest,
+  executorHandoffManifestFromRequirement,
+} from "../execution/handoff-manifest.js";
 
 function requiredAbsoluteEnvironment(name: string): string {
   const value = process.env[name];
@@ -49,6 +55,33 @@ try {
         executable: requiredAbsoluteEnvironment("AUBTOWN_FREED_CLAIM_BROKER"),
         cwd: requiredAbsoluteEnvironment("AUBTOWN_FREED_REPOSITORY_ROOT"),
       }),
+    });
+    const manifestDigest = executorHandoffManifestDigest(
+      executorHandoffManifestFromRequirement(
+        symphonyWorkspaceRequirementFromBinding({
+          binding: envelope.binding,
+          requiredAt: envelope.preparedAt,
+        }),
+      ),
+    );
+    const binding = envelope.binding;
+    await new SymphonyActiveTurnJournal(
+      requiredAbsoluteEnvironment("AUBTOWN_ACTIVE_TURN_ROOT"),
+    ).record({
+      schemaVersion: 1,
+      kind: "symphony-active-turn",
+      manifestDigest,
+      repository: binding.qualification.repository,
+      issueNumber: binding.qualification.issue.number,
+      claimId: binding.claim.claimId,
+      custodyEpoch: 1,
+      hostId: binding.claim.hostId,
+      workerId: binding.claim.workerId,
+      accountId: binding.accountId,
+      driverId: binding.driverId,
+      threadId: request.threadId,
+      turnId: request.turnId,
+      observedAt: now,
     });
   }
 } catch {

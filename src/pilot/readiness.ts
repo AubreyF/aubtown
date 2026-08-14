@@ -219,6 +219,8 @@ export async function auditPilotReadiness(input: {
   let executorReadiness: SelectedExecutorReadinessReport | undefined;
   let workspacePreparerSha256: string | undefined;
   let workspaceCompleterSha256: string | undefined;
+  let workspaceCompletionReaderSha256: string | undefined;
+  let workspaceAdjudicatorSha256: string | undefined;
   let expectedNodeVersion: string | undefined;
   let planningSource: unknown;
   let dispatchSource: unknown;
@@ -349,6 +351,32 @@ export async function auditPilotReadiness(input: {
       });
       workspaceCompleterSha256 = sha256(await readFile(file));
       return workspaceCompleterSha256;
+    }),
+    check("runtime:workspace-completion-reader-executable", async () => {
+      const file = await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/read-symphony-completion.js",
+        ),
+        label: "AubTown trusted completion reader",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      });
+      workspaceCompletionReaderSha256 = sha256(await readFile(file));
+      return workspaceCompletionReaderSha256;
+    }),
+    check("runtime:workspace-adjudicator-executable", async () => {
+      const file = await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/adjudicate-symphony-completion.js",
+        ),
+        label: "AubTown trusted adjudicator",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      });
+      workspaceAdjudicatorSha256 = sha256(await readFile(file));
+      return workspaceAdjudicatorSha256;
     }),
     check("runtime:node-version-contract", async () => {
       const file = await physicalFile({
@@ -539,13 +567,16 @@ export async function auditPilotReadiness(input: {
           executorReadiness.worktreeRoot ||
         executorReadiness.preparer.sha256 !== workspacePreparerSha256 ||
         executorReadiness.completer.sha256 !== workspaceCompleterSha256 ||
+        executorReadiness.completionReader.sha256 !==
+          workspaceCompletionReaderSha256 ||
+        executorReadiness.adjudicator.sha256 !== workspaceAdjudicatorSha256 ||
         executorReadiness.node.version !== expectedNodeVersion
       ) {
         throw new Error(
-          "Executor readiness disagrees with the selected host, repository, base, workspace root, preparer, completer, or Node version.",
+          "Executor readiness disagrees with the selected host, repository, base, workspace root, preparer, completer, completion reader, adjudicator, or Node version.",
         );
       }
-      return `${executorReadiness.hostId}:${executorReadiness.helper.sha256}:${executorReadiness.preparer.sha256}:${executorReadiness.completer.sha256}`;
+      return `${executorReadiness.hostId}:${executorReadiness.helper.sha256}:${executorReadiness.preparer.sha256}:${executorReadiness.completer.sha256}:${executorReadiness.completionReader.sha256}:${executorReadiness.adjudicator.sha256}`;
     }),
   );
 

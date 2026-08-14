@@ -1,6 +1,10 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
-import { canonicalJsonEqual } from "../security/canonical-json.js";
+import {
+  canonicalJson,
+  canonicalJsonEqual,
+} from "../security/canonical-json.js";
 import {
   loadProtectedJsonFile,
   writeImmutableProtectedJsonFile,
@@ -29,6 +33,7 @@ export const trustedCompletionReceiptSchema = z.object({
   driverId: z.string().min(1),
   baseHead: z.string().regex(/^[0-9a-f]{40}$/u),
   head: z.string().regex(/^[0-9a-f]{40}$/u),
+  patchDigest: z.string().regex(/^[0-9a-f]{64}$/u),
   finalizationNonce: z.uuid(),
   completedAt: z.iso.datetime(),
 });
@@ -36,6 +41,13 @@ export const trustedCompletionReceiptSchema = z.object({
 export type TrustedCompletionReceipt = z.infer<
   typeof trustedCompletionReceiptSchema
 >;
+
+export function trustedCompletionReference(
+  receipt: TrustedCompletionReceipt,
+): string {
+  const parsed = trustedCompletionReceiptSchema.parse(receipt);
+  return createHash("sha256").update(canonicalJson(parsed)).digest("hex");
+}
 
 function isMissing(error: unknown): boolean {
   return (

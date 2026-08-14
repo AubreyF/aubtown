@@ -45,9 +45,17 @@ describe("native Linux deployment", () => {
     const macRuntime = JSON.parse(
       await fixture("config/hosts/worker-runtime.macos.example.json"),
     ) as Record<string, unknown>;
+    const reviewerRuntime = JSON.parse(
+      await fixture("config/hosts/reviewer-runtime.example.json"),
+    ) as Record<string, unknown>;
+    const macReviewerRuntime = JSON.parse(
+      await fixture("config/hosts/reviewer-runtime.macos.example.json"),
+    ) as Record<string, unknown>;
     expect(environment).toContain("AUBTOWN_SSH_EXECUTABLE=/usr/bin/ssh");
     expect(environment).toContain("prepare-symphony-workspace.js");
     expect(environment).toContain("complete-symphony-workspace.js");
+    expect(environment).toContain("read-symphony-completion.js");
+    expect(environment).toContain("adjudicate-symphony-completion.js");
     expect(environment).toContain("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG=");
     expect(runtime).toMatchObject({
       hostId: "linux-control-1",
@@ -70,6 +78,49 @@ describe("native Linux deployment", () => {
         "/Users/aubtown/Library/Application Support/AubTown/executor/handoffs",
       worktreeHelper: "/Users/aubtown/freed/scripts/worktree-add.sh",
     });
+    expect(reviewerRuntime).toMatchObject({
+      hostId: "linux-control-1",
+      accountId: "codex-pro-1",
+      quotaSampleIntervalMs: 30_000,
+    });
+    expect(macReviewerRuntime).toMatchObject({
+      hostId: "macos-executor-1",
+      accountId: "codex-pro-1",
+      quotaSampleIntervalMs: 30_000,
+    });
+  });
+
+  it("reconciles trusted completion downstream of Symphony without another scheduler", async () => {
+    const service = await fixture(
+      "deploy/systemd/aubtown-completion-reconciliation.service",
+    );
+    const timer = await fixture(
+      "deploy/systemd/aubtown-completion-reconciliation.timer",
+    );
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    const command = await fixture(
+      "src/cli/reconcile-symphony-completion.ts",
+    );
+    const packageJson = await fixture("package.json");
+    expect(service).toContain("User=aubtown-symphony");
+    expect(service).toContain("dist/cli/reconcile-symphony-completion.js");
+    expect(service).toContain("ReadWritePaths=/var/lib/aubtown/admission");
+    expect(timer).toContain("OnUnitActiveSec=1min");
+    expect(environment).toContain("AUBTOWN_ACTIVE_TURN_ROOT=");
+    expect(environment).toContain("AUBTOWN_COMPLETION_RECONCILIATION_ROOT=");
+    expect(environment).toContain("AUBTOWN_VALIDATION_PROFILE_FILE=");
+    expect(environment).toContain("AUBTOWN_REMOTE_ADJUDICATOR=");
+    expect(environment).toContain("AUBTOWN_REMOTE_REVIEWER_RUNTIME_CONFIG=");
+    expect(environment).toContain("AUBTOWN_TRUSTED_ADJUDICATION_ROOT=");
+    expect(command).toContain("SymphonyCompletionReconciler");
+    expect(command).toContain("SshAdjudicationRunner");
+    expect(command).toContain("TrustedAdjudicationResultStore");
+    expect(command).toContain("GitHubLivePlanningReader");
+    expect(command).toContain("FreedAuthorityBridge");
+    expect(packageJson).toContain('"symphony:adjudicate-completion"');
+    expect(`${service}\n${timer}\n${command}`).not.toMatch(
+      /docker|compose|restate/iu,
+    );
   });
 
   it("ships a noninteractive pinned-host SSH worker profile", async () => {

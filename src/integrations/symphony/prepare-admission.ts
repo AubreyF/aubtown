@@ -18,7 +18,57 @@ import {
   createWorkspaceFinalizationNonce,
   workspaceRequirementFromBinding,
   type InitialWorkspacePreparer,
+  type InitialWorkspaceRequirement,
 } from "../../execution/workspace.js";
+
+export function symphonyWorkspaceRequirementFromBinding(input: {
+  readonly binding: ExecutionAdmissionBinding;
+  readonly requiredAt: string;
+}): InitialWorkspaceRequirement {
+  const binding = input.binding;
+  if (binding.claim.custodyEpoch !== 1) {
+    throw new Error("Initial Symphony workspace requires custody epoch one.");
+  }
+  const nonceInput = {
+    repository: binding.qualification.repository,
+    issueNumber: binding.qualification.issue.number,
+    claimId: binding.claim.claimId,
+    custodyEpoch: 1 as const,
+    hostId: binding.claim.hostId,
+    workerId: binding.claim.workerId,
+    worktree: binding.claim.worktree,
+    branch: binding.claim.branch,
+    authorityTaskId: binding.authorityTask.id,
+    authorityTaskRevision: binding.authorityTask.revision,
+    accountId: binding.accountId,
+    driverId: binding.driverId,
+    baseHead: binding.baseHead,
+  };
+  return workspaceRequirementFromBinding({
+    repository: binding.qualification.repository,
+    issueNumber: binding.qualification.issue.number,
+    claimId: binding.claim.claimId,
+    custodyEpoch: 1,
+    hostId: binding.claim.hostId,
+    workerId: binding.claim.workerId,
+    worktree: binding.claim.worktree,
+    branch: binding.claim.branch,
+    conflictDomains: binding.claim.conflictDomains,
+    claimedAt: binding.claim.claimedAt,
+    baseHead: binding.baseHead,
+    target: binding.target,
+    handoff: {
+      qualification: qualificationReportSchema.parse(binding.qualification),
+      authorityTaskId: binding.authorityTask.id,
+      authorityTaskRevision: binding.authorityTask.revision,
+      accountId: binding.accountId,
+      driverId: binding.driverId,
+      publicationCeiling: "draft-pr",
+      finalizationNonce: createWorkspaceFinalizationNonce(nonceInput),
+    },
+    requiredAt: input.requiredAt,
+  });
+}
 
 export function symphonyEnvelopeMatchesCandidate(input: {
   readonly envelope: SymphonyAdmissionEnvelope;
@@ -48,48 +98,9 @@ export class SymphonyAdmissionPreparer {
     readonly binding: ExecutionAdmissionBinding;
     readonly now: string;
   }): Promise<void> {
-    const binding = input.binding;
-    if (binding.claim.custodyEpoch !== 1) {
-      throw new Error("Initial Symphony workspace requires custody epoch one.");
-    }
-    const nonceInput = {
-      repository: binding.qualification.repository,
-      issueNumber: binding.qualification.issue.number,
-      claimId: binding.claim.claimId,
-      custodyEpoch: 1 as const,
-      hostId: binding.claim.hostId,
-      workerId: binding.claim.workerId,
-      worktree: binding.claim.worktree,
-      branch: binding.claim.branch,
-      authorityTaskId: binding.authorityTask.id,
-      authorityTaskRevision: binding.authorityTask.revision,
-      accountId: binding.accountId,
-      driverId: binding.driverId,
-      baseHead: binding.baseHead,
-    };
     await this.workspaces.prepare(
-      workspaceRequirementFromBinding({
-        repository: binding.qualification.repository,
-        issueNumber: binding.qualification.issue.number,
-        claimId: binding.claim.claimId,
-        custodyEpoch: 1,
-        hostId: binding.claim.hostId,
-        workerId: binding.claim.workerId,
-        worktree: binding.claim.worktree,
-        branch: binding.claim.branch,
-        conflictDomains: binding.claim.conflictDomains,
-        claimedAt: binding.claim.claimedAt,
-        baseHead: binding.baseHead,
-        target: binding.target,
-        handoff: {
-          qualification: qualificationReportSchema.parse(binding.qualification),
-          authorityTaskId: binding.authorityTask.id,
-          authorityTaskRevision: binding.authorityTask.revision,
-          accountId: binding.accountId,
-          driverId: binding.driverId,
-          publicationCeiling: "draft-pr",
-          finalizationNonce: createWorkspaceFinalizationNonce(nonceInput),
-        },
+      symphonyWorkspaceRequirementFromBinding({
+        binding: input.binding,
         requiredAt: input.now,
       }),
     );

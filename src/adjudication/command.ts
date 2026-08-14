@@ -10,6 +10,8 @@ import {
   type WorkProductIdentity,
 } from "./receipts.js";
 import type { QualificationReport } from "../domain/types.js";
+import { accountUsageSnapshotSchema } from "../domain/schemas.js";
+import type { AccountUsageSnapshot } from "../domain/types.js";
 
 export const adjudicationCommandSchema = z.object({
   schemaVersion: z.literal(1),
@@ -18,6 +20,7 @@ export const adjudicationCommandSchema = z.object({
   workProduct: workProductIdentitySchema,
   qualification: qualificationReportSchema,
   accountId: z.string().min(1),
+  usageAtAdmission: accountUsageSnapshotSchema,
   reviewerDriverId: z.literal("codex-app-server-review-v1"),
   validationCommands: z.array(validationCommandSchema).min(1).max(16),
   issuedAt: z.iso.datetime(),
@@ -30,6 +33,7 @@ export function createAdjudicationCommand(input: {
   readonly workProduct: WorkProductIdentity;
   readonly qualification: QualificationReport;
   readonly accountId: string;
+  readonly usageAtAdmission: AccountUsageSnapshot;
   readonly reviewerDriverId: "codex-app-server-review-v1";
   readonly validationCommands: readonly ValidationCommand[];
   readonly issuedAt: string;
@@ -41,6 +45,7 @@ export function createAdjudicationCommand(input: {
     workProduct: input.workProduct,
     qualification: input.qualification,
     accountId: input.accountId,
+    usageAtAdmission: input.usageAtAdmission,
     reviewerDriverId: input.reviewerDriverId,
     validationCommands: input.validationCommands,
     issuedAt: input.issuedAt,
@@ -59,6 +64,9 @@ export function assertAdjudicationCommand(
   }
   if (!qualification.eligible) {
     throw new Error("Adjudication command contains an ineligible qualification.");
+  }
+  if (command.usageAtAdmission.accountId !== command.accountId) {
+    throw new Error("Adjudication command quota snapshot targets another account.");
   }
   if (
     product.repository.owner !== qualification.repository.owner ||

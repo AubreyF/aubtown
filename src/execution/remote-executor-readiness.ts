@@ -17,8 +17,11 @@ export interface SshExecutorReadinessConfig {
   readonly remoteNodeExecutable: string;
   readonly remoteProbeExecutable: string;
   readonly remoteRuntimeConfig: string;
+  readonly remoteReviewerRuntimeConfig: string;
   readonly remoteWorkspacePreparer: string;
   readonly remoteWorkspaceCompleter: string;
+  readonly remoteCompletionReader: string;
+  readonly remoteAdjudicator: string;
   readonly expectedUser: string;
   readonly expectedIdentityFile: string;
   readonly expectedKnownHostsFile: string;
@@ -62,6 +65,10 @@ export class SshExecutorReadinessProbe {
         config.remoteRuntimeConfig,
         "Remote worker runtime config",
       ),
+      remoteReviewerRuntimeConfig: remoteToken(
+        config.remoteReviewerRuntimeConfig,
+        "Remote reviewer runtime config",
+      ),
       remoteWorkspacePreparer: remoteToken(
         config.remoteWorkspacePreparer,
         "Remote workspace preparer",
@@ -69,6 +76,14 @@ export class SshExecutorReadinessProbe {
       remoteWorkspaceCompleter: remoteToken(
         config.remoteWorkspaceCompleter,
         "Remote workspace completer",
+      ),
+      remoteCompletionReader: remoteToken(
+        config.remoteCompletionReader,
+        "Remote completion reader",
+      ),
+      remoteAdjudicator: remoteToken(
+        config.remoteAdjudicator,
+        "Remote trusted adjudicator",
       ),
     };
   }
@@ -99,8 +114,11 @@ export class SshExecutorReadinessProbe {
         this.#config.remoteNodeExecutable,
         this.#config.remoteProbeExecutable,
         this.#config.remoteRuntimeConfig,
+        this.#config.remoteReviewerRuntimeConfig,
         this.#config.remoteWorkspacePreparer,
         this.#config.remoteWorkspaceCompleter,
+        this.#config.remoteCompletionReader,
+        this.#config.remoteAdjudicator,
       ],
       cwd: this.#config.commandCwd,
       timeoutMs: 20_000,

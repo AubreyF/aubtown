@@ -13,6 +13,7 @@ import { ProcessCommandRunner } from "../src/adapters/command-runner.js";
 import type { WorkerRuntimeConfig } from "../src/config/worker-runtime.js";
 import { qualificationReportSchema } from "../src/domain/schemas.js";
 import { TrustedCompletionReceiptStore } from "../src/execution/completion-receipt.js";
+import { TrustedCompletionBundleStore } from "../src/execution/completion-bundle.js";
 import { ExecutorHandoffManifestStore } from "../src/execution/handoff-manifest.js";
 import { completeTrustedSymphonyWorkspace } from "../src/execution/trusted-completion.js";
 import {
@@ -185,6 +186,14 @@ describe("trusted Symphony completion", () => {
       completedAt: "2026-08-13T18:10:00.000Z",
     });
     expect(first.head).not.toBe(prepared.baseHead);
+    await expect(
+      new TrustedCompletionBundleStore(prepared.runtime.handoffRoot).load(
+        prepared.manifestDigest,
+      ),
+    ).resolves.toMatchObject({
+      manifestDigest: prepared.manifestDigest,
+      receipt: { head: first.head, patchDigest: first.patchDigest },
+    });
     expect(await git(prepared.workspace, ["status", "--porcelain=v1"])).toBe("");
     expect(
       await git(prepared.workspace, ["show", "-s", "--format=%B", "HEAD"]),

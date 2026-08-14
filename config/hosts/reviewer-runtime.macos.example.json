@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "hostId": "macos-executor-1",
+  "accountId": "codex-pro-1",
+  "codexExecutable": "/opt/aubtown/codex/bin/codex",
+  "codexHome": "/Users/aubtown/Library/Application Support/AubTown/reviewer/codex",
+  "homeDirectory": "/Users/aubtown/Library/Application Support/AubTown/reviewer",
+  "model": "replace-with-advertised-model",
+  "effort": "high",
+  "quotaSampleIntervalMs": 30000
+}

@@ -1,0 +1,31 @@
+[Unit]
+Description=AubTown trusted Symphony completion reconciliation
+Requires=aubtown-github-token.service
+After=aubtown-github-token.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=aubtown-symphony
+Group=aubtown-symphony
+WorkingDirectory=/var/lib/aubtown/symphony
+EnvironmentFile=/etc/aubtown/symphony.env
+ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reconcile-symphony-completion.js
+StateDirectory=aubtown/admission/completions
+StateDirectory=aubtown/admission/adjudications
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed /var/lib/freed/automation
+ReadWritePaths=/var/lib/aubtown/admission
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+SystemCallArchitectures=native

@@ -17,7 +17,10 @@ class FakeTransport implements JsonRpcTransport {
   readonly listeners = new Set<(message: unknown) => void>();
   readonly failureListeners = new Set<(error: Error) => void>();
 
-  constructor(private readonly usageResult?: unknown) {}
+  constructor(
+    private readonly usageResult?: unknown,
+    private readonly threadReadResult?: unknown,
+  ) {}
 
   async send(message: unknown): Promise<unknown> {
     this.messages.push(message);
@@ -67,6 +70,16 @@ class FakeTransport implements JsonRpcTransport {
           turns: [{ id: "turn-1", status: "inProgress" }],
         },
       };
+    }
+    if (method === "thread/read") {
+      return (
+        this.threadReadResult ?? {
+          thread: {
+            id: "thread-1",
+            turns: [{ id: "turn-1", status: "inProgress", items: [] }],
+          },
+        }
+      );
     }
     if (method === "turn/start") {
       return { turn: { id: "turn-1", status: "inProgress" } };
@@ -386,6 +399,109 @@ describe("Codex app-server integration", () => {
         model: "gpt-5.6-sol",
         approvalPolicy: "never",
         sandbox: "workspaceWrite",
+      },
+    });
+  });
+
+  it("recovers completed structured review output from persisted history", async () => {
+    const transport = new FakeTransport(undefined, {
+      thread: {
+        id: "review-thread",
+        turns: [
+          {
+            id: "review-turn",
+            status: "completed",
+            items: [
+              {
+                id: "commentary",
+                type: "agentMessage",
+                phase: "commentary",
+                text: "Reviewing the patch.",
+              },
+              {
+                id: "final",
+                type: "agentMessage",
+                phase: "final_answer",
+                text: JSON.stringify({
+                  verdict: "pass",
+                  summary: "Recovered review passed.",
+                  findings: [],
+                }),
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const reviewer = new CodexIndependentReviewer(
+      new CodexAppServerClient(transport),
+      { model: "gpt-5.6-sol", effort: "high" },
+    );
+    const workProduct: WorkProductIdentity = {
+      schemaVersion: 1,
+      repository: FREED_REPOSITORY,
+      issueNumber: 1_234,
+      claimId: "claim-1234",
+      custodyEpoch: 1,
+      hostId: "linux-control-1",
+      branch: "fix/deterministic-validation",
+      worktree: "/worktrees/1234",
+      commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
+      checkpointReference: "d".repeat(64),
+      baseHead: "a".repeat(40),
+      head: "c".repeat(40),
+      patchDigest: "e".repeat(64),
+      implementation: {
+        driverId: "codex-app-server-v1",
+        threadId: "implementation-thread",
+        turnId: "implementation-turn",
+      },
+    };
+    const handle = {
+      driverId: "codex-app-server-review-v1" as const,
+      threadId: "review-thread",
+      turnId: "review-turn",
+      startedAt: "2026-08-13T08:00:00.000Z",
+      workProduct,
+    };
+
+    await expect(reviewer.recover(handle)).resolves.toBe("completed");
+    await expect(reviewer.wait(handle)).resolves.toMatchObject({
+      verdict: "pass",
+      summary: "Recovered review passed.",
+      workProduct,
+    });
+    expect(transport.messages).toContainEqual({
+      method: "thread/read",
+      params: { threadId: "review-thread", includeTurns: true },
+    });
+    expect(transport.messages).not.toContainEqual(
+      expect.objectContaining({ method: "thread/resume" }),
+    );
+  });
+
+  it("resumes an in-progress structured review with read-only policy", async () => {
+    const transport = new FakeTransport();
+    const client = new CodexAppServerClient(transport);
+    await expect(
+      client.recoverStructuredTurn({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        cwd: "/worktrees/1234",
+        model: "gpt-5.6-sol",
+      }),
+    ).resolves.toBe("running");
+    expect(transport.messages).toContainEqual({
+      method: "thread/read",
+      params: { threadId: "thread-1", includeTurns: true },
+    });
+    expect(transport.messages.at(-1)).toMatchObject({
+      method: "thread/resume",
+      params: {
+        threadId: "thread-1",
+        cwd: "/worktrees/1234",
+        model: "gpt-5.6-sol",
+        sandbox: "readOnly",
       },
     });
   });

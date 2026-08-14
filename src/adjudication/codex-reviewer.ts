@@ -122,6 +122,17 @@ export class CodexIndependentReviewer {
     });
   }
 
+  async recover(
+    handle: CodexReviewHandle,
+  ): Promise<"running" | "completed" | "interrupted" | "failed"> {
+    return await this.client.recoverStructuredTurn({
+      threadId: handle.threadId,
+      turnId: handle.turnId,
+      cwd: handle.workProduct.worktree,
+      model: this.options.model,
+    });
+  }
+
   #prompt(input: {
     readonly workProduct: WorkProductIdentity;
     readonly qualification: QualificationReport;

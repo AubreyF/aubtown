@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "owner": "freed-project",
+    "name": "freed",
+    "defaultBranch": "dev"
+  },
+  "requirements": [
+    {
+      "text": "Run npm run validate:feature.",
+      "command": {
+        "executable": "/opt/aubtown/node/bin/npm",
+        "args": ["run", "validate:feature"],
+        "timeoutMs": 1200000
+      }
+    }
+  ]
+}

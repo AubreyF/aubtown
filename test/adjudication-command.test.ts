@@ -5,7 +5,7 @@ import {
   sameAdjudicationCommand,
 } from "../src/adjudication/command.js";
 import type { WorkProductIdentity } from "../src/adjudication/receipts.js";
-import { FREED_REPOSITORY, report } from "./helpers.js";
+import { FREED_REPOSITORY, report, usage } from "./helpers.js";
 
 const workProduct: WorkProductIdentity = {
   schemaVersion: 1,
@@ -35,6 +35,7 @@ describe("adjudication command", () => {
       workProduct,
       qualification: report(),
       accountId: "codex-pro-1",
+      usageAtAdmission: usage(),
       reviewerDriverId: "codex-app-server-review-v1",
       validationCommands: [
         {
@@ -60,6 +61,7 @@ describe("adjudication command", () => {
         workProduct,
         qualification: report(),
         accountId: "codex-pro-1",
+        usageAtAdmission: usage(),
         reviewerDriverId: "codex-app-server-review-v1",
         validationCommands: [
           { executable: "sh", args: ["-c", "npm test"], timeoutMs: 60_000 },
@@ -77,6 +79,7 @@ describe("adjudication command", () => {
           issue: { ...qualification.issue, number: 9_999 },
         },
         accountId: "codex-pro-1",
+        usageAtAdmission: usage(),
         reviewerDriverId: "codex-app-server-review-v1",
         validationCommands: [
           { executable: "/opt/node/bin/npm", args: ["test"], timeoutMs: 60_000 },

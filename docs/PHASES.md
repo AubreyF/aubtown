@@ -60,13 +60,17 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Add a required Symphony completion hook that propagates failure instead of using best-effort `after_run` semantics.
 - [x] Finalize only qualified paths into one trusted commit and persist one immutable completion receipt.
 - [x] Fence an already-finalized workspace before another Codex turn can spend subscription capacity.
+- [x] Reconcile trusted completion against current GitHub eligibility, Freed task authority, exact claim custody, and active implementation-turn evidence.
+- [x] Run reviewed exact validation and a fresh read-only independent review on the custody host.
+- [x] Recheck and actively monitor rolling-week quota during review, with targeted interruption at a hard boundary.
+- [x] Persist immutable adjudication results, resume durable reviewer handles after restart, and fence an ambiguous reviewer start.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
 - [x] Add hard-boundary active-turn interruption to the Symphony runner.
 - [ ] Execute one owner-selected low-risk runtime-neutral issue at concurrency one.
 - [ ] Use Freed's supported authority commands and `scripts/worktree-add.sh`.
 - [ ] Publish one draft pull request.
-- [ ] Complete independent review, validation, projection, claim cleanup, and restart reconciliation.
+- [ ] Complete draft publication, lifecycle projection, and exact claim cleanup.
 
 ## Phase 4: bounded parallelism
 

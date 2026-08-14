@@ -140,6 +140,14 @@ async function fixture(): Promise<{
     "export {};\n",
   );
   await protectedFile(
+    path.join(releaseRoot, "dist/cli/read-symphony-completion.js"),
+    "export {};\n",
+  );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/adjudicate-symphony-completion.js"),
+    "export {};\n",
+  );
+  await protectedFile(
     path.join(releaseRoot, "dist/cli/probe-executor-readiness.js"),
     "export {};\n",
   );
@@ -280,6 +288,26 @@ async function fixture(): Promise<{
       completer: {
         path: "/opt/aubtown/releases/test/dist/cli/complete-symphony-workspace.js",
         sha256: createHash("sha256").update("export {};\n").digest("hex"),
+      },
+      completionReader: {
+        path: "/opt/aubtown/releases/test/dist/cli/read-symphony-completion.js",
+        sha256: createHash("sha256").update("export {};\n").digest("hex"),
+      },
+      adjudicator: {
+        path: "/opt/aubtown/releases/test/dist/cli/adjudicate-symphony-completion.js",
+        sha256: createHash("sha256").update("export {};\n").digest("hex"),
+      },
+      reviewer: {
+        config: {
+          path: "/etc/aubtown/reviewer-runtime.json",
+          sha256: "7".repeat(64),
+        },
+        accountId: "codex-pro-1",
+        codexExecutable: "/opt/aubtown/codex/bin/codex",
+        codexHome: "/var/lib/aubtown-executor/reviewer/codex",
+        model: "review-model",
+        effort: "high",
+        quotaSampleIntervalMs: 30_000,
       },
       transport: {
         hostId: "linux-control-1",

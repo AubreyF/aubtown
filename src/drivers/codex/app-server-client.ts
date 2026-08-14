@@ -344,6 +344,25 @@ const threadResumeResponseSchema = z.object({
   }).passthrough(),
 }).passthrough();
 
+const storedTurnSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(["completed", "interrupted", "failed", "inProgress"]),
+  items: z.array(z.unknown()),
+}).passthrough();
+
+const threadReadResponseSchema = z.object({
+  thread: z.object({
+    id: z.string().min(1),
+    turns: z.array(storedTurnSchema),
+  }).passthrough(),
+}).passthrough();
+
+const storedAgentMessageSchema = z.object({
+  type: z.literal("agentMessage"),
+  text: z.string(),
+  phase: z.enum(["commentary", "final_answer"]).nullable().optional(),
+}).passthrough();
+
 export type CodexRateLimits = z.infer<typeof rateLimitsResponseSchema>;
 export type CodexUsage = z.infer<typeof usageResponseSchema>;
 export type CodexModel = z.infer<typeof modelListResponseSchema>["data"][number];
@@ -532,6 +551,7 @@ export class CodexAppServerClient {
     readonly turnId: string;
     readonly cwd: string;
     readonly model: string;
+    readonly sandbox?: "readOnly" | "workspaceWrite";
   }): Promise<"running" | "completed" | "interrupted" | "failed"> {
     await this.initialize();
     const response = threadResumeResponseSchema.parse(
@@ -542,7 +562,7 @@ export class CodexAppServerClient {
           cwd: input.cwd,
           model: input.model,
           approvalPolicy: "never",
-          sandbox: "workspaceWrite",
+          sandbox: input.sandbox ?? "workspaceWrite",
         },
       }),
     );
@@ -560,6 +580,29 @@ export class CodexAppServerClient {
     }
     this.#completedTurns.set(turn.id, turn.status);
     return turn.status;
+  }
+
+  async recoverStructuredTurn(input: {
+    readonly threadId: string;
+    readonly turnId: string;
+    readonly cwd: string;
+    readonly model: string;
+  }): Promise<"running" | "completed" | "interrupted" | "failed"> {
+    const stored = await this.#readStoredTurn(input.threadId, input.turnId);
+    if (stored.status !== "inProgress") {
+      this.#rememberStoredTurn(stored);
+      return stored.status;
+    }
+    const resumed = await this.recoverTurn({
+      ...input,
+      sandbox: "readOnly",
+    });
+    if (resumed !== "running") {
+      this.#rememberStoredTurn(
+        await this.#readStoredTurn(input.threadId, input.turnId),
+      );
+    }
+    return resumed;
   }
 
   async waitForTurn(input: {
@@ -611,6 +654,44 @@ export class CodexAppServerClient {
   async close(): Promise<void> {
     await this.transport.close();
     this.#failTurns(new Error("Codex app-server client closed."));
+  }
+
+  async #readStoredTurn(
+    threadId: string,
+    turnId: string,
+  ): Promise<z.infer<typeof storedTurnSchema>> {
+    await this.initialize();
+    const response = threadReadResponseSchema.parse(
+      await this.transport.send({
+        method: "thread/read",
+        params: { threadId, includeTurns: true },
+      }),
+    );
+    if (response.thread.id !== threadId) {
+      throw new Error("Codex read a different structured review thread.");
+    }
+    const turn = response.thread.turns.find(
+      (candidate) => candidate.id === turnId,
+    );
+    if (turn === undefined) {
+      throw new Error("Stored structured review thread lacks its recorded turn.");
+    }
+    return turn;
+  }
+
+  #rememberStoredTurn(turn: z.infer<typeof storedTurnSchema>): void {
+    if (turn.status !== "inProgress") {
+      this.#completedTurns.set(turn.id, turn.status);
+    }
+    const messages = turn.items
+      .map((item) => storedAgentMessageSchema.safeParse(item))
+      .filter((item) => item.success)
+      .map((item) => item.data)
+      .filter((item) => item.phase !== "commentary");
+    const finalMessage = messages.at(-1);
+    if (finalMessage !== undefined) {
+      this.#finalMessages.set(turn.id, finalMessage.text);
+    }
   }
 
   #acceptNotification(message: unknown): void {

@@ -27,6 +27,9 @@ async function fixture(): Promise<{
   readonly runtime: WorkerRuntimeConfig;
   readonly preparer: string;
   readonly completer: string;
+  readonly completionReader: string;
+  readonly adjudicator: string;
+  readonly reviewerRuntime: string;
   readonly baseHead: string;
 }> {
   const root = await realpath(
@@ -39,10 +42,18 @@ async function fixture(): Promise<{
   const helper = path.join(repository, "scripts", "worktree-add.sh");
   const preparer = path.join(root, "release", "prepare-symphony-workspace.js");
   const completer = path.join(root, "release", "complete-symphony-workspace.js");
+  const completionReader = path.join(root, "release", "read-symphony-completion.js");
+  const adjudicator = path.join(root, "release", "adjudicate-symphony-completion.js");
+  const reviewerRuntime = path.join(root, "reviewer-runtime.json");
+  const reviewerHome = path.join(root, "reviewer");
+  const reviewerCodexHome = path.join(reviewerHome, "codex");
   await mkdir(path.dirname(helper), { recursive: true });
   await mkdir(worktreeRoot);
   await mkdir(handoffRoot, { mode: 0o700 });
   await mkdir(path.dirname(preparer), { recursive: true });
+  await mkdir(reviewerCodexHome, { recursive: true, mode: 0o700 });
+  await chmod(reviewerHome, 0o700);
+  await chmod(reviewerCodexHome, 0o700);
   await runner.run({
     executable: gitExecutable,
     args: ["init", "-b", "dev", repository],
@@ -85,10 +96,30 @@ async function fixture(): Promise<{
   await chmod(helper, 0o700);
   await writeFile(preparer, "export {};\n", { mode: 0o600 });
   await writeFile(completer, "export {};\n", { mode: 0o600 });
+  await writeFile(completionReader, "export {};\n", { mode: 0o600 });
+  await writeFile(adjudicator, "export {};\n", { mode: 0o600 });
   const nodeExecutable = await realpath(process.execPath);
+  await writeFile(
+    reviewerRuntime,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      hostId: "linux-control-1",
+      accountId: "codex-pro-1",
+      codexExecutable: nodeExecutable,
+      codexHome: reviewerCodexHome,
+      homeDirectory: reviewerHome,
+      model: "test-model",
+      effort: "high",
+      quotaSampleIntervalMs: 30_000,
+    })}\n`,
+    { mode: 0o600 },
+  );
   return {
     preparer,
     completer,
+    completionReader,
+    adjudicator,
+    reviewerRuntime,
     baseHead,
     runtime: {
       schemaVersion: 1,
@@ -117,6 +148,9 @@ describe("executor readiness", () => {
         runtime: prepared.runtime,
         preparerFile: prepared.preparer,
         completionFile: prepared.completer,
+        completionReaderFile: prepared.completionReader,
+        adjudicatorFile: prepared.adjudicator,
+        reviewerRuntimeFile: prepared.reviewerRuntime,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,
@@ -131,6 +165,9 @@ describe("executor readiness", () => {
       helper: { path: prepared.runtime.worktreeHelper },
       preparer: { path: prepared.preparer },
       completer: { path: prepared.completer },
+      completionReader: { path: prepared.completionReader },
+      adjudicator: { path: prepared.adjudicator },
+      reviewer: { accountId: "codex-pro-1", model: "test-model" },
     });
   });
 
@@ -142,6 +179,9 @@ describe("executor readiness", () => {
         runtime: prepared.runtime,
         preparerFile: prepared.preparer,
         completionFile: prepared.completer,
+        completionReaderFile: prepared.completionReader,
+        adjudicatorFile: prepared.adjudicator,
+        reviewerRuntimeFile: prepared.reviewerRuntime,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,
@@ -163,6 +203,9 @@ describe("executor readiness", () => {
         runtime: { ...prepared.runtime, worktreeHelper: foreign },
         preparerFile: prepared.preparer,
         completionFile: prepared.completer,
+        completionReaderFile: prepared.completionReader,
+        adjudicatorFile: prepared.adjudicator,
+        reviewerRuntimeFile: prepared.reviewerRuntime,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,
@@ -178,6 +221,9 @@ describe("executor readiness", () => {
         runtime: prepared.runtime,
         preparerFile: prepared.preparer,
         completionFile: prepared.completer,
+        completionReaderFile: prepared.completionReader,
+        adjudicatorFile: prepared.adjudicator,
+        reviewerRuntimeFile: prepared.reviewerRuntime,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,

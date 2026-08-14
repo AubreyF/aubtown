@@ -54,7 +54,7 @@ function sha256(value: Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function manifestFromRequirement(
+export function executorHandoffManifestFromRequirement(
   input: InitialWorkspaceRequirement,
 ): ExecutorHandoffManifest {
   const requirement = initialWorkspaceRequirementSchema.parse(input);
@@ -64,6 +64,12 @@ function manifestFromRequirement(
     kind: "executor-handoff",
     binding,
   });
+}
+
+export function executorHandoffManifestDigest(
+  manifest: ExecutorHandoffManifest,
+): string {
+  return sha256(canonicalJson(executorHandoffManifestSchema.parse(manifest)));
 }
 
 function expectedFinalizationNonce(manifest: ExecutorHandoffManifest): string {
@@ -98,7 +104,7 @@ export class ExecutorHandoffManifestStore {
   }): Promise<PublishedExecutorHandoff> {
     const activatedAt = z.iso.datetime().parse(input.activatedAt);
     await this.#assertPhysicalWorkspace(input.requirement.worktree);
-    const manifest = manifestFromRequirement(input.requirement);
+    const manifest = executorHandoffManifestFromRequirement(input.requirement);
     if (
       manifest.binding.handoff.finalizationNonce !==
       expectedFinalizationNonce(manifest)
@@ -107,7 +113,7 @@ export class ExecutorHandoffManifestStore {
         "Executor handoff finalization nonce does not match custody.",
       );
     }
-    const manifestDigest = sha256(canonicalJson(manifest));
+    const manifestDigest = executorHandoffManifestDigest(manifest);
     const manifestFile = `manifest-${manifestDigest}.json`;
     const manifestPath = path.join(this.root, manifestFile);
     await writeImmutableProtectedJsonFile({
@@ -151,18 +157,8 @@ export class ExecutorHandoffManifestStore {
     if (pointer.manifestFile !== `manifest-${pointer.manifestDigest}.json`) {
       throw new Error("Executor handoff pointer changes its manifest digest.");
     }
-    const manifestPath = path.join(this.root, pointer.manifestFile);
-    const manifest = executorHandoffManifestSchema.parse(
-      await loadProtectedJsonFile({
-        file: manifestPath,
-        label: "Executor handoff manifest",
-      }),
-    );
-    if (sha256(canonicalJson(manifest)) !== pointer.manifestDigest) {
-      throw new Error(
-        "Executor handoff manifest digest does not match its pointer.",
-      );
-    }
+    const loaded = await this.loadByDigest(pointer.manifestDigest);
+    const { manifest, manifestPath } = loaded;
     const binding = manifest.binding;
     if (
       binding.worktree !== pointer.worktree ||
@@ -182,6 +178,35 @@ export class ExecutorHandoffManifestStore {
       );
     }
     return { manifest, pointer, manifestPath, pointerPath };
+  }
+
+  async loadByDigest(manifestDigest: string): Promise<{
+    readonly manifest: ExecutorHandoffManifest;
+    readonly manifestPath: string;
+  }> {
+    const digest = digestSchema.parse(manifestDigest);
+    await this.#assertProtectedRoot();
+    const manifestPath = path.join(this.root, `manifest-${digest}.json`);
+    const manifest = executorHandoffManifestSchema.parse(
+      await loadProtectedJsonFile({
+        file: manifestPath,
+        label: "Executor handoff manifest",
+      }),
+    );
+    if (executorHandoffManifestDigest(manifest) !== digest) {
+      throw new Error(
+        "Executor handoff manifest digest does not match its pointer.",
+      );
+    }
+    if (
+      manifest.binding.handoff.finalizationNonce !==
+      expectedFinalizationNonce(manifest)
+    ) {
+      throw new Error(
+        "Executor handoff finalization nonce does not match custody.",
+      );
+    }
+    return { manifest, manifestPath };
   }
 
   #pointerPath(worktree: string): string {

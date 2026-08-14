@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { CommandRunner } from "../adapters/command-runner.js";
 import type { ExecutorStartCommand } from "./command.js";
 
@@ -9,7 +10,7 @@ export interface ExecutionCandidateFinalizer {
   finalize(
     command: ExecutorStartCommand,
     finalizationNonce: string,
-  ): Promise<{ readonly head: string }>;
+  ): Promise<{ readonly head: string; readonly patchDigest: string }>;
 }
 
 export class GitExecutionCandidateFinalizer
@@ -23,7 +24,7 @@ export class GitExecutionCandidateFinalizer
   async finalize(
     command: ExecutorStartCommand,
     finalizationNonce: string,
-  ): Promise<{ readonly head: string }> {
+  ): Promise<{ readonly head: string; readonly patchDigest: string }> {
     if (!UUID.test(finalizationNonce)) {
       throw new Error("Candidate finalization nonce must be a UUID.");
     }
@@ -59,7 +60,10 @@ export class GitExecutionCandidateFinalizer
         title,
         finalizationNonce,
       });
-      return { head };
+      return {
+        head,
+        patchDigest: await this.#patchDigest(root, base, head),
+      };
     }
     if (head !== base) {
       throw new Error(
@@ -98,7 +102,22 @@ export class GitExecutionCandidateFinalizer
       title,
       finalizationNonce,
     });
-    return { head: finalizedHead };
+    return {
+      head: finalizedHead,
+      patchDigest: await this.#patchDigest(root, base, finalizedHead),
+    };
+  }
+
+  async #patchDigest(root: string, base: string, head: string): Promise<string> {
+    const patch = (
+      await this.runner.run({
+        executable: this.gitExecutable,
+        args: ["diff", "--binary", "--full-index", base, head, "--", "."],
+        cwd: root,
+        maxBufferBytes: 256 * 1_024 * 1_024,
+      })
+    ).stdout;
+    return createHash("sha256").update(patch, "utf8").digest("hex");
   }
 
   async #assertFinalizedCommit(input: {

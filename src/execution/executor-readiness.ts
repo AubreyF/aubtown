@@ -5,6 +5,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { CommandRunner } from "../adapters/command-runner.js";
 import type { WorkerRuntimeConfig } from "../config/worker-runtime.js";
+import { loadReviewerRuntimeConfig } from "../config/reviewer-runtime.js";
 import { sshTransportProofSchema } from "../security/ssh-worker-policy.js";
 
 const digest = z.string().regex(/^[0-9a-f]{64}$/u);
@@ -35,6 +36,20 @@ export const executorReadinessReportSchema = z.object({
   helper: z.object({ path: z.string().startsWith("/"), sha256: digest }),
   preparer: z.object({ path: z.string().startsWith("/"), sha256: digest }),
   completer: z.object({ path: z.string().startsWith("/"), sha256: digest }),
+  completionReader: z.object({
+    path: z.string().startsWith("/"),
+    sha256: digest,
+  }),
+  adjudicator: z.object({ path: z.string().startsWith("/"), sha256: digest }),
+  reviewer: z.object({
+    config: z.object({ path: z.string().startsWith("/"), sha256: digest }),
+    accountId: z.string().min(1),
+    codexExecutable: z.string().startsWith("/"),
+    codexHome: z.string().startsWith("/"),
+    model: z.string().min(1),
+    effort: z.enum(["low", "medium", "high", "xhigh"]),
+    quotaSampleIntervalMs: z.number().int().min(5_000).max(120_000),
+  }),
 });
 
 export type ExecutorReadinessReport = z.infer<
@@ -97,6 +112,9 @@ export async function probeExecutorReadiness(input: {
   readonly runtime: WorkerRuntimeConfig;
   readonly preparerFile: string;
   readonly completionFile: string;
+  readonly completionReaderFile: string;
+  readonly adjudicatorFile: string;
+  readonly reviewerRuntimeFile: string;
   readonly runner: CommandRunner;
   readonly checkedAt: string;
   readonly runningNodeExecutable?: string;
@@ -132,6 +150,27 @@ export async function probeExecutorReadiness(input: {
   const completer = await physicalFile({
     file: input.completionFile,
     label: "AubTown trusted completion entrypoint",
+    executable: false,
+  });
+  const completionReader = await physicalFile({
+    file: input.completionReaderFile,
+    label: "AubTown trusted completion reader",
+    executable: false,
+  });
+  const adjudicator = await physicalFile({
+    file: input.adjudicatorFile,
+    label: "AubTown trusted adjudicator",
+    executable: false,
+  });
+  const reviewerRuntime = await loadReviewerRuntimeConfig(
+    input.reviewerRuntimeFile,
+  );
+  if (reviewerRuntime.hostId !== input.runtime.hostId) {
+    throw new Error("Reviewer runtime targets another executor host.");
+  }
+  const reviewerConfig = await physicalFile({
+    file: input.reviewerRuntimeFile,
+    label: "AubTown reviewer runtime config",
     executable: false,
   });
   const node = await physicalFile({
@@ -199,5 +238,16 @@ export async function probeExecutorReadiness(input: {
     helper,
     preparer,
     completer,
+    completionReader,
+    adjudicator,
+    reviewer: {
+      config: reviewerConfig,
+      accountId: reviewerRuntime.accountId,
+      codexExecutable: reviewerRuntime.codexExecutable,
+      codexHome: reviewerRuntime.codexHome,
+      model: reviewerRuntime.model,
+      effort: reviewerRuntime.effort,
+      quotaSampleIntervalMs: reviewerRuntime.quotaSampleIntervalMs,
+    },
   });
 }

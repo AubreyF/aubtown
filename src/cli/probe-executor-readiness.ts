@@ -27,8 +27,13 @@ const report = await new SshExecutorReadinessProbe(new ProcessCommandRunner(), {
   remoteNodeExecutable: absolute("AUBTOWN_REMOTE_NODE_EXECUTABLE"),
   remoteProbeExecutable: absolute("AUBTOWN_REMOTE_EXECUTOR_PROBE"),
   remoteRuntimeConfig: absolute("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG"),
+  remoteReviewerRuntimeConfig: absolute(
+    "AUBTOWN_REMOTE_REVIEWER_RUNTIME_CONFIG",
+  ),
   remoteWorkspacePreparer: absolute("AUBTOWN_REMOTE_WORKSPACE_PREPARER"),
   remoteWorkspaceCompleter: absolute("AUBTOWN_REMOTE_WORKSPACE_COMPLETER"),
+  remoteCompletionReader: absolute("AUBTOWN_REMOTE_COMPLETION_READER"),
+  remoteAdjudicator: absolute("AUBTOWN_REMOTE_ADJUDICATOR"),
   expectedUser: required("AUBTOWN_SSH_WORKER_USER"),
   expectedIdentityFile: absolute("AUBTOWN_SSH_IDENTITY_FILE"),
   expectedKnownHostsFile: absolute("AUBTOWN_SSH_KNOWN_HOSTS_FILE"),
