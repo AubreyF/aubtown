@@ -1,6 +1,6 @@
 # Deployment contract
 
-Status: native deployment skeleton and authority broker source, writer disabled
+Status: native disabled-by-default installer and authority broker source, writer disabled
 
 ## Pilot topology
 
@@ -34,6 +34,28 @@ Copy the completed directory to `/opt/aubtown/releases/<commit>`, make the entir
 ```
 
 The installed verifier rejects the wrong path, platform, architecture, Node version, owner, mode, digest, missing file, unexpected file, or any symbolic link. Point `/opt/aubtown/current` at the release only after this proof succeeds. The pilot audit reruns the complete manifest verification at launch and still binds its critical executables individually. The release manifest closes the broader dependency and stale-file gap around them.
+
+## Disabled Linux host installation
+
+The release includes one native installer CLI. Plan the exact host change first:
+
+```sh
+/opt/aubtown/node/bin/node /opt/aubtown/releases/<commit>/dist/cli/install-linux-host.js \
+  --plan \
+  --release-root /opt/aubtown/releases/<commit>
+```
+
+Apply only after reviewing that plan:
+
+```sh
+sudo /opt/aubtown/node/bin/node /opt/aubtown/releases/<commit>/dist/cli/install-linux-host.js \
+  --apply \
+  --release-root /opt/aubtown/releases/<commit>
+```
+
+The installer verifies the root-owned release manifest before touching host state. It creates or verifies the four fixed service identities, exact private state directories, root configuration directories, and the reviewed systemd units. The Symphony and checkpoint identities use `nologin`. The executor and publisher identities use `/bin/bash` because OpenSSH invokes their reviewed remote or forced commands through the account shell. Password authentication, forwarding, interactive terminals, and unrestricted publisher commands remain prohibited by the SSH policy. The installer then points `/opt/aubtown/current` at that release and reloads systemd. It never enables or starts a unit. After installation it requires every unit to report `inactive` and either `disabled` or `static`.
+
+An exact retry is idempotent. A changed unit or a different active release fails closed unless the owner explicitly passes `--replace` while all units remain inactive. The installer creates no environment file, token, private key, Codex login, repository checkout, scheduler process, network listener, or provider traffic.
 
 ## Service graph
 
@@ -107,7 +129,7 @@ scoped receipts, not authority tokens or direct state-root access.
 - `/var/lib/aubtown/workspaces`: per-issue worktrees
 - `/var/lib/aubtown/executor/handoffs`: mode-0700 content-addressed executor custody manifests and active-workspace pointers
 - `/var/lib/aubtown/checkpoints`: encrypted unpublished-work objects
-- `/var/log/aubtown/symphony`: structured logs
+- `/var/lib/aubtown/logs/symphony`: protected structured logs. Journald remains the system log surface.
 
 On the initial Mac, the equivalent root-owned profile is
 `/Library/Application Support/AubTown/freed-broker-profiles/freed-pilot.json`.
