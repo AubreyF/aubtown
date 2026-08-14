@@ -43,6 +43,32 @@ describe("native Linux deployment", () => {
     expect(service).not.toMatch(/docker|compose|restate/iu);
   });
 
+  it("runs a loopback-only signed host observation gateway", async () => {
+    const service = await fixture(
+      "deploy/systemd/aubtown-host-gateway.service",
+    );
+    const environment = await fixture(
+      "deploy/systemd/host-gateway.env.example",
+    );
+    const symphony = await fixture("deploy/systemd/aubtown-symphony.service");
+    expect(service).toContain("User=aubtown-symphony");
+    expect(service).toContain("dist/host-gateway.js");
+    expect(service).toContain("StateDirectory=aubtown/coordinator");
+    expect(environment).toContain("AUBTOWN_BIND_HOST=127.0.0.1");
+    expect(environment).toContain("PORT=8090");
+    expect(environment).toContain(
+      "AUBTOWN_HOST_OBSERVATION_JOURNAL_FILE=/var/lib/aubtown/coordinator/host-observations.json",
+    );
+    expect(symphony).toContain("Requires=aubtown-github-token.service aubtown-host-gateway.service");
+    expect(`${service}\n${environment}`).not.toMatch(/docker|compose|restate/iu);
+    const hostAgent = await fixture("deploy/systemd/host-agent.env.example");
+    expect(hostAgent).toContain(
+      "AUBTOWN_HOST_GATEWAY_URL=http://127.0.0.1:8090",
+    );
+    expect(hostAgent).toContain("AUBTOWN_QUOTA_SAMPLE_SECONDS=60");
+    expect(hostAgent).not.toMatch(/replace-with-private-key|BEGIN PRIVATE KEY/iu);
+  });
+
   it("ships a native non-authoritative admission candidate publisher", async () => {
     const packageJson = await fixture("package.json");
     const publisher = await fixture(

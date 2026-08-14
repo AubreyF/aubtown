@@ -1,8 +1,8 @@
 [Unit]
 Description=AubTown Symphony coordinator
 Wants=network-online.target
-Requires=aubtown-github-token.service
-After=network-online.target aubtown-github-token.service
+Requires=aubtown-github-token.service aubtown-host-gateway.service
+After=network-online.target aubtown-github-token.service aubtown-host-gateway.service
 
 [Service]
 Type=simple

@@ -34,6 +34,7 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - A no-shell Freed claim broker caller with exact response-loss retry and protected envelope handoff
 - A native protected non-authoritative dispatch-candidate publisher with matching-envelope reuse
 - A native deterministic reconciler CLI across conflict, host, account, route, and quota state
+- A native signed host observation gateway with durable heartbeat and quota state
 - A Freed workflow that accepts only helper-prepared, policy-safe worktrees
 
 The checked-in Symphony prelaunch executable resolves a protected dispatch candidate before launch. A candidate is a request, not authority. The native publisher rejects unsafe files, stale claims, incompatible routes, ineligible work, and blocked daily or rolling-week quota before writing the request. Prelaunch checks freshness again before any broker call. An unchanged candidate may reuse its matching protected envelope. A changed candidate must acquire a new exact Freed claim through the reviewed host broker before AubTown publishes a replacement envelope. The final boundary then checks fresh quota and atomically records the exact claim, so a restart or concurrent process cannot admit it twice. The real writer remains disabled because the Freed task-claim commands and live reconciler are not wired yet. Passing tests does not authorize a live issue or GitHub write.
