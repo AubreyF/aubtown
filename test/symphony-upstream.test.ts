@@ -39,10 +39,13 @@ describe("Symphony upstream contract", () => {
     expect(lock.reviewedCapabilities).toContain(
       "fail-closed-active-turn-guard",
     );
+    expect(lock.reviewedCapabilities).toContain(
+      "fail-closed-trusted-completion-hook",
+    );
     expect(lock.knownGaps).not.toContain(
       "worker-host-selection-is-load-based-not-lane-aware",
     );
-    expect(lock.patches).toHaveLength(2);
+    expect(lock.patches).toHaveLength(3);
     for (const patch of lock.patches) {
       expect(patch.verifiedAgainst).toBe(lock.production.commit);
       const patchBytes = await readFile(path.join(root, patch.path));
@@ -52,6 +55,7 @@ describe("Symphony upstream contract", () => {
     }
     const runtimePatch = await readFile(path.join(root, lock.patches[0]!.path));
     const activeGuardPatch = await readFile(path.join(root, lock.patches[1]!.path));
+    const completionPatch = await readFile(path.join(root, lock.patches[2]!.path));
     expect(runtimePatch.toString("utf8")).toContain(
       "select_worker_host_for_issue_for_test",
     );
@@ -65,6 +69,12 @@ describe("Symphony upstream contract", () => {
     expect(activeGuardPatch.toString("utf8")).toContain("turn/interrupt");
     expect(activeGuardPatch.toString("utf8")).toContain(
       "active_guard_hard_stop",
+    );
+    expect(completionPatch.toString("utf8")).toContain(
+      "Workspace.run_completion_hook",
+    );
+    expect(completionPatch.toString("utf8")).toContain(
+      "trusted completion hook propagates failure",
     );
   });
 

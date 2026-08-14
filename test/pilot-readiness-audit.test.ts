@@ -83,13 +83,14 @@ async function fixture(): Promise<{
       reviewedCapabilities: [
         "fail-closed-prelaunch-admission-command",
         "fail-closed-active-turn-guard",
+        "fail-closed-trusted-completion-hook",
       ],
       knownGaps: [],
     })}\n`,
   );
   await protectedFile(
     workflowFile,
-    "kind: github\nfactory:ready\nmax_concurrent_agents: 1\nsymphony-prelaunch.js\nsymphony-active-run-guard.js\n",
+    "kind: github\nfactory:ready\nmax_concurrent_agents: 1\nsymphony-prelaunch.js\nsymphony-active-run-guard.js\ncomplete-symphony-workspace.js\n",
   );
   await protectedFile(symphonyExecutable, "#!/bin/sh\nexit 0\n", 0o700);
   await protectedFile(claimBrokerExecutable, "#!/bin/sh\nexit 0\n", 0o700);
@@ -132,6 +133,10 @@ async function fixture(): Promise<{
   );
   await protectedFile(
     path.join(releaseRoot, "dist/cli/prepare-symphony-workspace.js"),
+    "export {};\n",
+  );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/complete-symphony-workspace.js"),
     "export {};\n",
   );
   await protectedFile(
@@ -270,6 +275,10 @@ async function fixture(): Promise<{
       },
       preparer: {
         path: "/opt/aubtown/releases/test/dist/cli/prepare-symphony-workspace.js",
+        sha256: createHash("sha256").update("export {};\n").digest("hex"),
+      },
+      completer: {
+        path: "/opt/aubtown/releases/test/dist/cli/complete-symphony-workspace.js",
         sha256: createHash("sha256").update("export {};\n").digest("hex"),
       },
       transport: {

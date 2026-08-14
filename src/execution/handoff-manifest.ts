@@ -1,13 +1,11 @@
 import { createHash } from "node:crypto";
-import { chmod, lstat, mkdir, open, realpath } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import {
-  canonicalJson,
-  canonicalJsonEqual,
-} from "../security/canonical-json.js";
+import { canonicalJson } from "../security/canonical-json.js";
 import {
   loadProtectedJsonFile,
+  writeImmutableProtectedJsonFile,
   writeProtectedJsonFile,
 } from "../security/protected-json.js";
 import {
@@ -54,15 +52,6 @@ export interface PublishedExecutorHandoff {
 
 function sha256(value: Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function isAlreadyPresent(error: unknown): boolean {
-  return (
-    error !== null &&
-    typeof error === "object" &&
-    "code" in error &&
-    (error as { readonly code?: string }).code === "EEXIST"
-  );
 }
 
 function manifestFromRequirement(
@@ -121,7 +110,11 @@ export class ExecutorHandoffManifestStore {
     const manifestDigest = sha256(canonicalJson(manifest));
     const manifestFile = `manifest-${manifestDigest}.json`;
     const manifestPath = path.join(this.root, manifestFile);
-    await this.#writeImmutableManifest(manifestPath, manifest);
+    await writeImmutableProtectedJsonFile({
+      file: manifestPath,
+      label: "Executor handoff manifest",
+      value: manifest,
+    });
     const pointer = activeWorkspacePointerSchema.parse({
       schemaVersion: 1,
       kind: "active-executor-workspace",
@@ -144,6 +137,7 @@ export class ExecutorHandoffManifestStore {
 
   async loadForWorkspace(worktree: string): Promise<PublishedExecutorHandoff> {
     await this.#assertPhysicalWorkspace(worktree);
+    await this.#assertProtectedRoot();
     const pointerPath = this.#pointerPath(worktree);
     const pointer = activeWorkspacePointerSchema.parse(
       await loadProtectedJsonFile({
@@ -200,51 +194,15 @@ export class ExecutorHandoffManifestStore {
     return path.join(this.root, `workspace-${digest}.json`);
   }
 
-  async #writeImmutableManifest(
-    file: string,
-    manifest: ExecutorHandoffManifest,
-  ): Promise<void> {
-    await this.#prepareRoot();
-    let handle;
-    try {
-      handle = await open(file, "wx", 0o600);
-      await handle.writeFile(`${JSON.stringify(manifest)}\n`, "utf8");
-      await handle.chmod(0o600);
-      await handle.sync();
-    } catch (error) {
-      if (!isAlreadyPresent(error)) {
-        throw error;
-      }
-      const existing = executorHandoffManifestSchema.parse(
-        await loadProtectedJsonFile({
-          file,
-          label: "Executor handoff manifest",
-        }),
-      );
-      if (!canonicalJsonEqual(existing, manifest)) {
-        throw new Error(
-          "Executor handoff manifest conflicts with immutable custody.",
-        );
-      }
-      return;
-    } finally {
-      await handle?.close();
-    }
-    const directory = await open(this.root, "r");
-    try {
-      await directory.sync();
-    } finally {
-      await directory.close();
-    }
-  }
-
-  async #prepareRoot(): Promise<void> {
-    await mkdir(this.root, { recursive: true, mode: 0o700 });
+  async #assertProtectedRoot(): Promise<void> {
     const stats = await lstat(this.root);
-    if (!stats.isDirectory() || stats.isSymbolicLink()) {
+    if (
+      !stats.isDirectory() ||
+      stats.isSymbolicLink() ||
+      (stats.mode & 0o077) !== 0
+    ) {
       throw new Error("Executor handoff root must be a physical directory.");
     }
-    await chmod(this.root, 0o700);
     if ((await realpath(this.root)) !== this.root) {
       throw new Error("Executor handoff root cannot contain symbolic links.");
     }

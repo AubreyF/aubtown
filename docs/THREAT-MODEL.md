@@ -29,6 +29,8 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Symphony starts in an empty or foreign directory | Admission invokes one fixed remote preparer after claim acquisition and verifies its exact receipt; `after_create` rejects fallback directories and `before_run` verifies a clean worktree under the enrolled Freed repository |
 | A completion hook acts on another claim or workspace | A content-addressed manifest binds exact custody and an atomic pointer selects it by physical worktree; digest, path, claim, host, epoch, qualification, and finalization identity are rechecked on load |
 | Worker code tampers with executor custody | The mode-0700 handoff root sits outside the workspace-write sandbox, contains no credential, and exposes only mode-0600 manifests to trusted host hooks |
+| A completion retry creates another commit or spends another Codex turn | Exact commit message and nonce verification make completion idempotent; the pre-run guard blocks a workspace with an existing completion receipt before app-server startup |
+| Completion publishes stale custody | The executor hook has no publication or authority credential; coordinator reconciliation must recheck the current claim before validation, review, or draft publication |
 | Issue text injects a remote shell command during workspace setup | SSH receives only strict host IDs, fixed shell-safe absolute command paths, and one schema-checked base64url payload; issue prose is never interpolated into the remote command |
 | Conflicting tasks run concurrently | Qualified path domains and logical locks are compared against every active claim before admission |
 | A missing claim is mistaken for free capacity | Planning requires one complete broker claim-list response with unique task and claim IDs; missing or malformed evidence blocks |
@@ -85,6 +87,8 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 - No terminal handoff before encrypted checkpoint persistence.
 - No publication for an unreviewed or changed work-product identity.
 - No trusted completion action without a matching active-workspace handoff digest and exact custody identity.
+- No second worker turn after a trusted completion receipt exists.
+- No candidate commit containing a path outside qualified ownership.
 - No publication above draft pull request.
 - No automatic merge, release, deployment, issue closure, signing, secret use, migration, or provider traffic.
 - No floating Symphony branch or tag in production.

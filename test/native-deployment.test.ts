@@ -31,6 +31,7 @@ describe("native Linux deployment", () => {
     expect(workflow).toContain("interrupt_grace_ms: 5000");
     expect(workflow).toContain("reject-unprepared-symphony-workspace.js");
     expect(workflow).toContain("verify-symphony-workspace.js");
+    expect(workflow).toContain("complete-symphony-workspace.js");
     expect(workflow).toContain("linux-control-1");
     expect(workflow).toContain("macos-executor-1");
     expect(workflow).not.toMatch(/docker|compose|restate/iu);
@@ -46,6 +47,7 @@ describe("native Linux deployment", () => {
     ) as Record<string, unknown>;
     expect(environment).toContain("AUBTOWN_SSH_EXECUTABLE=/usr/bin/ssh");
     expect(environment).toContain("prepare-symphony-workspace.js");
+    expect(environment).toContain("complete-symphony-workspace.js");
     expect(environment).toContain("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG=");
     expect(runtime).toMatchObject({
       hostId: "linux-control-1",

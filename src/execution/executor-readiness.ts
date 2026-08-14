@@ -34,6 +34,7 @@ export const executorReadinessReportSchema = z.object({
   }),
   helper: z.object({ path: z.string().startsWith("/"), sha256: digest }),
   preparer: z.object({ path: z.string().startsWith("/"), sha256: digest }),
+  completer: z.object({ path: z.string().startsWith("/"), sha256: digest }),
 });
 
 export type ExecutorReadinessReport = z.infer<
@@ -95,6 +96,7 @@ async function physicalFile(input: {
 export async function probeExecutorReadiness(input: {
   readonly runtime: WorkerRuntimeConfig;
   readonly preparerFile: string;
+  readonly completionFile: string;
   readonly runner: CommandRunner;
   readonly checkedAt: string;
   readonly runningNodeExecutable?: string;
@@ -125,6 +127,11 @@ export async function probeExecutorReadiness(input: {
   const preparer = await physicalFile({
     file: input.preparerFile,
     label: "AubTown workspace preparer",
+    executable: false,
+  });
+  const completer = await physicalFile({
+    file: input.completionFile,
+    label: "AubTown trusted completion entrypoint",
     executable: false,
   });
   const node = await physicalFile({
@@ -191,5 +198,6 @@ export async function probeExecutorReadiness(input: {
     node: { executable: node.path, version: runningVersion },
     helper,
     preparer,
+    completer,
   });
 }

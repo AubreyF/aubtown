@@ -1,0 +1,206 @@
+From aa812e83e75db7e6b0c662bb7b88b480c0cd7d7f Mon Sep 17 00:00:00 2001
+From: AubTown Build <build@example.invalid>
+Date: Thu, 13 Aug 2026 23:59:39 -0700
+Subject: [PATCH] feat: add required completion hook
+
+---
+ elixir/lib/symphony_elixir/agent_runner.ex    |  6 +++--
+ elixir/lib/symphony_elixir/config/schema.ex   |  3 ++-
+ elixir/lib/symphony_elixir/workspace.ex       | 22 +++++++++++++++
+ elixir/test/support/test_support.exs          | 26 +++++++++++++++---
+ elixir/test/symphony_elixir/core_test.exs     |  2 ++
+ .../workspace_and_config_test.exs             | 27 +++++++++++++++++++
+ 6 files changed, 79 insertions(+), 7 deletions(-)
+
+diff --git a/elixir/lib/symphony_elixir/agent_runner.ex b/elixir/lib/symphony_elixir/agent_runner.ex
+index f99a2d9..3d37440 100644
+--- a/elixir/lib/symphony_elixir/agent_runner.ex
++++ b/elixir/lib/symphony_elixir/agent_runner.ex
+@@ -43,8 +43,10 @@ defmodule SymphonyElixir.AgentRunner do
+         send_worker_runtime_info(codex_update_recipient, issue, worker_host, workspace)
+ 
+         try do
+-          with :ok <- Workspace.run_before_run_hook(workspace, issue, worker_host) do
+-            run_codex_turns(workspace, issue, codex_update_recipient, opts, worker_host)
++          with :ok <- Workspace.run_before_run_hook(workspace, issue, worker_host),
++               :ok <- run_codex_turns(workspace, issue, codex_update_recipient, opts, worker_host),
++               :ok <- Workspace.run_completion_hook(workspace, issue, worker_host) do
++            :ok
+           end
+         after
+           Workspace.run_after_run_hook(workspace, issue, worker_host)
+diff --git a/elixir/lib/symphony_elixir/config/schema.ex b/elixir/lib/symphony_elixir/config/schema.ex
+index c2ce38b..a8050a0 100644
+--- a/elixir/lib/symphony_elixir/config/schema.ex
++++ b/elixir/lib/symphony_elixir/config/schema.ex
+@@ -322,6 +322,7 @@ defmodule SymphonyElixir.Config.Schema do
+     embedded_schema do
+       field(:after_create, :string)
+       field(:before_run, :string)
++      field(:completion, :string)
+       field(:after_run, :string)
+       field(:before_remove, :string)
+       field(:timeout_ms, :integer, default: 60_000)
+@@ -330,7 +331,7 @@ defmodule SymphonyElixir.Config.Schema do
+     @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
+     def changeset(schema, attrs) do
+       schema
+-      |> cast(attrs, [:after_create, :before_run, :after_run, :before_remove, :timeout_ms], empty_values: [])
++      |> cast(attrs, [:after_create, :before_run, :completion, :after_run, :before_remove, :timeout_ms], empty_values: [])
+       |> validate_number(:timeout_ms, greater_than: 0)
+     end
+   end
+diff --git a/elixir/lib/symphony_elixir/workspace.ex b/elixir/lib/symphony_elixir/workspace.ex
+index 28ee2da..7e07b51 100644
+--- a/elixir/lib/symphony_elixir/workspace.ex
++++ b/elixir/lib/symphony_elixir/workspace.ex
+@@ -246,6 +246,28 @@ defmodule SymphonyElixir.Workspace do
+     end
+   end
+ 
++  @doc """
++  Runs the trusted completion hook after Codex succeeds.
++
++  Unlike `after_run`, this hook is part of the worker result. A missing command is disabled, while
++  a command failure or timeout propagates to the orchestrator and fails the worker attempt.
++  """
++  @spec run_completion_hook(Path.t(), map() | String.t() | nil, worker_host()) ::
++          :ok | {:error, term()}
++  def run_completion_hook(workspace, issue_or_identifier, worker_host \\ nil)
++      when is_binary(workspace) do
++    issue_context = issue_context(issue_or_identifier)
++    hooks = Config.settings!().hooks
++
++    case hooks.completion do
++      nil ->
++        :ok
++
++      command ->
++        run_hook(command, workspace, issue_context, "completion", worker_host)
++    end
++  end
++
+   defp workspace_path_for_issue(safe_id, nil) when is_binary(safe_id) do
+     Config.local_workspace_root()
+     |> Path.join(safe_id)
+diff --git a/elixir/test/support/test_support.exs b/elixir/test/support/test_support.exs
+index 7d73c7f..820a658 100644
+--- a/elixir/test/support/test_support.exs
++++ b/elixir/test/support/test_support.exs
+@@ -122,6 +122,7 @@ defmodule SymphonyElixir.TestSupport do
+           codex_stall_timeout_ms: 300_000,
+           hook_after_create: nil,
+           hook_before_run: nil,
++          hook_completion: nil,
+           hook_after_run: nil,
+           hook_before_remove: nil,
+           hook_timeout_ms: 60_000,
+@@ -167,6 +168,7 @@ defmodule SymphonyElixir.TestSupport do
+     codex_stall_timeout_ms = Keyword.get(config, :codex_stall_timeout_ms)
+     hook_after_create = Keyword.get(config, :hook_after_create)
+     hook_before_run = Keyword.get(config, :hook_before_run)
++    hook_completion = Keyword.get(config, :hook_completion)
+     hook_after_run = Keyword.get(config, :hook_after_run)
+     hook_before_remove = Keyword.get(config, :hook_before_remove)
+     hook_timeout_ms = Keyword.get(config, :hook_timeout_ms)
+@@ -215,7 +217,14 @@ defmodule SymphonyElixir.TestSupport do
+         "  turn_timeout_ms: #{yaml_value(codex_turn_timeout_ms)}",
+         "  read_timeout_ms: #{yaml_value(codex_read_timeout_ms)}",
+         "  stall_timeout_ms: #{yaml_value(codex_stall_timeout_ms)}",
+-        hooks_yaml(hook_after_create, hook_before_run, hook_after_run, hook_before_remove, hook_timeout_ms),
++        hooks_yaml(
++          hook_after_create,
++          hook_before_run,
++          hook_completion,
++          hook_after_run,
++          hook_before_remove,
++          hook_timeout_ms
++        ),
+         observability_yaml(observability_enabled, observability_refresh_ms, observability_render_interval_ms),
+         server_yaml(server_port, server_host),
+         "---",
+@@ -248,14 +257,23 @@ defmodule SymphonyElixir.TestSupport do
+ 
+   defp yaml_value(value), do: yaml_value(to_string(value))
+ 
+-  defp hooks_yaml(nil, nil, nil, nil, timeout_ms), do: "hooks:\n  timeout_ms: #{yaml_value(timeout_ms)}"
+-
+-  defp hooks_yaml(hook_after_create, hook_before_run, hook_after_run, hook_before_remove, timeout_ms) do
++  defp hooks_yaml(nil, nil, nil, nil, nil, timeout_ms),
++    do: "hooks:\n  timeout_ms: #{yaml_value(timeout_ms)}"
++
++  defp hooks_yaml(
++         hook_after_create,
++         hook_before_run,
++         hook_completion,
++         hook_after_run,
++         hook_before_remove,
++         timeout_ms
++       ) do
+     [
+       "hooks:",
+       "  timeout_ms: #{yaml_value(timeout_ms)}",
+       hook_entry("after_create", hook_after_create),
+       hook_entry("before_run", hook_before_run),
++      hook_entry("completion", hook_completion),
+       hook_entry("after_run", hook_after_run),
+       hook_entry("before_remove", hook_before_remove)
+     ]
+diff --git a/elixir/test/symphony_elixir/core_test.exs b/elixir/test/symphony_elixir/core_test.exs
+index 1beea17..c4ea8f7 100644
+--- a/elixir/test/symphony_elixir/core_test.exs
++++ b/elixir/test/symphony_elixir/core_test.exs
+@@ -1701,6 +1701,7 @@ defmodule SymphonyElixir.CoreTest do
+       write_workflow_file!(Workflow.workflow_file_path(),
+         workspace_root: workspace_root,
+         hook_after_create: "cp #{Path.join(template_repo, "README.md")} README.md",
++        hook_completion: "echo complete > completion.log",
+         codex_command: "#{codex_binary} app-server"
+       )
+ 
+@@ -1729,6 +1730,7 @@ defmodule SymphonyElixir.CoreTest do
+       workspace = Path.join(workspace_root, workspace_name)
+       assert File.exists?(workspace)
+       assert File.exists?(Path.join(workspace, "README.md"))
++      assert File.read!(Path.join(workspace, "completion.log")) == "complete\n"
+     after
+       File.rm_rf(test_root)
+     end
+diff --git a/elixir/test/symphony_elixir/workspace_and_config_test.exs b/elixir/test/symphony_elixir/workspace_and_config_test.exs
+index 15f7c36..caaca85 100644
+--- a/elixir/test/symphony_elixir/workspace_and_config_test.exs
++++ b/elixir/test/symphony_elixir/workspace_and_config_test.exs
+@@ -925,6 +925,33 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
+     end
+   end
+ 
++  test "trusted completion hook propagates failure" do
++    test_root =
++      Path.join(
++        System.tmp_dir!(),
++        "symphony-elixir-completion-hook-fail-#{System.unique_integer([:positive])}"
++      )
++
++    try do
++      workspace_root = Path.join(test_root, "workspaces")
++      File.mkdir_p!(workspace_root)
++
++      write_workflow_file!(Workflow.workflow_file_path(),
++        workspace_root: workspace_root,
++        hook_completion: "echo completion-denied && exit 17"
++      )
++
++      assert {:ok, workspace} = Workspace.create_for_issue("MT-COMPLETION-FAIL")
++
++      assert {:error, {:workspace_hook_failed, "completion", 17, output}} =
++               Workspace.run_completion_hook(workspace, "MT-COMPLETION-FAIL")
++
++      assert output =~ "completion-denied"
++    after
++      File.rm_rf(test_root)
++    end
++  end
++
+   test "workspace remove continues when before_remove hook fails with large output" do
+     test_root =
+       Path.join(

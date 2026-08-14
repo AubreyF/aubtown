@@ -218,6 +218,7 @@ export async function auditPilotReadiness(input: {
   let dispatch: z.infer<typeof dispatchSchema> | undefined;
   let executorReadiness: SelectedExecutorReadinessReport | undefined;
   let workspacePreparerSha256: string | undefined;
+  let workspaceCompleterSha256: string | undefined;
   let expectedNodeVersion: string | undefined;
   let planningSource: unknown;
   let dispatchSource: unknown;
@@ -248,13 +249,14 @@ export async function auditPilotReadiness(input: {
         "factory:ready",
         "symphony-prelaunch.js",
         "symphony-active-run-guard.js",
+        "complete-symphony-workspace.js",
         "max_concurrent_agents: 1",
       ]) {
         if (!workflow.includes(required)) {
           throw new Error(`Symphony workflow lacks ${required}.`);
         }
       }
-      return "reviewed admission, active guard, and concurrency contract present";
+      return "reviewed admission, active guard, trusted completion, and concurrency contract present";
     }),
     check("runtime:planning-snapshot", async () => {
       planningSource = await loadProtectedJsonFile({
@@ -334,6 +336,19 @@ export async function auditPilotReadiness(input: {
       });
       workspacePreparerSha256 = sha256(await readFile(file));
       return workspacePreparerSha256;
+    }),
+    check("runtime:workspace-completer-executable", async () => {
+      const file = await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/complete-symphony-workspace.js",
+        ),
+        label: "AubTown trusted workspace completer",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      });
+      workspaceCompleterSha256 = sha256(await readFile(file));
+      return workspaceCompleterSha256;
     }),
     check("runtime:node-version-contract", async () => {
       const file = await physicalFile({
@@ -447,6 +462,7 @@ export async function auditPilotReadiness(input: {
       for (const capability of [
         "fail-closed-prelaunch-admission-command",
         "fail-closed-active-turn-guard",
+        "fail-closed-trusted-completion-hook",
       ]) {
         if (!lock.reviewedCapabilities.includes(capability)) {
           throw new Error(`Symphony lock lacks reviewed capability ${capability}.`);
@@ -522,13 +538,14 @@ export async function auditPilotReadiness(input: {
         path.dirname(candidate.intendedClaim.worktree) !==
           executorReadiness.worktreeRoot ||
         executorReadiness.preparer.sha256 !== workspacePreparerSha256 ||
+        executorReadiness.completer.sha256 !== workspaceCompleterSha256 ||
         executorReadiness.node.version !== expectedNodeVersion
       ) {
         throw new Error(
-          "Executor readiness disagrees with the selected host, repository, base, workspace root, preparer, or Node version.",
+          "Executor readiness disagrees with the selected host, repository, base, workspace root, preparer, completer, or Node version.",
         );
       }
-      return `${executorReadiness.hostId}:${executorReadiness.helper.sha256}:${executorReadiness.preparer.sha256}`;
+      return `${executorReadiness.hostId}:${executorReadiness.helper.sha256}:${executorReadiness.preparer.sha256}:${executorReadiness.completer.sha256}`;
     }),
   );
 

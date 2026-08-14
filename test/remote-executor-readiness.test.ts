@@ -27,6 +27,10 @@ const report = {
     path: "/opt/aubtown/releases/test/prepare-symphony-workspace.js",
     sha256: "c".repeat(64),
   },
+  completer: {
+    path: "/opt/aubtown/releases/test/complete-symphony-workspace.js",
+    sha256: "f".repeat(64),
+  },
 };
 
 const transport = {
@@ -61,7 +65,8 @@ function probe(runner: CommandRunner): SshExecutorReadinessProbe {
       remoteNodeExecutable: "/opt/aubtown/node/bin/node",
       remoteProbeExecutable: "/opt/aubtown/releases/test/probe.js",
       remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
-      remoteWorkspacePreparer: "/opt/aubtown/releases/test/preparer.js",
+    remoteWorkspacePreparer: "/opt/aubtown/releases/test/preparer.js",
+    remoteWorkspaceCompleter: "/opt/aubtown/releases/test/completer.js",
       expectedUser: "aubtown-executor",
       expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
       expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
@@ -88,6 +93,7 @@ describe("remote executor readiness", () => {
         "/opt/aubtown/releases/test/probe.js",
         "/etc/aubtown/worker-runtime.json",
         "/opt/aubtown/releases/test/preparer.js",
+        "/opt/aubtown/releases/test/completer.js",
       ],
     });
   });

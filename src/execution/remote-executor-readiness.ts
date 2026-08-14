@@ -18,6 +18,7 @@ export interface SshExecutorReadinessConfig {
   readonly remoteProbeExecutable: string;
   readonly remoteRuntimeConfig: string;
   readonly remoteWorkspacePreparer: string;
+  readonly remoteWorkspaceCompleter: string;
   readonly expectedUser: string;
   readonly expectedIdentityFile: string;
   readonly expectedKnownHostsFile: string;
@@ -65,6 +66,10 @@ export class SshExecutorReadinessProbe {
         config.remoteWorkspacePreparer,
         "Remote workspace preparer",
       ),
+      remoteWorkspaceCompleter: remoteToken(
+        config.remoteWorkspaceCompleter,
+        "Remote workspace completer",
+      ),
     };
   }
 
@@ -95,6 +100,7 @@ export class SshExecutorReadinessProbe {
         this.#config.remoteProbeExecutable,
         this.#config.remoteRuntimeConfig,
         this.#config.remoteWorkspacePreparer,
+        this.#config.remoteWorkspaceCompleter,
       ],
       cwd: this.#config.commandCwd,
       timeoutMs: 20_000,

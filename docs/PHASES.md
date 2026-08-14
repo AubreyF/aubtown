@@ -31,7 +31,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Refresh compatible locked dependencies until the Hex audit has no current security advisories.
 - [x] Add the reviewed Symphony prelaunch admission boundary.
 - [x] Add the Freed-specific `WORKFLOW.md`, helper-only workspace preparation, and fail-closed workspace guards.
-- [x] Run the complete upstream Symphony suite against the pinned commit and patch series, with 303 passing and 6 explicit skips.
+- [x] Run the complete upstream Symphony suite against the pinned commit and patch series, with 304 passing and 6 explicit skips.
 - [x] Prove a fake issue cannot dispatch twice across coordinator restart.
 - [x] Prove daily and rolling-week quota stops through the Symphony admission boundary.
 - [x] Preserve gross daily quota consumption across weekly-window resets and cross-check it against cumulative token activity.
@@ -57,6 +57,9 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Persist one protected content-addressed executor handoff and active-workspace pointer after exact worktree preparation.
 - [x] Bind handoff custody to qualification, task revision, account, driver, owned paths, publication ceiling, and trusted finalization identity.
 - [x] Require private handoff roots in both Linux and macOS executor configurations and readiness evidence.
+- [x] Add a required Symphony completion hook that propagates failure instead of using best-effort `after_run` semantics.
+- [x] Finalize only qualified paths into one trusted commit and persist one immutable completion receipt.
+- [x] Fence an already-finalized workspace before another Codex turn can spend subscription capacity.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
 - [x] Add hard-boundary active-turn interruption to the Symphony runner.

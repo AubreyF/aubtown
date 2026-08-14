@@ -10,7 +10,12 @@ export async function assertPreparedSymphonyWorkspace(input: {
   readonly workspace: string;
   readonly config: WorkerRuntimeConfig;
   readonly runner: CommandRunner;
-}): Promise<{ readonly branch: string; readonly head: string }> {
+  readonly requireClean?: boolean;
+}): Promise<{
+  readonly branch: string;
+  readonly head: string;
+  readonly clean: boolean;
+}> {
   const workspace = path.resolve(input.workspace);
   const worktreeRoot = await physicalDirectory(input.config.worktreeRoot, "worktree root");
   const repositoryRoot = await physicalDirectory(
@@ -58,7 +63,8 @@ export async function assertPreparedSymphonyWorkspace(input: {
       cwd: physicalWorkspace,
     })
   ).stdout;
-  if (status.trim() !== "") {
+  const clean = status.trim() === "";
+  if (input.requireClean !== false && !clean) {
     throw new Error("Symphony workspace must be clean before worker launch.");
   }
   const head = (
@@ -71,7 +77,7 @@ export async function assertPreparedSymphonyWorkspace(input: {
   if (!/^[0-9a-f]{40}$/u.test(head)) {
     throw new Error("Symphony workspace HEAD is invalid.");
   }
-  return { branch, head };
+  return { branch, head, clean };
 }
 
 async function physicalDirectory(value: string, purpose: string): Promise<string> {

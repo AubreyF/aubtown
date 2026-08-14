@@ -47,6 +47,7 @@ codex:
 hooks:
   after_create: /opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reject-unprepared-symphony-workspace.js
   before_run: /opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/verify-symphony-workspace.js /etc/aubtown/worker-runtime.json
+  completion: /opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/complete-symphony-workspace.js /etc/aubtown/worker-runtime.json
   timeout_ms: 120000
 observability:
   dashboard_enabled: true

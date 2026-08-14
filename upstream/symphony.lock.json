@@ -40,6 +40,16 @@
         "exact-thread-and-turn-interruption",
         "hard-stop-after-interrupt-grace"
       ]
+    },
+    {
+      "path": "upstream/patches/0003-feat-add-required-completion-hook.patch",
+      "sha256": "5bc24c147078d3f0177b95fb71499df212954702b6e3e67e37d52e0a2f61262d",
+      "verifiedAgainst": "8001b52e3062495a16e520e4ceaf8f9de868c4d0",
+      "purpose": [
+        "fail-closed-trusted-completion-hook",
+        "completion-before-best-effort-cleanup",
+        "remote-executor-finalization"
+      ]
     }
   ],
   "reviewedCapabilities": [
@@ -57,12 +67,13 @@
     "capability-aware-ssh-worker-routing",
     "fail-closed-prelaunch-admission-command",
     "fail-closed-active-turn-guard",
+    "fail-closed-trusted-completion-hook",
     "security-audited-compatible-dependencies"
   ],
   "knownGaps": [
     "blocked-and-retry-state-is-memory-only",
     "configured-ssh-workers-replace-local-execution-instead-of-forming-one-mixed-pool",
-    "freed-worktree-admission-handshake-is-not-yet-wired",
-    "freed-authority-claim-commands-are-not-yet-implemented"
+    "freed-authority-claim-commands-are-not-yet-implemented",
+    "coordinator-completion-reconciliation-is-not-yet-wired"
   ]
 }

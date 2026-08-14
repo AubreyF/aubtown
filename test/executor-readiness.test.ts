@@ -26,6 +26,7 @@ afterEach(async () => {
 async function fixture(): Promise<{
   readonly runtime: WorkerRuntimeConfig;
   readonly preparer: string;
+  readonly completer: string;
   readonly baseHead: string;
 }> {
   const root = await realpath(
@@ -37,6 +38,7 @@ async function fixture(): Promise<{
   const handoffRoot = path.join(root, "handoffs");
   const helper = path.join(repository, "scripts", "worktree-add.sh");
   const preparer = path.join(root, "release", "prepare-symphony-workspace.js");
+  const completer = path.join(root, "release", "complete-symphony-workspace.js");
   await mkdir(path.dirname(helper), { recursive: true });
   await mkdir(worktreeRoot);
   await mkdir(handoffRoot, { mode: 0o700 });
@@ -82,9 +84,11 @@ async function fixture(): Promise<{
   await writeFile(helper, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
   await chmod(helper, 0o700);
   await writeFile(preparer, "export {};\n", { mode: 0o600 });
+  await writeFile(completer, "export {};\n", { mode: 0o600 });
   const nodeExecutable = await realpath(process.execPath);
   return {
     preparer,
+    completer,
     baseHead,
     runtime: {
       schemaVersion: 1,
@@ -112,6 +116,7 @@ describe("executor readiness", () => {
       probeExecutorReadiness({
         runtime: prepared.runtime,
         preparerFile: prepared.preparer,
+        completionFile: prepared.completer,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,
@@ -125,6 +130,7 @@ describe("executor readiness", () => {
       handoffRoot: prepared.runtime.handoffRoot,
       helper: { path: prepared.runtime.worktreeHelper },
       preparer: { path: prepared.preparer },
+      completer: { path: prepared.completer },
     });
   });
 
@@ -135,6 +141,7 @@ describe("executor readiness", () => {
       probeExecutorReadiness({
         runtime: prepared.runtime,
         preparerFile: prepared.preparer,
+        completionFile: prepared.completer,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,
@@ -155,6 +162,7 @@ describe("executor readiness", () => {
       probeExecutorReadiness({
         runtime: { ...prepared.runtime, worktreeHelper: foreign },
         preparerFile: prepared.preparer,
+        completionFile: prepared.completer,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,
@@ -169,6 +177,7 @@ describe("executor readiness", () => {
       probeExecutorReadiness({
         runtime: prepared.runtime,
         preparerFile: prepared.preparer,
+        completionFile: prepared.completer,
         runner,
         checkedAt: "2026-08-13T22:00:00.000Z",
         runningNodeExecutable: prepared.runtime.nodeExecutable,

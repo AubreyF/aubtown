@@ -165,7 +165,7 @@ describe("executor handoff manifest", () => {
         requirement: requirement(prepared.worktree),
         activatedAt: "2026-08-13T18:00:03.000Z",
       }),
-    ).rejects.toThrow("conflicts with immutable custody");
+    ).rejects.toThrow("conflicts with immutable content");
 
     await writeFile(
       published.pointerPath,
