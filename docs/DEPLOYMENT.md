@@ -79,6 +79,21 @@ scoped receipts, not authority tokens or direct state-root access.
 - `/etc/aubtown/WORKFLOW.md`: root-owned reviewed workflow
 - `/etc/aubtown/symphony.env`: mode-restricted non-secret paths and secret references
 - `/etc/aubtown/freed-broker-profiles/freed-pilot.json`: root-owned Linux broker profile with exact runtime checksums
+
+Generate the production profile from installed physical artifacts instead of
+editing the example by hand:
+
+```text
+npm run freed:plan-broker-install -- \
+  --freed-root /opt/freed/control/<reviewed-commit> \
+  --freed-commit <reviewed-commit> \
+  --release-root /opt/aubtown/releases/<reviewed-aubtown-commit>
+```
+
+The command is read-only and requires root so its successful result proves the
+same ownership boundary the broker will enforce. It emits the exact profile and
+digests, but does not install them or activate any unit.
+
 - `/etc/aubtown/ssh/config`: root-owned worker aliases and host-key policy
 - `/etc/aubtown/ssh/worker_ed25519`: coordinator-to-executor private key, mode 0600
 - `/etc/aubtown/ssh/publisher_ed25519`: coordinator-to-publisher private key, mode 0600

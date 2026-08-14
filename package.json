@@ -12,6 +12,7 @@
     "build:broker": "go build -trimpath -o dist/factory-coordinator ./cmd/factory-coordinator",
     "release:bundle": "npm run build && node dist/cli/build-release-bundle.js",
     "release:verify-install": "node dist/cli/verify-release-install.js",
+    "freed:plan-broker-install": "tsx src/cli/plan-freed-broker-install.ts",
     "check": "npm run typecheck && npm test && npm run test:broker",
     "check:symphony": "node scripts/check-symphony-upstream.mjs",
     "check:symphony:upstream": "node scripts/check-symphony-upstream.mjs --network",

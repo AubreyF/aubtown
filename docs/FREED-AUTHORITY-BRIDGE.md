@@ -1,6 +1,7 @@
 # Freed authority bridge
 
-Status: Freed commands published for review; AubTown broker binary implemented but not installed
+Status: Freed commands published for review; AubTown broker and deterministic
+installation planner implemented but not installed
 
 ## Purpose
 
@@ -133,6 +134,16 @@ root-owned `factory-coordinator` binary invokes a checksum-pinned Freed control
 runtime locally and returns narrowly scoped receipts. On Linux it reads
 root-owned profiles from `/etc/aubtown/freed-broker-profiles`. The initial Mac
 profile lives under `/Library/Application Support/AubTown/freed-broker-profiles`.
+
+Before any Linux host mutation, run `npm run freed:plan-broker-install --`
+with the immutable Freed checkout, its reviewed full commit, and the installed
+AubTown release. The planner accepts only a clean physical checkout whose path
+ends in that commit. It verifies the AubTown release manifest, broker binary,
+pinned Node executable, and every Freed runtime file consumed by the broker.
+Its JSON output contains the exact broker copy, profile document, and digests.
+It does not create directories, copy files, enable services, or touch Freed
+authority state.
+
 Workers never receive the coordinator lease or filesystem access.
 
 The broker allowlist is limited to:
