@@ -26,9 +26,11 @@ Status: Phase 1 is complete. Phase 2 is in progress around pinned Symphony, nati
 - [x] Remove the superseded Restate and container runtime.
 - [x] Preserve host-local journals, encrypted checkpoints, exact-head publication, and quota policy as reusable AubTown components.
 - [x] Prove receipt publication is serialized across completion, flush, and shutdown.
-- [ ] Add the reviewed Symphony patch series for GitHub App token refresh, capability routing, and prelaunch admission.
+- [x] Add the reviewed Symphony patch for GitHub App token refresh and capability-aware SSH routing.
+- [x] Refresh compatible locked dependencies until the Hex audit has no current security advisories.
+- [ ] Add the reviewed Symphony prelaunch admission boundary.
 - [ ] Add the Freed-specific `WORKFLOW.md` and worktree hooks.
-- [ ] Run the complete upstream Symphony test suite after patches.
+- [x] Run the complete upstream Symphony suite against the pinned commit and patch, with 292 passing and 6 explicit skips.
 - [ ] Prove a fake issue cannot dispatch twice across coordinator restart.
 - [ ] Prove daily and rolling-week quota stops through the Symphony admission boundary.
 - [ ] Prove Linux continues generic work while the Mac is offline.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -25,10 +26,32 @@ if (
   lock.tracking?.ref !== "refs/heads/main" ||
   !commitPattern.test(lock.releaseBaseline?.commit ?? "") ||
   !Array.isArray(lock.reviewedCapabilities) ||
-  !Array.isArray(lock.knownGaps)
+  !Array.isArray(lock.knownGaps) ||
+  !Array.isArray(lock.patches) ||
+  lock.patches.length === 0
 ) {
   fail("Symphony lock file is invalid.");
   process.exit();
+}
+
+for (const patch of lock.patches) {
+  if (
+    typeof patch?.path !== "string" ||
+    !patch.path.startsWith("upstream/patches/") ||
+    !digestPattern.test(patch.sha256 ?? "") ||
+    patch.verifiedAgainst !== lock.production.commit ||
+    !Array.isArray(patch.purpose) ||
+    patch.purpose.length === 0
+  ) {
+    fail("Symphony patch declaration is invalid.");
+    process.exit();
+  }
+  const bytes = await readFile(path.join(root, patch.path));
+  const actual = createHash("sha256").update(bytes).digest("hex");
+  if (actual !== patch.sha256) {
+    fail(`Symphony patch digest does not match ${patch.path}.`);
+    process.exit();
+  }
 }
 
 const result = {

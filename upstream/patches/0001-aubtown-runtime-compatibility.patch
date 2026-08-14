@@ -1,0 +1,431 @@
+diff --git a/elixir/lib/symphony_elixir/config/schema.ex b/elixir/lib/symphony_elixir/config/schema.ex
+index 6ebb278..76ed83d 100644
+--- a/elixir/lib/symphony_elixir/config/schema.ex
++++ b/elixir/lib/symphony_elixir/config/schema.ex
+@@ -130,13 +130,27 @@ defmodule SymphonyElixir.Config.Schema do
+     embedded_schema do
+       field(:ssh_hosts, {:array, :string}, default: [])
+       field(:max_concurrent_agents_per_host, :integer)
++      field(:capabilities_by_host, :map, default: %{})
+     end
+ 
+     @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
+     def changeset(schema, attrs) do
+       schema
+-      |> cast(attrs, [:ssh_hosts, :max_concurrent_agents_per_host], empty_values: [])
++      |> cast(attrs, [:ssh_hosts, :max_concurrent_agents_per_host, :capabilities_by_host], empty_values: [])
+       |> validate_number(:max_concurrent_agents_per_host, greater_than: 0)
++      |> validate_change(:capabilities_by_host, fn :capabilities_by_host, capabilities_by_host ->
++        valid? =
++          Enum.all?(capabilities_by_host, fn
++            {host, capabilities} when is_binary(host) and is_list(capabilities) ->
++              String.trim(host) != "" and
++                Enum.all?(capabilities, &(is_binary(&1) and String.trim(&1) != ""))
++
++            _ ->
++              false
++          end)
++
++        if valid?, do: [], else: [capabilities_by_host: "must map host names to nonblank capability lists"]
++      end)
+     end
+   end
+ 
+diff --git a/elixir/lib/symphony_elixir/github/client.ex b/elixir/lib/symphony_elixir/github/client.ex
+index 8bd63c1..575c6ed 100644
+--- a/elixir/lib/symphony_elixir/github/client.ex
++++ b/elixir/lib/symphony_elixir/github/client.ex
+@@ -23,9 +23,11 @@ defmodule SymphonyElixir.GitHub.Client do
+ 
+     [
+       "GITHUB_TOKEN",
++      "GITHUB_TOKEN_FILE",
+       "GH_TOKEN",
+       "GITHUB_ENTERPRISE_TOKEN",
+-      "GH_ENTERPRISE_TOKEN" | env_reference_names([provider["token"]])
++      "GH_ENTERPRISE_TOKEN" |
++        env_reference_names([provider["token"], provider["token_file"]])
+     ]
+     |> Enum.uniq()
+   end
+@@ -286,14 +288,45 @@ defmodule SymphonyElixir.GitHub.Client do
+     provider = provider_settings(tracker_settings)
+     api_url = provider["api_url"] || @default_api_url
+     repo = resolve_setting(provider["repo"], System.get_env("GITHUB_REPO"))
+-    token = resolve_setting(provider["token"], System.get_env("GITHUB_TOKEN"))
++    token_result = resolve_token(provider)
+ 
+-    cond do
+-      not valid_api_url?(api_url) -> {:error, :invalid_github_api_url}
+-      not present_string?(repo) -> {:error, :missing_github_repo}
+-      not valid_repo?(repo) -> {:error, :invalid_github_repo}
+-      not present_string?(token) -> {:error, :missing_github_token}
+-      true -> {:ok, %{api_url: String.trim_trailing(api_url, "/"), repo: repo, token: token}}
++    with true <- valid_api_url?(api_url) or {:error, :invalid_github_api_url},
++         true <- present_string?(repo) or {:error, :missing_github_repo},
++         true <- valid_repo?(repo) or {:error, :invalid_github_repo},
++         {:ok, token} <- token_result do
++      {:ok, %{api_url: String.trim_trailing(api_url, "/"), repo: repo, token: token}}
++    end
++  end
++
++  defp resolve_token(provider) do
++    token_file =
++      resolve_setting(provider["token_file"], System.get_env("GITHUB_TOKEN_FILE"))
++
++    case token_file do
++      nil ->
++        case resolve_setting(provider["token"], System.get_env("GITHUB_TOKEN")) do
++          token when is_binary(token) -> {:ok, token}
++          _ -> {:error, :missing_github_token}
++        end
++
++      path ->
++        read_token_file(path)
++    end
++  end
++
++  defp read_token_file(path) when is_binary(path) do
++    with true <- Path.type(path) == :absolute or {:error, :invalid_github_token_file},
++         {:ok, stat} <- File.lstat(path),
++         true <- stat.type == :regular or {:error, :invalid_github_token_file},
++         true <- Bitwise.band(stat.mode, 0o077) == 0 or {:error, :insecure_github_token_file},
++         true <- stat.size <= 4_096 or {:error, :invalid_github_token_file},
++         {:ok, value} <- File.read(path),
++         token when is_binary(token) <- normalize_string(value) do
++      {:ok, token}
++    else
++      nil -> {:error, :missing_github_token}
++      {:error, _reason} = error -> error
++      _ -> {:error, :invalid_github_token_file}
+     end
+   end
+ 
+diff --git a/elixir/lib/symphony_elixir/orchestrator.ex b/elixir/lib/symphony_elixir/orchestrator.ex
+index b52e991..1660592 100644
+--- a/elixir/lib/symphony_elixir/orchestrator.ex
++++ b/elixir/lib/symphony_elixir/orchestrator.ex
+@@ -404,7 +404,14 @@ defmodule SymphonyElixir.Orchestrator do
+   @doc false
+   @spec select_worker_host_for_test(term(), String.t() | nil) :: String.t() | nil | :no_worker_capacity
+   def select_worker_host_for_test(%State{} = state, preferred_worker_host) do
+-    select_worker_host(state, preferred_worker_host)
++    select_worker_host(state, nil, preferred_worker_host)
++  end
++
++  @doc false
++  @spec select_worker_host_for_issue_for_test(term(), Issue.t(), String.t() | nil) ::
++          String.t() | nil | :no_worker_capacity
++  def select_worker_host_for_issue_for_test(%State{} = state, %Issue{} = issue, preferred_worker_host) do
++    select_worker_host(state, issue, preferred_worker_host)
+   end
+ 
+   defp reconcile_running_issue_states([], state, _active_states, _terminal_states), do: state
+@@ -940,7 +947,7 @@ defmodule SymphonyElixir.Orchestrator do
+   defp do_dispatch_issue(%State{} = state, issue, attempt, preferred_worker_host) do
+     recipient = self()
+ 
+-    case select_worker_host(state, preferred_worker_host) do
++    case select_worker_host(state, issue, preferred_worker_host) do
+       :no_worker_capacity ->
+         Logger.debug("No SSH worker slots available for #{issue_context(issue)} preferred_worker_host=#{inspect(preferred_worker_host)}")
+         state
+@@ -1278,13 +1285,16 @@ defmodule SymphonyElixir.Orchestrator do
+     Map.put(running_entry, key, value)
+   end
+ 
+-  defp select_worker_host(%State{} = state, preferred_worker_host) do
++  defp select_worker_host(%State{} = state, issue, preferred_worker_host) do
+     case Config.settings!().worker.ssh_hosts do
+       [] ->
+         nil
+ 
+       hosts ->
+-        available_hosts = Enum.filter(hosts, &worker_host_slots_available?(state, &1))
++        available_hosts =
++          Enum.filter(hosts, fn host ->
++            worker_host_slots_available?(state, host) and worker_host_capable?(host, issue)
++          end)
+ 
+         cond do
+           available_hosts == [] ->
+@@ -1299,6 +1309,48 @@ defmodule SymphonyElixir.Orchestrator do
+     end
+   end
+ 
++  defp worker_host_capable?(_worker_host, nil), do: true
++
++  defp worker_host_capable?(worker_host, %Issue{labels: labels}) when is_binary(worker_host) do
++    required = required_host_capabilities(labels)
++
++    configured =
++      Config.settings!().worker.capabilities_by_host
++      |> Map.get(worker_host, [])
++      |> normalize_capabilities()
++      |> MapSet.new()
++
++    Enum.all?(required, &MapSet.member?(configured, &1))
++  end
++
++  defp required_host_capabilities(labels) when is_list(labels) do
++    labels
++    |> Enum.flat_map(fn label ->
++      case normalize_capability(label) do
++        "lane:linux" -> ["linux"]
++        "lane:macos" -> ["macos"]
++        "factory:requires:" <> capability when capability != "" -> [capability]
++        _ -> []
++      end
++    end)
++    |> Enum.uniq()
++  end
++
++  defp required_host_capabilities(_labels), do: []
++
++  defp normalize_capabilities(capabilities) when is_list(capabilities) do
++    capabilities
++    |> Enum.map(&normalize_capability/1)
++    |> Enum.reject(&(&1 == ""))
++  end
++
++  defp normalize_capabilities(_capabilities), do: []
++
++  defp normalize_capability(value) when is_binary(value),
++    do: value |> String.trim() |> String.downcase()
++
++  defp normalize_capability(_value), do: ""
++
+   defp preferred_worker_host_available?(preferred_worker_host, hosts)
+        when is_binary(preferred_worker_host) and is_list(hosts) do
+     preferred_worker_host != "" and preferred_worker_host in hosts
+@@ -1323,11 +1375,11 @@ defmodule SymphonyElixir.Orchestrator do
+   end
+ 
+   defp worker_slots_available?(%State{} = state) do
+-    select_worker_host(state, nil) != :no_worker_capacity
++    select_worker_host(state, nil, nil) != :no_worker_capacity
+   end
+ 
+   defp worker_slots_available?(%State{} = state, preferred_worker_host) do
+-    select_worker_host(state, preferred_worker_host) != :no_worker_capacity
++    select_worker_host(state, nil, preferred_worker_host) != :no_worker_capacity
+   end
+ 
+   defp worker_host_slots_available?(%State{} = state, worker_host) when is_binary(worker_host) do
+diff --git a/elixir/mix.exs b/elixir/mix.exs
+index be14dd8..35a30db 100644
+--- a/elixir/mix.exs
++++ b/elixir/mix.exs
+@@ -79,7 +79,7 @@ defmodule SymphonyElixir.MixProject do
+       {:jason, "~> 1.4"},
+       {:yaml_elixir, "~> 2.12"},
+       {:solid, "~> 1.2"},
+-      {:ecto, "~> 3.13"},
++      {:ecto, "~> 3.13.0"},
+       {:burrito, "~> 1.5", only: :prod, runtime: false},
+       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+       {:dialyxir, "~> 1.4", only: [:dev], runtime: false}
+diff --git a/elixir/mix.lock b/elixir/mix.lock
+index c8ef36e..514affc 100644
+--- a/elixir/mix.lock
++++ b/elixir/mix.lock
+@@ -1,41 +1,41 @@
+ %{
+-  "bandit": {:hex, :bandit, "1.10.3", "1e5d168fa79ec8de2860d1b4d878d97d4fbbe2fdbe7b0a7d9315a4359d1d4bb9", [:mix], [{:hpax, "~> 1.0", [hex: :hpax, repo: "hexpm", optional: false]}, {:plug, "~> 1.18", [hex: :plug, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}, {:thousand_island, "~> 1.0", [hex: :thousand_island, repo: "hexpm", optional: false]}, {:websock, "~> 0.5", [hex: :websock, repo: "hexpm", optional: false]}], "hexpm", "99a52d909c48db65ca598e1962797659e3c0f1d06e825a50c3d75b74a5e2db18"},
++  "bandit": {:hex, :bandit, "1.12.4", "10bbab488edf8162318d736c19c5837077b8fca2bf5d95b07b33830387124f62", [:mix], [{:hpax, "~> 1.0", [hex: :hpax, repo: "hexpm", optional: false]}, {:plug, "~> 1.18", [hex: :plug, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}, {:thousand_island, "~> 1.5", [hex: :thousand_island, repo: "hexpm", optional: false]}, {:websock, "~> 0.5", [hex: :websock, repo: "hexpm", optional: false]}], "hexpm", "84513318c5752a2a8017664450f889b47fae5d53d64698ddf1e4fb09a7449e8d"},
+   "bunt": {:hex, :bunt, "1.0.0", "081c2c665f086849e6d57900292b3a161727ab40431219529f13c4ddcf3e7a44", [:mix], [], "hexpm", "dc5f86aa08a5f6fa6b8096f0735c4e76d54ae5c9fa2c143e5a1fc7c1cd9bb6b5"},
+-  "burrito": {:hex, :burrito, "1.5.0", "d68ec01df2871f1d5bc603b883a78546c75761ac73c1bec1b7ae2cc74790fcd1", [:mix], [{:jason, "~> 1.4", [hex: :jason, repo: "hexpm", optional: false]}, {:req, ">= 0.5.0", [hex: :req, repo: "hexpm", optional: false]}, {:typed_struct, "~> 0.2.0 or ~> 0.3.0", [hex: :typed_struct, repo: "hexpm", optional: false]}], "hexpm", "3861abda7bffa733862b48da3e03df0b4cd41abf6fd24b91745f5c16d971e5fa"},
++  "burrito": {:hex, :burrito, "1.6.0", "7af0a75f11680e8a6e9c01370c9af51cb9d0e15b3226eddf4f438dbc68570520", [:mix], [{:jason, "~> 1.4", [hex: :jason, repo: "hexpm", optional: false]}, {:req, ">= 0.5.0", [hex: :req, repo: "hexpm", optional: false]}, {:typed_struct, "~> 0.2.0 or ~> 0.3.0", [hex: :typed_struct, repo: "hexpm", optional: false]}], "hexpm", "e636a00b032c45a69ff755d9fc53fa5fdc9e1d21bdbd229075fe4a15b05355fe"},
+   "cc_precompiler": {:hex, :cc_precompiler, "0.1.11", "8c844d0b9fb98a3edea067f94f616b3f6b29b959b6b3bf25fee94ffe34364768", [:mix], [{:elixir_make, "~> 0.7", [hex: :elixir_make, repo: "hexpm", optional: false]}], "hexpm", "3427232caf0835f94680e5bcf082408a70b48ad68a5f5c0b02a3bea9f3a075b9"},
+-  "credo": {:hex, :credo, "1.7.16", "a9f1389d13d19c631cb123c77a813dbf16449a2aebf602f590defa08953309d4", [:mix], [{:bunt, "~> 0.2.1 or ~> 1.0", [hex: :bunt, repo: "hexpm", optional: false]}, {:file_system, "~> 0.2 or ~> 1.0", [hex: :file_system, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: false]}], "hexpm", "d0562af33756b21f248f066a9119e3890722031b6d199f22e3cf95550e4f1579"},
++  "credo": {:hex, :credo, "1.7.19", "cc52129665fc7c15143d47838fda0f9cd6dac9ceced7bf4da6f85fcbfe64b12a", [:mix], [{:bunt, "~> 0.2.1 or ~> 1.0", [hex: :bunt, repo: "hexpm", optional: false]}, {:file_system, "~> 0.2 or ~> 1.0", [hex: :file_system, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: false]}], "hexpm", "2d8bc95d5a7bb99dd2613621d4f08c6a3575c3fd4b62e6a2b48a100352a557b8"},
+   "date_time_parser": {:hex, :date_time_parser, "1.3.0", "6ba16850b5ab83dd126576451023ab65349e29af2336ca5084aa1e37025b476e", [:mix], [{:kday, "~> 1.0", [hex: :kday, repo: "hexpm", optional: false]}], "hexpm", "93c8203a8ddc66b1f1531fc0e046329bf0b250c75ffa09567ef03d2c09218e8c"},
+-  "decimal": {:hex, :decimal, "2.3.0", "3ad6255aa77b4a3c4f818171b12d237500e63525c2fd056699967a3e7ea20f62", [:mix], [], "hexpm", "a4d66355cb29cb47c3cf30e71329e58361cfcb37c34235ef3bf1d7bf3773aeac"},
++  "decimal": {:hex, :decimal, "3.1.1", "430d87b04011ce6cbd4fd205be758311a81f87d552d40904abd00f015935b1d0", [:mix], [], "hexpm", "c5f25f2ced74a0587d03e6023f595db8e924c9d3922c8c8ffd9edfc4498cf1f6"},
+   "dialyxir": {:hex, :dialyxir, "1.4.7", "dda948fcee52962e4b6c5b4b16b2d8fa7d50d8645bbae8b8685c3f9ecb7f5f4d", [:mix], [{:erlex, ">= 0.2.8", [hex: :erlex, repo: "hexpm", optional: false]}], "hexpm", "b34527202e6eb8cee198efec110996c25c5898f43a4094df157f8d28f27d9efe"},
+-  "ecto": {:hex, :ecto, "3.13.5", "9d4a69700183f33bf97208294768e561f5c7f1ecf417e0fa1006e4a91713a834", [:mix], [{:decimal, "~> 2.0", [hex: :decimal, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "df9efebf70cf94142739ba357499661ef5dbb559ef902b68ea1f3c1fabce36de"},
+-  "elixir_make": {:hex, :elixir_make, "0.9.0", "6484b3cd8c0cee58f09f05ecaf1a140a8c97670671a6a0e7ab4dc326c3109726", [:mix], [], "hexpm", "db23d4fd8b757462ad02f8aa73431a426fe6671c80b200d9710caf3d1dd0ffdb"},
+-  "erlex": {:hex, :erlex, "0.2.8", "cd8116f20f3c0afe376d1e8d1f0ae2452337729f68be016ea544a72f767d9c12", [:mix], [], "hexpm", "9d66ff9fedf69e49dc3fd12831e12a8a37b76f8651dd21cd45fcf5561a8a7590"},
++  "ecto": {:hex, :ecto, "3.13.6", "352135b474f91d1ab99a1b502171d207e9db60421c9e3d0ecab4c7ab96b24d14", [:mix], [{:decimal, "~> 2.0 or ~> 3.0", [hex: :decimal, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "8afa059bc16cd2c94739ec0a11e3e5df69d828125119109bef35f20a21a76af2"},
++  "elixir_make": {:hex, :elixir_make, "0.10.0", "16577e2583a79bb79237bbff349619ef5d80afffc07eac6e4faf0d00e2ddaf7d", [:mix], [], "hexpm", "dc1f09fb7fa68866b886abd5f0f3c83553b1a19a52359a899e92af1bb3b31982"},
++  "erlex": {:hex, :erlex, "0.2.9", "7debbbaa9f4f368b8cd648983e0f1d7963028508e9c59e9d4ed504e94ef52a55", [:mix], [], "hexpm", "8cfffc0ec7159e6d73de2ab28a588064de80f88b2798d5cbe4482cbbc200178b"},
+   "file_system": {:hex, :file_system, "1.1.1", "31864f4685b0148f25bd3fbef2b1228457c0c89024ad67f7a81a3ffbc0bbad3a", [:mix], [], "hexpm", "7a15ff97dfe526aeefb090a7a9d3d03aa907e100e262a0f8f7746b78f8f87a5d"},
+-  "finch": {:hex, :finch, "0.21.0", "b1c3b2d48af02d0c66d2a9ebfb5622be5c5ecd62937cf79a88a7f98d48a8290c", [:mix], [{:mime, "~> 1.0 or ~> 2.0", [hex: :mime, repo: "hexpm", optional: false]}, {:mint, "~> 1.6.2 or ~> 1.7", [hex: :mint, repo: "hexpm", optional: false]}, {:nimble_options, "~> 0.4 or ~> 1.0", [hex: :nimble_options, repo: "hexpm", optional: false]}, {:nimble_pool, "~> 1.1", [hex: :nimble_pool, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "87dc6e169794cb2570f75841a19da99cfde834249568f2a5b121b809588a4377"},
+-  "fine": {:hex, :fine, "0.1.4", "b19a89c1476c7c57afb5f9314aed5960b5bc95d5277de4cb5ee8e1d1616ce379", [:mix], [], "hexpm", "be3324cc454a42d80951cf6023b9954e9ff27c6daa255483b3e8d608670303f5"},
+-  "floki": {:hex, :floki, "0.38.0", "62b642386fa3f2f90713f6e231da0fa3256e41ef1089f83b6ceac7a3fd3abf33", [:mix], [], "hexpm", "a5943ee91e93fb2d635b612caf5508e36d37548e84928463ef9dd986f0d1abd9"},
+-  "hpax": {:hex, :hpax, "1.0.3", "ed67ef51ad4df91e75cc6a1494f851850c0bd98ebc0be6e81b026e765ee535aa", [:mix], [], "hexpm", "8eab6e1cfa8d5918c2ce4ba43588e894af35dbd8e91e6e55c817bca5847df34a"},
+-  "jason": {:hex, :jason, "1.4.4", "b9226785a9aa77b6857ca22832cffa5d5011a667207eb2a0ad56adb5db443b8a", [:mix], [{:decimal, "~> 1.0 or ~> 2.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm", "c5eb0cab91f094599f94d55bc63409236a8ec69a21a67814529e8d5f6cc90b3b"},
++  "finch": {:hex, :finch, "0.23.0", "e3f9287ac25a8832f848b144c2b57346aac65b205e2e0629a52adfe6507fd837", [:mix], [{:mime, "~> 1.0 or ~> 2.0", [hex: :mime, repo: "hexpm", optional: false]}, {:mint, "~> 1.8", [hex: :mint, repo: "hexpm", optional: false]}, {:nimble_options, "~> 0.4 or ~> 1.0", [hex: :nimble_options, repo: "hexpm", optional: false]}, {:nimble_pool, "~> 1.1", [hex: :nimble_pool, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "80e58d3f936f57e3fdf404f83a3642897ae6d9fb642934e46da4d8fe761b99d5"},
++  "fine": {:hex, :fine, "0.1.6", "4bf7151493443c454aac9f2fa2f34f5fefd0346a83fb5586a016c4a135c63247", [:mix], [], "hexpm", "5638eb4495488e885ebec167fa57973e5c35e1a50c344eb7666c90ec1c4e3b12"},
++  "floki": {:hex, :floki, "0.38.4", "10f98971e892aed2c2f1b3a0f928e488e3797e1c6dd3dfd98db40b14e9a78bcf", [:mix], [], "hexpm", "bdb34645eee8e79845c7edaca2d4099a52804ee4d4a3ecc683a69451f0244973"},
++  "hpax": {:hex, :hpax, "1.0.4", "777de5d433b0fbdc7c418159c8055910faa8047ffdb3d6b31098d2a46cd7685c", [:mix], [], "hexpm", "afc7cb142ebcc2d01ce7816190b98ce5dd49e799111b24249f3443d730f377ca"},
++  "jason": {:hex, :jason, "1.4.5", "2e3a008590b0b8d7388c20293e9dcc9cf3e5d642fd2a114e4cbbb52e595d940a", [:mix], [{:decimal, "~> 1.0 or ~> 2.0 or ~> 3.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm", "b0c823996102bcd0239b3c2444eb00409b72f6a140c1950bc8b457d836b30684"},
+   "kday": {:hex, :kday, "1.1.0", "64efac85279a12283eaaf3ad6f13001ca2dff943eda8c53288179775a8c057a0", [:mix], [{:ex_doc, "~> 0.21", [hex: :ex_doc, repo: "hexpm", optional: true]}], "hexpm", "69703055d63b8d5b260479266c78b0b3e66f7aecdd2022906cd9bf09892a266d"},
+-  "lazy_html": {:hex, :lazy_html, "0.1.10", "ffe42a0b4e70859cf21a33e12a251e0c76c1dff76391609bd56702a0ef5bc429", [:make, :mix], [{:cc_precompiler, "~> 0.1", [hex: :cc_precompiler, repo: "hexpm", optional: false]}, {:elixir_make, "~> 0.9.0", [hex: :elixir_make, repo: "hexpm", optional: false]}, {:fine, "~> 0.1.0", [hex: :fine, repo: "hexpm", optional: false]}], "hexpm", "50f67e5faa09d45a99c1ddf3fac004f051997877dc8974c5797bb5ccd8e27058"},
++  "lazy_html": {:hex, :lazy_html, "0.1.12", "31a55ee622918fce988c94b06232227b42daa64e4eab14ac32081d0f3fd8db6f", [:make, :mix], [{:cc_precompiler, "~> 0.1", [hex: :cc_precompiler, repo: "hexpm", optional: false]}, {:elixir_make, "~> 0.9", [hex: :elixir_make, repo: "hexpm", optional: false]}, {:fine, "~> 0.1.0", [hex: :fine, repo: "hexpm", optional: false]}], "hexpm", "8a0da594776caee58782c6f93b2abaa5bdb809daf8d43351a561f7de9dc2e2a8"},
+   "mime": {:hex, :mime, "2.0.7", "b8d739037be7cd402aee1ba0306edfdef982687ee7e9859bee6198c1e7e2f128", [:mix], [], "hexpm", "6171188e399ee16023ffc5b76ce445eb6d9672e2e241d2df6050f3c771e80ccd"},
+-  "mint": {:hex, :mint, "1.7.1", "113fdb2b2f3b59e47c7955971854641c61f378549d73e829e1768de90fc1abf1", [:mix], [{:castore, "~> 0.1.0 or ~> 1.0", [hex: :castore, repo: "hexpm", optional: true]}, {:hpax, "~> 0.1.1 or ~> 0.2.0 or ~> 1.0", [hex: :hpax, repo: "hexpm", optional: false]}], "hexpm", "fceba0a4d0f24301ddee3024ae116df1c3f4bb7a563a731f45fdfeb9d39a231b"},
++  "mint": {:hex, :mint, "1.9.3", "3337184d69179695c7a9f1714d92c11e629d36c8c037a21cf490131d3d150554", [:mix], [{:castore, "~> 0.1.0 or ~> 1.0", [hex: :castore, repo: "hexpm", optional: true]}, {:hpax, "~> 0.1.1 or ~> 0.2.0 or ~> 1.0", [hex: :hpax, repo: "hexpm", optional: false]}], "hexpm", "5f7c9342480c069dbbc4eeac3490303c9e01870ff01a7f1d29b6107054fc1e74"},
+   "nimble_options": {:hex, :nimble_options, "1.1.1", "e3a492d54d85fc3fd7c5baf411d9d2852922f66e69476317787a7b2bb000a61b", [:mix], [], "hexpm", "821b2470ca9442c4b6984882fe9bb0389371b8ddec4d45a9504f00a66f650b44"},
+   "nimble_pool": {:hex, :nimble_pool, "1.1.0", "bf9c29fbdcba3564a8b800d1eeb5a3c58f36e1e11d7b7fb2e084a643f645f06b", [:mix], [], "hexpm", "af2e4e6b34197db81f7aad230c1118eac993acc0dae6bc83bac0126d4ae0813a"},
+-  "phoenix": {:hex, :phoenix, "1.8.4", "0387f84f00071cba8d71d930b9121b2fb3645197a9206c31b908d2e7902a4851", [:mix], [{:bandit, "~> 1.0", [hex: :bandit, repo: "hexpm", optional: true]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:phoenix_pubsub, "~> 2.1", [hex: :phoenix_pubsub, repo: "hexpm", optional: false]}, {:phoenix_template, "~> 1.0", [hex: :phoenix_template, repo: "hexpm", optional: false]}, {:phoenix_view, "~> 2.0", [hex: :phoenix_view, repo: "hexpm", optional: true]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}, {:plug_cowboy, "~> 2.7", [hex: :plug_cowboy, repo: "hexpm", optional: true]}, {:plug_crypto, "~> 1.2 or ~> 2.0", [hex: :plug_crypto, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}, {:websock_adapter, "~> 0.5.3", [hex: :websock_adapter, repo: "hexpm", optional: false]}], "hexpm", "c988b1cd3b084eebb13e6676d572597d387fa607dab258526637b4e6c4c08543"},
++  "phoenix": {:hex, :phoenix, "1.8.11", "9bb8f0c4e9f0b9eaf7f34cf8cb0bd25bd8599763a5587d64918a9ebb04027823", [:mix], [{:bandit, "~> 1.0", [hex: :bandit, repo: "hexpm", optional: true]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:phoenix_pubsub, "~> 2.1", [hex: :phoenix_pubsub, repo: "hexpm", optional: false]}, {:phoenix_template, "~> 1.0", [hex: :phoenix_template, repo: "hexpm", optional: false]}, {:phoenix_view, "~> 2.0", [hex: :phoenix_view, repo: "hexpm", optional: true]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}, {:plug_cowboy, "~> 2.7", [hex: :plug_cowboy, repo: "hexpm", optional: true]}, {:plug_crypto, "~> 2.2", [hex: :plug_crypto, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}, {:websock_adapter, "~> 0.5", [hex: :websock_adapter, repo: "hexpm", optional: false]}], "hexpm", "44f028f4129e5a29487e868f84903373e3d032da151ad0c789c3849f464e7351"},
+   "phoenix_html": {:hex, :phoenix_html, "4.3.0", "d3577a5df4b6954cd7890c84d955c470b5310bb49647f0a114a6eeecc850f7ad", [:mix], [], "hexpm", "3eaa290a78bab0f075f791a46a981bbe769d94bc776869f4f3063a14f30497ad"},
+-  "phoenix_live_view": {:hex, :phoenix_live_view, "1.1.25", "abc1bdf7f148d7f9a003f149834cc858b24290c433b10ef6d1cbb1d6e9a211ca", [:mix], [{:igniter, ">= 0.6.16 and < 1.0.0-0", [hex: :igniter, repo: "hexpm", optional: true]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:lazy_html, "~> 0.1.0", [hex: :lazy_html, repo: "hexpm", optional: true]}, {:phoenix, "~> 1.6.15 or ~> 1.7.0 or ~> 1.8.0-rc", [hex: :phoenix, repo: "hexpm", optional: false]}, {:phoenix_html, "~> 3.3 or ~> 4.0", [hex: :phoenix_html, repo: "hexpm", optional: false]}, {:phoenix_template, "~> 1.0", [hex: :phoenix_template, repo: "hexpm", optional: false]}, {:phoenix_view, "~> 2.0", [hex: :phoenix_view, repo: "hexpm", optional: true]}, {:plug, "~> 1.15", [hex: :plug, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4.2 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "b8946e474799da1f874eab7e9ce107502c96ca318ed46d19f811f847df270865"},
++  "phoenix_live_view": {:hex, :phoenix_live_view, "1.1.33", "8350c8bebabfa318c9afb0970eacced9174cd72603c9be2240e99d550fcc2eed", [:mix], [{:igniter, ">= 0.6.16 and < 1.0.0-0", [hex: :igniter, repo: "hexpm", optional: true]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:lazy_html, "~> 0.1.0", [hex: :lazy_html, repo: "hexpm", optional: true]}, {:phoenix, "~> 1.6.15 or ~> 1.7.0 or ~> 1.8.0-rc", [hex: :phoenix, repo: "hexpm", optional: false]}, {:phoenix_html, "~> 3.3 or ~> 4.0", [hex: :phoenix_html, repo: "hexpm", optional: false]}, {:phoenix_template, "~> 1.0", [hex: :phoenix_template, repo: "hexpm", optional: false]}, {:phoenix_view, "~> 2.0", [hex: :phoenix_view, repo: "hexpm", optional: true]}, {:plug, "~> 1.15", [hex: :plug, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4.2 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "2030f7987f641a269634e021bcde9373e5dea993f9373e628a44da86b2330b6c"},
+   "phoenix_pubsub": {:hex, :phoenix_pubsub, "2.2.0", "ff3a5616e1bed6804de7773b92cbccfc0b0f473faf1f63d7daf1206c7aeaaa6f", [:mix], [], "hexpm", "adc313a5bf7136039f63cfd9668fde73bba0765e0614cba80c06ac9460ff3e96"},
+   "phoenix_template": {:hex, :phoenix_template, "1.0.4", "e2092c132f3b5e5b2d49c96695342eb36d0ed514c5b252a77048d5969330d639", [:mix], [{:phoenix_html, "~> 2.14.2 or ~> 3.0 or ~> 4.0", [hex: :phoenix_html, repo: "hexpm", optional: true]}], "hexpm", "2c0c81f0e5c6753faf5cca2f229c9709919aba34fab866d3bc05060c9c444206"},
+-  "plug": {:hex, :plug, "1.19.1", "09bac17ae7a001a68ae393658aa23c7e38782be5c5c00c80be82901262c394c0", [:mix], [{:mime, "~> 1.0 or ~> 2.0", [hex: :mime, repo: "hexpm", optional: false]}, {:plug_crypto, "~> 1.1.1 or ~> 1.2 or ~> 2.0", [hex: :plug_crypto, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4.3 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "560a0017a8f6d5d30146916862aaf9300b7280063651dd7e532b8be168511e62"},
+-  "plug_crypto": {:hex, :plug_crypto, "2.1.1", "19bda8184399cb24afa10be734f84a16ea0a2bc65054e23a62bb10f06bc89491", [:mix], [], "hexpm", "6470bce6ffe41c8bd497612ffde1a7e4af67f36a15eea5f921af71cf3e11247c"},
+-  "req": {:hex, :req, "0.5.17", "0096ddd5b0ed6f576a03dde4b158a0c727215b15d2795e59e0916c6971066ede", [:mix], [{:brotli, "~> 0.3.1", [hex: :brotli, repo: "hexpm", optional: true]}, {:ezstd, "~> 1.0", [hex: :ezstd, repo: "hexpm", optional: true]}, {:finch, "~> 0.17", [hex: :finch, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: false]}, {:mime, "~> 2.0.6 or ~> 2.1", [hex: :mime, repo: "hexpm", optional: false]}, {:nimble_csv, "~> 1.0", [hex: :nimble_csv, repo: "hexpm", optional: true]}, {:plug, "~> 1.0", [hex: :plug, repo: "hexpm", optional: true]}], "hexpm", "0b8bc6ffdfebbc07968e59d3ff96d52f2202d0536f10fef4dc11dc02a2a43e39"},
+-  "solid": {:hex, :solid, "1.2.2", "615d3fb75e12b575d99976ca49f242b1e603f98489d30bf8634b5ab47d85e33f", [:mix], [{:date_time_parser, "~> 1.2", [hex: :date_time_parser, repo: "hexpm", optional: false]}, {:decimal, "~> 2.0", [hex: :decimal, repo: "hexpm", optional: false]}], "hexpm", "410d0af6c0cdfd9d58ed2d22158f4fb0733a49f7b59b8e3bdb26f05919ae38ae"},
+-  "telemetry": {:hex, :telemetry, "1.3.0", "fedebbae410d715cf8e7062c96a1ef32ec22e764197f70cda73d82778d61e7a2", [:rebar3], [], "hexpm", "7015fc8919dbe63764f4b4b87a95b7c0996bd539e0d499be6ec9d7f3875b79e6"},
+-  "thousand_island": {:hex, :thousand_island, "1.4.3", "2158209580f633be38d43ec4e3ce0a01079592b9657afff9080d5d8ca149a3af", [:mix], [{:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "6e4ce09b0fd761a58594d02814d40f77daff460c48a7354a15ab353bb998ea0b"},
++  "plug": {:hex, :plug, "1.20.3", "56c480c633ec2ce10140e236e15233bf576e1d323887d7c96711bd02ab5160db", [:mix], [{:mime, "~> 1.0 or ~> 2.0", [hex: :mime, repo: "hexpm", optional: false]}, {:plug_crypto, "~> 1.1.1 or ~> 1.2 or ~> 2.0", [hex: :plug_crypto, repo: "hexpm", optional: false]}, {:telemetry, "~> 0.4.3 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "be266aee1b8536ef6409d58cf39a3121319f0ec47cfa1b24024485aa0e76ad76"},
++  "plug_crypto": {:hex, :plug_crypto, "2.2.0", "144014737daaf485407f5ed77daeaad74d651b216a28c87543f8cc7043f8efc8", [:mix], [], "hexpm", "83a95744ab1c75876542b6fab135fcc176280e0f301a111c1f757fddcec95d2c"},
++  "req": {:hex, :req, "0.7.2", "364eae2e5f5c984f2dac6d71c07f8c8c89ce0bc49c4d746dacb7a306823020de", [:mix], [{:brotli, "~> 0.3.1", [hex: :brotli, repo: "hexpm", optional: true]}, {:finch, "~> 0.21", [hex: :finch, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: false]}, {:mime, "~> 2.0.6 or ~> 2.1", [hex: :mime, repo: "hexpm", optional: false]}, {:nimble_csv, "~> 1.0", [hex: :nimble_csv, repo: "hexpm", optional: true]}, {:plug, "~> 1.0", [hex: :plug, repo: "hexpm", optional: true]}], "hexpm", "c9cdfa276b05d8db2a27fda5d233e6858b764d47189d76cbb186e130a871ae0b"},
++  "solid": {:hex, :solid, "1.3.3", "fe39028255ffafdce5dd150dd50b85b3c2c36327aec49f1e075d6beb1a39db69", [:mix], [{:date_time_parser, "~> 1.2", [hex: :date_time_parser, repo: "hexpm", optional: false]}, {:decimal, "~> 3.0", [hex: :decimal, repo: "hexpm", optional: false]}], "hexpm", "3e636fe57ab9267ddc51c7aa9d5e221d3544d148bb8803efb0af6409b4d341c8"},
++  "telemetry": {:hex, :telemetry, "1.4.2", "a0cb522801dffb1c49fe6e30561badffc7b6d0e180db1300df759faa22062855", [:rebar3], [], "hexpm", "928f6495066506077862c0d1646609eed891a4326bee3126ba54b60af61febb1"},
++  "thousand_island": {:hex, :thousand_island, "1.5.0", "f50a213cac97262b6d5ebb85745aa2c00fec1413191e6e66834788d45425cecb", [:mix], [{:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "708923d40523e43cf99041ab37a0d4b0ec426ac6438fa3716ab23d919eaeb412"},
+   "typed_struct": {:hex, :typed_struct, "0.3.0", "939789e3c1dca39d7170c87f729127469d1315dcf99fee8e152bb774b17e7ff7", [:mix], [], "hexpm", "c50bd5c3a61fe4e198a8504f939be3d3c85903b382bde4865579bc23111d1b6d"},
+   "websock": {:hex, :websock, "0.5.3", "2f69a6ebe810328555b6fe5c831a851f485e303a7c8ce6c5f675abeb20ebdadc", [:mix], [], "hexpm", "6105453d7fac22c712ad66fab1d45abdf049868f253cf719b625151460b8b453"},
+-  "websock_adapter": {:hex, :websock_adapter, "0.5.9", "43dc3ba6d89ef5dec5b1d0a39698436a1e856d000d84bf31a3149862b01a287f", [:mix], [{:bandit, ">= 0.6.0", [hex: :bandit, repo: "hexpm", optional: true]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}, {:plug_cowboy, "~> 2.6", [hex: :plug_cowboy, repo: "hexpm", optional: true]}, {:websock, "~> 0.5", [hex: :websock, repo: "hexpm", optional: false]}], "hexpm", "5534d5c9adad3c18a0f58a9371220d75a803bf0b9a3d87e6fe072faaeed76a08"},
++  "websock_adapter": {:hex, :websock_adapter, "0.6.0", "73db5ab8aaefd1a876a97ce3e6afc96562625de69ef17a4e04426e034849d0b8", [:mix], [{:bandit, ">= 0.6.0", [hex: :bandit, repo: "hexpm", optional: true]}, {:plug, "~> 1.14", [hex: :plug, repo: "hexpm", optional: false]}, {:plug_cowboy, "~> 2.6", [hex: :plug_cowboy, repo: "hexpm", optional: true]}, {:websock, "~> 0.5", [hex: :websock, repo: "hexpm", optional: false]}], "hexpm", "50021a85bce8f203b086705d9e0c5415e2c7eb05d319111b0428fe71f9934617"},
+   "yamerl": {:hex, :yamerl, "0.10.0", "4ff81fee2f1f6a46f1700c0d880b24d193ddb74bd14ef42cb0bcf46e81ef2f8e", [:rebar3], [], "hexpm", "346adb2963f1051dc837a2364e4acf6eb7d80097c0f53cbdc3046ec8ec4b4e6e"},
+-  "yaml_elixir": {:hex, :yaml_elixir, "2.12.0", "30343ff5018637a64b1b7de1ed2a3ca03bc641410c1f311a4dbdc1ffbbf449c7", [:mix], [{:yamerl, "~> 0.10", [hex: :yamerl, repo: "hexpm", optional: false]}], "hexpm", "ca6bacae7bac917a7155dca0ab6149088aa7bc800c94d0fe18c5238f53b313c6"},
++  "yaml_elixir": {:hex, :yaml_elixir, "2.12.2", "9dd1330fb4cd9a36a7b0f502e5b12486eff632792ee4a5f0eba52a4d4ec32c9c", [:mix], [{:yamerl, "~> 0.10", [hex: :yamerl, repo: "hexpm", optional: false]}], "hexpm", "e7c1b10122f973e6558462d51c39026ba0e14afbc6745318e990ea82cfe9e159"},
+ }
+diff --git a/elixir/test/support/test_support.exs b/elixir/test/support/test_support.exs
+index ca7c5dd..f12eafd 100644
+--- a/elixir/test/support/test_support.exs
++++ b/elixir/test/support/test_support.exs
+@@ -141,6 +141,7 @@ defmodule SymphonyElixir.TestSupport do
+     workspace_root = Keyword.get(config, :workspace_root)
+     worker_ssh_hosts = Keyword.get(config, :worker_ssh_hosts)
+     worker_max_concurrent_agents_per_host = Keyword.get(config, :worker_max_concurrent_agents_per_host)
++    worker_capabilities_by_host = Keyword.get(config, :worker_capabilities_by_host)
+     max_concurrent_agents = Keyword.get(config, :max_concurrent_agents)
+     max_turns = Keyword.get(config, :max_turns)
+     max_retry_backoff_ms = Keyword.get(config, :max_retry_backoff_ms)
+@@ -180,7 +181,7 @@ defmodule SymphonyElixir.TestSupport do
+         "  interval_ms: #{yaml_value(poll_interval_ms)}",
+         "workspace:",
+         "  root: #{yaml_value(workspace_root)}",
+-        worker_yaml(worker_ssh_hosts, worker_max_concurrent_agents_per_host),
++        worker_yaml(worker_ssh_hosts, worker_max_concurrent_agents_per_host, worker_capabilities_by_host),
+         "agent:",
+         "  max_concurrent_agents: #{yaml_value(max_concurrent_agents)}",
+         "  max_turns: #{yaml_value(max_turns)}",
+@@ -242,16 +243,19 @@ defmodule SymphonyElixir.TestSupport do
+     |> Enum.join("\n")
+   end
+ 
+-  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host)
+-       when ssh_hosts in [nil, []] and is_nil(max_concurrent_agents_per_host),
++  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host, capabilities_by_host)
++       when ssh_hosts in [nil, []] and is_nil(max_concurrent_agents_per_host) and
++              capabilities_by_host in [nil, %{}],
+        do: nil
+ 
+-  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host) do
++  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host, capabilities_by_host) do
+     [
+       "worker:",
+       ssh_hosts not in [nil, []] && "  ssh_hosts: #{yaml_value(ssh_hosts)}",
+       !is_nil(max_concurrent_agents_per_host) &&
+-        "  max_concurrent_agents_per_host: #{yaml_value(max_concurrent_agents_per_host)}"
++        "  max_concurrent_agents_per_host: #{yaml_value(max_concurrent_agents_per_host)}",
++      capabilities_by_host not in [nil, %{}] &&
++        "  capabilities_by_host: #{yaml_value(capabilities_by_host)}"
+     ]
+     |> Enum.reject(&(&1 in [nil, false]))
+     |> Enum.join("\n")
+diff --git a/elixir/test/symphony_elixir/core_test.exs b/elixir/test/symphony_elixir/core_test.exs
+index 1263601..3802c01 100644
+--- a/elixir/test/symphony_elixir/core_test.exs
++++ b/elixir/test/symphony_elixir/core_test.exs
+@@ -1255,6 +1255,31 @@ defmodule SymphonyElixir.CoreTest do
+     assert Orchestrator.select_worker_host_for_test(state, "worker-a") == "worker-a"
+   end
+ 
++  test "select_worker_host_for_issue_for_test routes required host capabilities" do
++    write_workflow_file!(Workflow.workflow_file_path(),
++      worker_ssh_hosts: ["worker-linux", "worker-macos"],
++      worker_max_concurrent_agents_per_host: 1,
++      worker_capabilities_by_host: %{
++        "worker-linux" => ["linux"],
++        "worker-macos" => ["macos", "linux"]
++      }
++    )
++
++    state = %Orchestrator.State{running: %{}}
++    macos_issue = %Issue{id: "issue-macos", labels: ["lane:macos"]}
++    linux_issue = %Issue{id: "issue-linux", labels: ["lane:linux"]}
++    impossible_issue = %Issue{id: "issue-impossible", labels: ["factory:requires:gpu"]}
++
++    assert Orchestrator.select_worker_host_for_issue_for_test(state, macos_issue, nil) ==
++             "worker-macos"
++
++    assert Orchestrator.select_worker_host_for_issue_for_test(state, linux_issue, nil) ==
++             "worker-linux"
++
++    assert Orchestrator.select_worker_host_for_issue_for_test(state, impossible_issue, nil) ==
++             :no_worker_capacity
++  end
++
+   defp assert_due_in_range(due_at_ms, min_remaining_ms, max_remaining_ms) do
+     remaining_ms = due_at_ms - System.monotonic_time(:millisecond)
+ 
+diff --git a/elixir/test/symphony_elixir/github_adapter_test.exs b/elixir/test/symphony_elixir/github_adapter_test.exs
+index 2475853..1d4dad8 100644
+--- a/elixir/test/symphony_elixir/github_adapter_test.exs
++++ b/elixir/test/symphony_elixir/github_adapter_test.exs
+@@ -95,6 +95,7 @@ defmodule SymphonyElixir.GitHub.AdapterTest do
+ 
+     assert GitHubClient.secret_environment_names(tracker_settings(%{"token" => "$SYMPHONY_GITHUB_TOKEN"})) == [
+              "GITHUB_TOKEN",
++             "GITHUB_TOKEN_FILE",
+              "GH_TOKEN",
+              "GITHUB_ENTERPRISE_TOKEN",
+              "GH_ENTERPRISE_TOKEN",
+@@ -102,6 +103,31 @@ defmodule SymphonyElixir.GitHub.AdapterTest do
+            ]
+   end
+ 
++  test "client reloads a mode-restricted GitHub token file" do
++    token_file =
++      Path.join(
++        System.tmp_dir!(),
++        "symphony-github-token-#{System.unique_integer([:positive])}"
++      )
++
++    on_exit(fn -> File.rm(token_file) end)
++
++    File.write!(token_file, "first-token\n", [:sync])
++    File.chmod!(token_file, 0o600)
++
++    settings = tracker_settings(%{"token" => nil, "token_file" => token_file})
++    assert :ok = GitHubClient.validate_settings(settings)
++
++    File.chmod!(token_file, 0o644)
++
++    assert {:error, :insecure_github_token_file} =
++             GitHubClient.validate_settings(settings)
++
++    File.write!(token_file, "second-token\n", [:sync])
++    File.chmod!(token_file, 0o600)
++    assert :ok = GitHubClient.validate_settings(settings)
++  end
++
+   test "client normalizes GitHub issues without dropping provider details" do
+     issue = GitHubClient.normalize_issue_for_test(raw_issue(42), "octo/repo")
+ 
+@@ -386,6 +412,7 @@ defmodule SymphonyElixir.GitHub.AdapterTest do
+ 
+     assert binding.secret_environment_names == [
+              "GITHUB_TOKEN",
++             "GITHUB_TOKEN_FILE",
+              "GH_TOKEN",
+              "GITHUB_ENTERPRISE_TOKEN",
+              "GH_ENTERPRISE_TOKEN",
+

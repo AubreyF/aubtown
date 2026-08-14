@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -16,6 +17,12 @@ describe("Symphony upstream contract", () => {
       tracking: { ref: string };
       reviewedCapabilities: string[];
       knownGaps: string[];
+      patches: Array<{
+        path: string;
+        sha256: string;
+        verifiedAgainst: string;
+        purpose: string[];
+      }>;
     };
     expect(lock.production.commit).toMatch(/^[0-9a-f]{40}$/u);
     expect(lock.production.sourceArchive).toContain(lock.production.commit);
@@ -23,8 +30,24 @@ describe("Symphony upstream contract", () => {
     expect(lock.tracking.ref).toBe("refs/heads/main");
     expect(lock.reviewedCapabilities).toContain("github-issues-adapter");
     expect(lock.reviewedCapabilities).toContain("ssh-workers");
-    expect(lock.knownGaps).toContain(
+    expect(lock.reviewedCapabilities).toContain(
+      "capability-aware-ssh-worker-routing",
+    );
+    expect(lock.knownGaps).not.toContain(
       "worker-host-selection-is-load-based-not-lane-aware",
+    );
+    expect(lock.patches).toHaveLength(1);
+    expect(lock.patches[0]?.verifiedAgainst).toBe(lock.production.commit);
+    const patchBytes = await readFile(path.join(root, lock.patches[0]!.path));
+    expect(createHash("sha256").update(patchBytes).digest("hex")).toBe(
+      lock.patches[0]?.sha256,
+    );
+    expect(patchBytes.toString("utf8")).toContain(
+      "select_worker_host_for_issue_for_test",
+    );
+    expect(patchBytes.toString("utf8")).toContain("GITHUB_TOKEN_FILE");
+    expect(patchBytes.toString("utf8")).not.toContain(
+      "No retired or security advisory packages found",
     );
   });
 
