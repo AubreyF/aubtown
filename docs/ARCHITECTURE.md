@@ -41,6 +41,8 @@ That boundary begins with one protected host-side candidate. The candidate binds
 
 The reconciler's native snapshot command accepts the qualified issue, matching Freed task, intended claim, active claims and lanes, enrolled host observations, account profiles, usage snapshots, exact base head, and target in one protected file. Its pure assembly boundary enforces pilot concurrency, ignores host heartbeats older than 120 seconds, selects the compatible account and host with current headroom, and rejects a stale intended claim when routing has changed. The same snapshot produces byte-identical candidate state. The command then atomically publishes the protected candidate.
 
+A native one-shot collector now reads the owner-selected GitHub issue, exact default-branch head, every open pull request, matching Freed task, signed host journal, local refs, and every local worktree. It writes one atomic mode-0600 planning report every minute. Source errors, an unmatched task, incomplete claim evidence, stale compatible hosts, blocked quota, incomplete qualification, or disagreement between GitHub and local `origin/dev` keep `planningSafe` false. The current Freed command can list tasks but cannot list task-scoped execution claims, so the report deliberately remains blocked instead of interpreting an empty claim array as proof that no claims exist.
+
 Host agents deliver Ed25519-signed heartbeat and rolling-week quota envelopes to one native Linux observation gateway. The gateway binds to loopback, with private Mac access supplied by Tailscale forwarding. It verifies enrollment scope, signature, host identity, sequence, timestamp, and request idempotency identity before atomically updating one mode-restricted journal. The same signed sequence and digest returns its original receipt after restart. Stale or conflicting sequence reuse fails closed. The journal is operational observation state, not a queue and not execution authority.
 
 The native AubTown candidate publisher accepts that candidate as one protected physical input file. It applies the same runtime-neutral binding policy used by the Freed bridge, checks route identity and current quota, and publishes a mode-restricted candidate. Prelaunch checks the candidate against the actual launch instant before touching authority. A stale candidate therefore cannot acquire a claim and fail only afterward.
@@ -50,7 +52,7 @@ The AubTown bridge caller constructs the exact canonical claim request, invokes 
 The remaining integration work is:
 
 - connect the admission command to Freed's task-scoped claim operations
-- connect live GitHub, Freed, host-journal, Git, PR, and worktree reads to the reconciler assembly
+- map complete Freed claim, pull-request, branch, and worktree evidence into one stable dispatch intention
 - stage and attest deterministic Freed worktrees through `scripts/worktree-add.sh`
 - full startup reconciliation around upstream's memory-only blocked and retry maps so a blocked exact claim can be released and replaced automatically when no worker launched
 
@@ -75,10 +77,13 @@ Pilot admission requires all of the following:
 - bounded scope and explicit acceptance criteria
 - exact validation instructions
 - owned paths or logical conflict locks
+- explicit host, work-lane, behavioral, owner-review, and release-risk classifications
 - matching active Freed task
 - fresh quota and host observations
 - no conflicting claim, branch, pull request, worktree, or task state
 - no provider, release, migration, signing, deployment, secret, owner-review, or other sensitive unattended requirement
+
+The standard Freed debt form supplies root cause, evidence, scope, and completion criteria. A pilot-ready issue also carries an AubTown qualification appendix using level-three headings for `Validation`, `Owned paths`, `Logical locks`, `Host lane`, `Work lane`, `Requires owner review`, `Behavioral`, and `Release or migration risk`. Lists use ordinary Markdown bullets. Boolean values are exactly `true` or `false`. Unknown values are ignored and therefore fail qualification rather than being guessed.
 
 Conflict domains include qualified path prefixes and logical locks such as behavior, schema, auth, sync, provider, release, and macOS. Initial concurrency is one. Concurrency rises to two only after the single-worker restart and quota proofs pass. Two runtime-neutral tasks may overlap only when both path and logical domains are disjoint.
 

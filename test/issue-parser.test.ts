@@ -18,13 +18,62 @@ It does not block active delivery.
 
 ### Scope and gates
 Runtime-neutral tooling only.
+
+### Validation
+- npm run test:tooling
+
+### Owned paths
+- scripts/lib/validation-order.mjs
+
+### Logical locks
+- tooling-validation
+
+### Host lane
+linux
+
+### Work lane
+runtime-neutral
+
+### Requires owner review
+false
+
+### Behavioral
+false
+
+### Release or migration risk
+false
 `);
     expect(parsed).toEqual({
       rootCause: "Unsorted paths cause nondeterministic output.",
       evidence: "The fixture alternates between two orders.",
       scope: "Runtime-neutral tooling only.",
       acceptanceCriteria: ["Output is stable.", "The focused test passes."],
+      validation: ["npm run test:tooling"],
+      ownedPaths: ["scripts/lib/validation-order.mjs"],
+      logicalLocks: ["tooling-validation"],
+      hostLane: "linux",
+      lane: "runtime-neutral",
+      requiresOwnerReview: false,
+      behavioral: false,
+      releaseOrMigrationRisk: false,
     });
-    expect(parsed.validation).toBeUndefined();
+  });
+
+  it("ignores malformed machine qualification values instead of guessing", () => {
+    expect(
+      parseDebtIssueBody(`### Host lane
+somewhere
+
+### Work lane
+magic
+
+### Behavioral
+perhaps
+
+### Dependencies
+- #42
+- not-an-issue
+`),
+    ).toEqual({ dependencies: [42] });
   });
 });

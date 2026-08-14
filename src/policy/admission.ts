@@ -136,6 +136,36 @@ export function qualifyIssue(input: {
       "Owned paths or logical locks are declared.",
     ),
     check(
+      "host-lane-classified",
+      evidence.hostLane !== undefined,
+      true,
+      "Required host lane is explicitly classified.",
+    ),
+    check(
+      "work-lane-classified",
+      evidence.lane !== undefined,
+      true,
+      "Work lane is explicitly classified.",
+    ),
+    check(
+      "behavior-classified",
+      evidence.behavioral !== undefined,
+      true,
+      "Behavioral impact is explicitly classified.",
+    ),
+    check(
+      "owner-review-classified",
+      evidence.requiresOwnerReview !== undefined,
+      true,
+      "Owner-review impact is explicitly classified.",
+    ),
+    check(
+      "release-risk-classified",
+      evidence.releaseOrMigrationRisk !== undefined,
+      true,
+      "Release and migration risk is explicitly classified.",
+    ),
+    check(
       "not-duplicate",
       evidence.duplicateOf === undefined,
       true,

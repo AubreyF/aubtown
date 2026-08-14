@@ -12,7 +12,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FilePrivateKeyProvider } from "../src/credentials/file-private-key-provider.js";
-import { writeInstallationTokenFile } from "../src/credentials/token-file.js";
+import {
+  readInstallationTokenFile,
+  writeInstallationTokenFile,
+} from "../src/credentials/token-file.js";
 
 const roots: string[] = [];
 
@@ -31,6 +34,13 @@ describe("GitHub App credential files", () => {
     const stats = await lstat(destination);
     expect(stats.mode & 0o777).toBe(0o600);
     expect(await readFile(destination, "utf8")).toBe("installation-token\n");
+    await expect(readInstallationTokenFile(destination)).resolves.toBe(
+      "installation-token",
+    );
+    await chmod(destination, 0o644);
+    await expect(readInstallationTokenFile(destination)).rejects.toThrow(
+      "protected physical file",
+    );
   });
 
   it("reads only a physical mode-restricted GitHub App private key", async () => {

@@ -140,6 +140,7 @@ describe("Freed adapter", () => {
         "--state-root",
         "/state/freed",
       ],
+      env: {},
     });
   });
 

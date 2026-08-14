@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, open, realpath, rename, rm } from "node:fs/promises";
+import { lstat, open, readFile, realpath, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 export async function writeInstallationTokenFile(input: {
@@ -46,4 +46,25 @@ export async function writeInstallationTokenFile(input: {
   } finally {
     await directory.close();
   }
+}
+
+export async function readInstallationTokenFile(file: string): Promise<string> {
+  if (!path.isAbsolute(file) || (await realpath(file)) !== file) {
+    throw new Error("GitHub installation token path must be one absolute physical file.");
+  }
+  const stats = await lstat(file);
+  if (
+    !stats.isFile() ||
+    stats.isSymbolicLink() ||
+    stats.size < 2 ||
+    stats.size > 16 * 1_024 ||
+    (stats.mode & 0o077) !== 0
+  ) {
+    throw new Error("GitHub installation token must be a protected physical file.");
+  }
+  const token = (await readFile(file, "utf8")).trim();
+  if (token.length < 1 || /\s/u.test(token)) {
+    throw new Error("GitHub installation token file is invalid.");
+  }
+  return token;
 }

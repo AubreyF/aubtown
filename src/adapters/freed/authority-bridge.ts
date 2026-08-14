@@ -137,6 +137,7 @@ export class FreedAuthorityBridge implements AuthorityBridge {
         this.options.stateRoot,
       ],
       cwd: this.options.repositoryRoot,
+      env: {},
     });
     const parsed = taskListOutputSchema.parse(JSON.parse(output.stdout));
     const task = parsed.result.tasks

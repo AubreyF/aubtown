@@ -60,4 +60,30 @@ describe("qualifyIssue", () => {
     expect(result.eligible).toBe(false);
     expect(result.priorityScore).toBe(0);
   });
+
+  it("does not infer safe lane and review classifications from absence", () => {
+    const candidate = evidence();
+    const result = qualifyIssue({
+      repository: FREED_REPOSITORY,
+      issue: issue(),
+      evidence: {
+        ...candidate,
+        hostLane: undefined,
+        lane: undefined,
+        behavioral: undefined,
+        requiresOwnerReview: undefined,
+        releaseOrMigrationRisk: undefined,
+      },
+      requireExecutionAuthority: false,
+    });
+    expect(
+      result.checks.filter((check) => !check.passed).map((check) => check.id),
+    ).toEqual([
+      "host-lane-classified",
+      "work-lane-classified",
+      "behavior-classified",
+      "owner-review-classified",
+      "release-risk-classified",
+    ]);
+  });
 });

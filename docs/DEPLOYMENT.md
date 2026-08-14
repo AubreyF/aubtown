@@ -23,6 +23,8 @@ Docker Desktop, Docker Engine, Compose, Restate, PostgreSQL, Redis, and a second
 
 `aubtown-host-gateway.service` receives signed heartbeat and quota envelopes as `aubtown-symphony`. It binds to `127.0.0.1:8090`, persists `/var/lib/aubtown/coordinator/host-observations.json`, and reads only enrolled public keys from `/etc/aubtown/hosts.json`. A Mac reaches it through a private Tailscale HTTPS forward. Do not bind it publicly. Execution, workspace, restore, checkpoint, validation, and review commands remain closed until their coordinator state machines and the Freed claim path are enabled.
 
+`aubtown-planning-snapshot.timer` invokes a native one-shot collector once per minute. The collector reads GitHub, the supported Freed task command, signed host state, local Git refs, and local worktrees. It atomically replaces `/var/lib/aubtown/coordinator/planning-snapshot.json`. This report is read-only planning evidence. It is not an execution claim, candidate, queue, or launch authority.
+
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
 
 The future authority broker runs under its own service identity beside the canonical Freed state root. Symphony and workers receive scoped receipts, not authority tokens or direct state-root access.
@@ -37,6 +39,7 @@ The future authority broker runs under its own service identity beside the canon
 - `/etc/aubtown/keys`: service-specific private credentials
 - `/var/lib/aubtown/symphony`: coordinator state and `CODEX_HOME`
 - `/var/lib/aubtown/coordinator/host-observations.json`: authenticated heartbeat and quota state
+- `/var/lib/aubtown/coordinator/planning-snapshot.json`: protected read-only cross-source planning evidence
 - `/var/lib/aubtown/admission/candidates`: protected non-authoritative per-issue dispatch requests
 - `/var/lib/aubtown/admission/envelopes`: protected per-issue Freed authority and quota envelopes
 - `/var/lib/aubtown/admission/receipts`: append-only exact-claim prelaunch receipts
@@ -54,7 +57,7 @@ The trusted read-only reconciler first runs AubTown's deterministic assembly bou
 /opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reconcile-symphony-candidate.js /var/lib/aubtown/reconciler/dispatch-snapshot.json
 ```
 
-The command reads `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, rejects a symbolic, group-writable, world-writable, oversized, stale, inconsistent, ineligible, route-mismatched, or quota-blocked snapshot, and writes no authority receipt. The source input is transient reconciler state and must be replaced atomically before invocation. The current repository ships this command, but live GitHub, Freed, host-gateway, and Git-head snapshot collection remains disabled until the Freed claim side is installed.
+The command reads `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, rejects a symbolic, group-writable, world-writable, oversized, stale, inconsistent, ineligible, route-mismatched, or quota-blocked snapshot, and writes no authority receipt. The source input is transient reconciler state and must be replaced atomically before invocation. The read-only collector now gathers GitHub, Freed task, host-gateway, local ref, pull-request, and worktree evidence. It remains fail-closed because Freed does not yet expose complete task-scoped claim evidence, and no code converts the planning report directly into an authority-bearing candidate.
 
 ## GitHub authentication
 
@@ -97,7 +100,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 2. Create dedicated coordinator, checkpoint, and executor users. The MVP token refresher uses the restricted coordinator identity. A later broker split must preserve mode-0600 delivery without widening access.
 3. Install reviewed absolute Git, Node, Codex, SSH, and certificate paths.
 4. Install the pinned Symphony source or binary and verify its checksum.
-5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer and signed host observation gateway.
+5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer, signed host observation gateway, and read-only planning timer.
 6. Check out Freed and verify `scripts/worktree-add.sh` at the expected path.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.

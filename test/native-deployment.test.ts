@@ -69,6 +69,26 @@ describe("native Linux deployment", () => {
     expect(hostAgent).not.toMatch(/replace-with-private-key|BEGIN PRIVATE KEY/iu);
   });
 
+  it("collects read-only planning evidence every minute without containers", async () => {
+    const service = await fixture(
+      "deploy/systemd/aubtown-planning-snapshot.service",
+    );
+    const timer = await fixture(
+      "deploy/systemd/aubtown-planning-snapshot.timer",
+    );
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    expect(service).toContain("User=aubtown-symphony");
+    expect(service).toContain("dist/cli/collect-planning-snapshot.js");
+    expect(service).toContain("ReadOnlyPaths=/etc/aubtown /srv/freed /var/lib/freed/automation");
+    expect(service).toContain("ReadWritePaths=/var/lib/aubtown/coordinator");
+    expect(timer).toContain("OnUnitActiveSec=1min");
+    expect(environment).toContain(
+      "AUBTOWN_PLANNING_SNAPSHOT_FILE=/var/lib/aubtown/coordinator/planning-snapshot.json",
+    );
+    expect(environment).toContain("AUBTOWN_PILOT_ISSUE_NUMBER=");
+    expect(`${service}\n${timer}`).not.toMatch(/docker|compose|restate/iu);
+  });
+
   it("ships a native non-authoritative admission candidate publisher", async () => {
     const packageJson = await fixture("package.json");
     const publisher = await fixture(
