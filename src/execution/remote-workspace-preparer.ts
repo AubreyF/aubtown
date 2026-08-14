@@ -8,6 +8,10 @@ import {
   type InitialWorkspaceReceipt,
   type InitialWorkspaceRequirement,
 } from "./workspace.js";
+import {
+  OpenSshWorkerPolicyVerifier,
+  type SshWorkerPolicyVerifier,
+} from "../security/ssh-worker-policy.js";
 
 export interface SshWorkspacePreparerConfig {
   readonly sshExecutable: string;
@@ -16,6 +20,10 @@ export interface SshWorkspacePreparerConfig {
   readonly remoteNodeExecutable: string;
   readonly remotePreparerExecutable: string;
   readonly remoteRuntimeConfig: string;
+  readonly expectedUser: string;
+  readonly expectedIdentityFile: string;
+  readonly expectedKnownHostsFile: string;
+  readonly requiredConfigUid?: number;
 }
 
 function absoluteCommandToken(value: string, label: string): string {
@@ -48,6 +56,8 @@ export class SshInitialWorkspacePreparer implements InitialWorkspacePreparer {
   constructor(
     private readonly runner: CommandRunner,
     config: SshWorkspacePreparerConfig,
+    private readonly policy: SshWorkerPolicyVerifier =
+      new OpenSshWorkerPolicyVerifier(runner),
   ) {
     if (
       !path.isAbsolute(config.sshExecutable) ||
@@ -77,6 +87,18 @@ export class SshInitialWorkspacePreparer implements InitialWorkspacePreparer {
     input: InitialWorkspaceRequirement,
   ): Promise<InitialWorkspaceReceipt> {
     const requirement = initialWorkspaceRequirementSchema.parse(input);
+    await this.policy.verify({
+      sshExecutable: this.#config.sshExecutable,
+      sshConfig: this.#config.sshConfig,
+      commandCwd: this.#config.commandCwd,
+      hostId: requirement.hostId,
+      expectedUser: this.#config.expectedUser,
+      expectedIdentityFile: this.#config.expectedIdentityFile,
+      expectedKnownHostsFile: this.#config.expectedKnownHostsFile,
+      ...(this.#config.requiredConfigUid === undefined
+        ? {}
+        : { requiredConfigUid: this.#config.requiredConfigUid }),
+    });
     const payload = Buffer.from(canonicalJson(requirement)).toString("base64url");
     const result = await this.runner.run({
       executable: this.#config.sshExecutable,

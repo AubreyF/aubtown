@@ -9,6 +9,7 @@ import {
   initialWorkspaceRequirementSchema,
   type InitialWorkspaceReceipt,
 } from "../src/execution/workspace.js";
+import type { SshWorkerPolicyVerifier } from "../src/security/ssh-worker-policy.js";
 
 const requirement = initialWorkspaceRequirementSchema.parse({
   schemaVersion: 1,
@@ -42,6 +43,18 @@ class CapturingRunner implements CommandRunner {
   }
 }
 
+const policy: SshWorkerPolicyVerifier = {
+  verify: async (input) => ({
+    hostId: input.hostId,
+    hostname: "linux-control-1.tailnet.example",
+    user: input.expectedUser,
+    identityFile: input.expectedIdentityFile,
+    knownHostsFile: input.expectedKnownHostsFile,
+    configSha256: "d".repeat(64),
+    sshExecutableSha256: "e".repeat(64),
+  }),
+};
+
 function receipt(
   overrides: Partial<InitialWorkspaceReceipt> = {},
 ): InitialWorkspaceReceipt {
@@ -67,7 +80,10 @@ function preparer(runner: CommandRunner): SshInitialWorkspacePreparer {
     remotePreparerExecutable:
       "/opt/aubtown/current/dist/cli/prepare-symphony-workspace.js",
     remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
-  });
+    expectedUser: "aubtown-executor",
+    expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
+    expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
+  }, policy);
 }
 
 describe("remote initial workspace preparation", () => {
@@ -114,7 +130,10 @@ describe("remote initial workspace preparation", () => {
           remoteNodeExecutable: "/opt/aubtown/node;shutdown",
           remotePreparerExecutable: "/opt/aubtown/preparer.js",
           remoteRuntimeConfig: "/etc/aubtown/worker.json",
-        }),
+          expectedUser: "aubtown-executor",
+          expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
+          expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
+        }, policy),
     ).toThrow("shell-safe absolute path");
   });
 });

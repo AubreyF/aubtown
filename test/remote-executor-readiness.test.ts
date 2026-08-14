@@ -5,6 +5,7 @@ import type {
   CommandRunner,
 } from "../src/adapters/command-runner.js";
 import { SshExecutorReadinessProbe } from "../src/execution/remote-executor-readiness.js";
+import type { SshWorkerPolicyVerifier } from "../src/security/ssh-worker-policy.js";
 
 const report = {
   schemaVersion: 1 as const,
@@ -27,6 +28,19 @@ const report = {
   },
 };
 
+const transport = {
+  hostId: "linux-control-1",
+  hostname: "linux-control-1.tailnet.example",
+  user: "aubtown-executor",
+  identityFile: "/etc/aubtown/ssh/worker_ed25519",
+  knownHostsFile: "/etc/aubtown/ssh/known_hosts",
+  configSha256: "d".repeat(64),
+  sshExecutableSha256: "e".repeat(64),
+};
+const policy: SshWorkerPolicyVerifier = {
+  verify: async (input) => ({ ...transport, hostId: input.hostId }),
+};
+
 class Runner implements CommandRunner {
   request?: CommandRequest;
   constructor(private readonly output: unknown = report) {}
@@ -45,13 +59,19 @@ function probe(runner: CommandRunner): SshExecutorReadinessProbe {
     remoteProbeExecutable: "/opt/aubtown/releases/test/probe.js",
     remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
     remoteWorkspacePreparer: "/opt/aubtown/releases/test/preparer.js",
-  });
+    expectedUser: "aubtown-executor",
+    expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
+    expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
+  }, policy);
 }
 
 describe("remote executor readiness", () => {
   it("runs one fixed probe through the selected Symphony SSH alias", async () => {
     const runner = new Runner();
-    await expect(probe(runner).probe("linux-control-1")).resolves.toEqual(report);
+    await expect(probe(runner).probe("linux-control-1")).resolves.toEqual({
+      ...report,
+      transport,
+    });
     expect(runner.request).toMatchObject({
       executable: "/usr/bin/ssh",
       args: [

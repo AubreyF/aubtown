@@ -41,6 +41,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | A route changes between intended claim creation and candidate assembly | Deterministic assembly recomputes the route from fresh host and account state and rejects a claim naming another host |
 | A dead host remains marked online | Heartbeats older than 120 seconds or dated in the future are treated as offline before route selection |
 | A host impersonates another worker | Every observation is signed by the enrolled Ed25519 host key and bound to its route host ID |
+| An SSH alias routes to an unintended host or weakens authentication | Root-owned config, strict known-host pinning, per-host key aliases, one identity, public-key-only authentication, bounded connection policy, and use-time validation before probes and worktree creation |
 | A signed host event is replayed after restart | The durable per-host sequence and envelope digest return only the original exact receipt; stale or conflicting reuse is rejected |
 | A host reports another subscription | Heartbeat and quota account IDs must remain inside that host's enrollment scope |
 | Coordinator credential reaches Codex | GitHub App token remains host-side and is scrubbed from the child environment |

@@ -271,6 +271,15 @@ async function fixture(): Promise<{
         path: "/opt/aubtown/releases/test/dist/cli/prepare-symphony-workspace.js",
         sha256: createHash("sha256").update("export {};\n").digest("hex"),
       },
+      transport: {
+        hostId: "linux-control-1",
+        hostname: "linux-control-1.tailnet.example",
+        user: "aubtown-executor",
+        identityFile: "/etc/aubtown/ssh/worker_ed25519",
+        knownHostsFile: "/etc/aubtown/ssh/known_hosts",
+        configSha256: "d".repeat(64),
+        sshExecutableSha256: "e".repeat(64),
+      },
     })}\n`,
   );
 

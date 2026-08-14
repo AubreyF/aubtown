@@ -55,6 +55,32 @@ describe("native Linux deployment", () => {
     });
   });
 
+  it("ships a noninteractive pinned-host SSH worker profile", async () => {
+    const config = await fixture("config/hosts/ssh_config.example");
+    for (const required of [
+      "Host linux-control-1 macos-executor-1",
+      "User aubtown-executor",
+      "IdentityFile /etc/aubtown/ssh/worker_ed25519",
+      "UserKnownHostsFile /etc/aubtown/ssh/known_hosts",
+      "GlobalKnownHostsFile /dev/null",
+      "BatchMode yes",
+      "StrictHostKeyChecking yes",
+      "PasswordAuthentication no",
+      "KbdInteractiveAuthentication no",
+      "PreferredAuthentications publickey",
+      "GSSAPIAuthentication no",
+      "HostbasedAuthentication no",
+      "ForwardAgent no",
+      "ClearAllForwardings yes",
+      "ControlMaster no",
+      "UpdateHostKeys no",
+    ]) {
+      expect(config).toContain(required);
+    }
+    expect(config).toContain("HostKeyAlias linux-control-1");
+    expect(config).toContain("HostKeyAlias macos-executor-1");
+  });
+
   it("refreshes the coordinator token natively before expiry", async () => {
     const service = await fixture("deploy/systemd/aubtown-github-token.service");
     const timer = await fixture("deploy/systemd/aubtown-github-token.timer");

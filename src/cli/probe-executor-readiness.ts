@@ -28,6 +28,10 @@ const report = await new SshExecutorReadinessProbe(new ProcessCommandRunner(), {
   remoteProbeExecutable: absolute("AUBTOWN_REMOTE_EXECUTOR_PROBE"),
   remoteRuntimeConfig: absolute("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG"),
   remoteWorkspacePreparer: absolute("AUBTOWN_REMOTE_WORKSPACE_PREPARER"),
+  expectedUser: required("AUBTOWN_SSH_WORKER_USER"),
+  expectedIdentityFile: absolute("AUBTOWN_SSH_IDENTITY_FILE"),
+  expectedKnownHostsFile: absolute("AUBTOWN_SSH_KNOWN_HOSTS_FILE"),
+  requiredConfigUid: 0,
 }).probe(hostId);
 const outputFile = absolute("AUBTOWN_EXECUTOR_READINESS_FILE");
 await writeProtectedJsonFile({

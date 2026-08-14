@@ -5,6 +5,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { CommandRunner } from "../adapters/command-runner.js";
 import type { WorkerRuntimeConfig } from "../config/worker-runtime.js";
+import { sshTransportProofSchema } from "../security/ssh-worker-policy.js";
 
 const digest = z.string().regex(/^[0-9a-f]{64}$/u);
 const commit = z.string().regex(/^[0-9a-f]{40}$/u);
@@ -36,6 +37,15 @@ export const executorReadinessReportSchema = z.object({
 
 export type ExecutorReadinessReport = z.infer<
   typeof executorReadinessReportSchema
+>;
+
+export const selectedExecutorReadinessReportSchema =
+  executorReadinessReportSchema.extend({
+    transport: sshTransportProofSchema,
+  });
+
+export type SelectedExecutorReadinessReport = z.infer<
+  typeof selectedExecutorReadinessReportSchema
 >;
 
 async function physicalDirectory(file: string, label: string): Promise<string> {

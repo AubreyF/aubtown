@@ -2,8 +2,13 @@ import path from "node:path";
 import type { CommandRunner } from "../adapters/command-runner.js";
 import {
   executorReadinessReportSchema,
-  type ExecutorReadinessReport,
+  selectedExecutorReadinessReportSchema,
+  type SelectedExecutorReadinessReport,
 } from "./executor-readiness.js";
+import {
+  OpenSshWorkerPolicyVerifier,
+  type SshWorkerPolicyVerifier,
+} from "../security/ssh-worker-policy.js";
 
 export interface SshExecutorReadinessConfig {
   readonly sshExecutable: string;
@@ -13,6 +18,10 @@ export interface SshExecutorReadinessConfig {
   readonly remoteProbeExecutable: string;
   readonly remoteRuntimeConfig: string;
   readonly remoteWorkspacePreparer: string;
+  readonly expectedUser: string;
+  readonly expectedIdentityFile: string;
+  readonly expectedKnownHostsFile: string;
+  readonly requiredConfigUid?: number;
 }
 
 function remoteToken(value: string, label: string): string {
@@ -28,6 +37,8 @@ export class SshExecutorReadinessProbe {
   constructor(
     private readonly runner: CommandRunner,
     config: SshExecutorReadinessConfig,
+    private readonly policy: SshWorkerPolicyVerifier =
+      new OpenSshWorkerPolicyVerifier(runner),
   ) {
     if (
       !path.isAbsolute(config.sshExecutable) ||
@@ -57,10 +68,22 @@ export class SshExecutorReadinessProbe {
     };
   }
 
-  async probe(hostId: string): Promise<ExecutorReadinessReport> {
+  async probe(hostId: string): Promise<SelectedExecutorReadinessReport> {
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(hostId)) {
       throw new Error("Executor host ID is invalid.");
     }
+    const transport = await this.policy.verify({
+      sshExecutable: this.#config.sshExecutable,
+      sshConfig: this.#config.sshConfig,
+      commandCwd: this.#config.commandCwd,
+      hostId,
+      expectedUser: this.#config.expectedUser,
+      expectedIdentityFile: this.#config.expectedIdentityFile,
+      expectedKnownHostsFile: this.#config.expectedKnownHostsFile,
+      ...(this.#config.requiredConfigUid === undefined
+        ? {}
+        : { requiredConfigUid: this.#config.requiredConfigUid }),
+    });
     const result = await this.runner.run({
       executable: this.#config.sshExecutable,
       args: [
@@ -87,6 +110,6 @@ export class SshExecutorReadinessProbe {
     if (report.hostId !== hostId) {
       throw new Error("Remote executor probe returned another host identity.");
     }
-    return report;
+    return selectedExecutorReadinessReportSchema.parse({ ...report, transport });
   }
 }

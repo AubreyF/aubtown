@@ -10,8 +10,8 @@ import { canonicalJson } from "../security/canonical-json.js";
 import { parseHostEnrollments } from "../security/host-enrollment.js";
 import { loadProtectedJsonFile } from "../security/protected-json.js";
 import {
-  executorReadinessReportSchema,
-  type ExecutorReadinessReport,
+  selectedExecutorReadinessReportSchema,
+  type SelectedExecutorReadinessReport,
 } from "../execution/executor-readiness.js";
 
 const digestPattern = /^[0-9a-f]{64}$/u;
@@ -216,7 +216,7 @@ export async function auditPilotReadiness(input: {
   let lock: z.infer<typeof lockSchema> | undefined;
   let planning: z.infer<typeof planningSchema> | undefined;
   let dispatch: z.infer<typeof dispatchSchema> | undefined;
-  let executorReadiness: ExecutorReadinessReport | undefined;
+  let executorReadiness: SelectedExecutorReadinessReport | undefined;
   let workspacePreparerSha256: string | undefined;
   let expectedNodeVersion: string | undefined;
   let planningSource: unknown;
@@ -288,7 +288,7 @@ export async function auditPilotReadiness(input: {
       return dispatch.intention.intentionId;
     }),
     check("runtime:executor-readiness", async () => {
-      executorReadiness = executorReadinessReportSchema.parse(
+      executorReadiness = selectedExecutorReadinessReportSchema.parse(
         await loadProtectedJsonFile({
           file: input.paths.executorReadinessFile,
           label: "Selected executor readiness",
@@ -296,7 +296,7 @@ export async function auditPilotReadiness(input: {
         }),
       );
       assertFresh(executorReadiness.checkedAt, input.auditedAt, 120);
-      return `${executorReadiness.hostId}:${executorReadiness.baseHead}`;
+      return `${executorReadiness.hostId}:${executorReadiness.baseHead}:${executorReadiness.transport.configSha256}`;
     }),
     check("runtime:symphony-executable", async () =>
       await physicalFile({
@@ -516,6 +516,7 @@ export async function auditPilotReadiness(input: {
       const candidate = dispatch.intention.candidateInput;
       if (
         executorReadiness.hostId !== candidate.intendedClaim.hostId ||
+        executorReadiness.transport.hostId !== executorReadiness.hostId ||
         repositoryName(executorReadiness.repository) !== input.repository ||
         executorReadiness.baseHead !== candidate.baseHead ||
         path.dirname(candidate.intendedClaim.worktree) !==

@@ -34,6 +34,14 @@ function requiredAbsoluteEnvironment(name: string): string {
   return value;
 }
 
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]?.trim();
+  if (value === undefined || value.length === 0) {
+    throw new Error(`${name} is required.`);
+  }
+  return value;
+}
+
 async function optionalCurrentEnvelope(
   root: string,
   issueId: string,
@@ -97,6 +105,14 @@ async function resolveEnvelope(now: string): Promise<SymphonyAdmissionEnvelope> 
       remoteRuntimeConfig: requiredAbsoluteEnvironment(
         "AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG",
       ),
+      expectedUser: requiredEnvironment("AUBTOWN_SSH_WORKER_USER"),
+      expectedIdentityFile: requiredAbsoluteEnvironment(
+        "AUBTOWN_SSH_IDENTITY_FILE",
+      ),
+      expectedKnownHostsFile: requiredAbsoluteEnvironment(
+        "AUBTOWN_SSH_KNOWN_HOSTS_FILE",
+      ),
+      requiredConfigUid: 0,
     }),
   ).resolve({
     candidate,

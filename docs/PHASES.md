@@ -53,6 +53,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Add active-turn claim stages, heartbeats, and race-safe unlaunched-claim recovery before startup and every minute.
 - [x] Prepare the exact claim-bound Freed worktree on the selected SSH executor before Symphony launches a worker.
 - [x] Require fresh SSH executor readiness that matches the selected host, repository, workspace root, and admitted base head.
+- [x] Enforce the root-owned pinned-host SSH policy before readiness probes and worktree creation.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
 - [x] Add hard-boundary active-turn interruption to the Symphony runner.

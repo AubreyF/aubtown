@@ -46,6 +46,8 @@ The future authority broker runs under its own service identity beside the canon
 - `/etc/aubtown/WORKFLOW.md`: root-owned reviewed workflow
 - `/etc/aubtown/symphony.env`: mode-restricted non-secret paths and secret references
 - `/etc/aubtown/ssh/config`: root-owned worker aliases and host-key policy
+- `/etc/aubtown/ssh/worker_ed25519`: coordinator-to-executor private key, mode 0600
+- `/etc/aubtown/ssh/known_hosts`: explicit host-key aliases for the enrolled Linux and macOS hosts
 - `/etc/aubtown/keys`: service-specific private credentials
 - `/var/lib/aubtown/symphony`: coordinator state and `CODEX_HOME`
 - `/var/lib/aubtown/coordinator/host-observations.json`: authenticated heartbeat and quota state
@@ -86,7 +88,9 @@ Installation tokens are short-lived. The native refresher writes `/var/lib/aubto
 
 Symphony and AubTown workspace preparation use `/etc/aubtown/ssh/config`. The Linux executor is also represented as an SSH alias because current upstream Symphony switches to an SSH-only worker pool whenever any SSH host is configured. SSH alias names must exactly match the enrolled AubTown host IDs, including `linux-control-1` and `macos-executor-1` in the initial topology.
 
-Each alias must pin:
+Start from `config/hosts/ssh_config.example`. Replace both hostnames, install the private key at mode 0600, and write exact entries for `linux-control-1` and `macos-executor-1` to the private known-hosts file. Do not collect or accept host keys inside an unattended service. Verify each fingerprint out of band before installation.
+
+Each alias pins:
 
 - hostname or Tailscale address
 - dedicated unprivileged user
@@ -94,6 +98,8 @@ Each alias must pin:
 - expected host key
 - batch mode
 - connection timeout and keepalive
+
+The readiness probe and the worktree preparer both expand the alias with `ssh -G` before any connection. They reject a symbolic, non-root-owned, group-writable, or world-writable config. They also reject placeholders, password fallback, keyboard-interactive authentication, extra identities, mutable host-key learning, forwarding, connection multiplexing, or missing timeouts. The executor readiness report records the SSH executable and config digests.
 
 The reviewed AubTown patch maps each alias to capabilities. A task labeled or qualified for macOS may route only to the Mac alias. Runtime-neutral work may route to either eligible host.
 
@@ -121,7 +127,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 6. Install the same reviewed AubTown release on each executor, check out Freed, write the protected worker runtime config, and verify `scripts/worktree-add.sh` at the configured physical path.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
-9. Install the Symphony workflow and SSH configuration.
+9. Install the Symphony workflow and the root-owned SSH configuration, identity, and independently verified known-host keys.
 10. Run the read-only upstream, host, quota, issue, task, branch, and workspace checks, then invoke the native publisher for one protected non-authoritative candidate.
 11. Run the fake worker, exact-claim restart, concurrent prelaunch, rolling-week, daily ceiling, and Mac-offline Linux routing proofs.
 12. Install `/etc/aubtown/freed-broker-conformance.json` from `config/repositories/freed-broker-conformance.example.json`, map its `conformance-*` profile to disposable state, then run `systemctl start aubtown-freed-broker-conformance.service`.
@@ -144,6 +150,7 @@ Before enabling a writer, verify:
 - workflow and executable match reviewed digests
 - GitHub token refresh succeeds without reaching the worker environment
 - both SSH aliases verify pinned host keys
+- the expanded SSH aliases pass AubTown policy with passwords, forwarding, and multiplexing disabled
 - Codex reports the expected account, callable model, and rate-limit windows
 - restart does not duplicate a fake issue
 - daily and rolling-week stops reject new fake dispatches
