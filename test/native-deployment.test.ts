@@ -173,13 +173,18 @@ describe("native Linux deployment", () => {
     const packageJson = await fixture("package.json");
     expect(service).toContain("Type=oneshot");
     expect(service).toContain("dist/cli/audit-pilot-readiness.js");
+    expect(service).toContain("dist/cli/probe-executor-readiness.js");
     expect(service).toContain("Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service");
     expect(service).toContain("ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed /var/lib/freed/automation");
     expect(service).toContain("ReadWritePaths=/var/lib/aubtown/coordinator");
+    expect(service).toContain("RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6");
     expect(environment).toContain("AUBTOWN_PILOT_READINESS_FILE=");
+    expect(environment).toContain("AUBTOWN_EXECUTOR_READINESS_FILE=");
+    expect(environment).toContain("AUBTOWN_REMOTE_EXECUTOR_PROBE=");
     expect(environment).toContain("AUBTOWN_SYMPHONY_LOCK_FILE=");
     expect(environment).toContain("AUBTOWN_SYMPHONY_EXECUTABLE=");
     expect(packageJson).toContain('"pilot:audit"');
+    expect(packageJson).toContain('"pilot:probe-executor"');
     expect(`${service}\n${environment}`).not.toMatch(/docker|compose|restate/iu);
   });
 

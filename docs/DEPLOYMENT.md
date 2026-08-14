@@ -29,7 +29,7 @@ The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every
 
 `aubtown-planning-snapshot.timer` invokes a native one-shot collector once per minute. The collector reads GitHub, the supported Freed task command, signed host state, local Git refs, and local worktrees. It atomically replaces `/var/lib/aubtown/coordinator/planning-snapshot.json` and `/var/lib/aubtown/coordinator/dispatch-intention.json`. The second file contains either one deterministic proposed initial dispatch or explicit blockers. These files are read-only planning evidence. Neither is an execution claim, candidate, queue, or launch authority.
 
-`aubtown-pilot-readiness.service` is a manual, read-only launch gate. It runs only after a fresh planning collection. It verifies protected physical runtime files, the immutable Symphony executable path, every reviewed patch digest, the workflow policy, prelaunch and active-guard builds, the installed Freed claim broker, a planning snapshot no older than 90 seconds, and one coherent ready dispatch for the configured repository and issue. It writes `/var/lib/aubtown/coordinator/pilot-readiness.json` and exits nonzero when any check fails. A blocked report is evidence, not permission to weaken the check.
+`aubtown-pilot-readiness.service` is a manual, read-only launch gate. It runs only after a fresh planning collection. Its preflight probes the selected executor through the configured Symphony SSH alias and writes `/var/lib/aubtown/coordinator/executor-readiness.json`. The probe verifies the protected worker config, physical Freed checkout, writable workspace root, exact `origin/dev` head, pinned Node and Git runtimes, physical worktree helper, and immutable workspace preparer. The audit then verifies that fresh report against the selected host, repository, workspace root, and dispatch base head. It also verifies protected coordinator runtime files, the immutable Symphony executable path, every reviewed patch digest, the workflow policy, prelaunch and active-guard builds, the installed Freed claim broker, a planning snapshot no older than 90 seconds, and one coherent ready dispatch for the configured repository and issue. It writes `/var/lib/aubtown/coordinator/pilot-readiness.json` and exits nonzero when any check fails. A blocked report is evidence, not permission to weaken the check.
 
 `aubtown-claim-reconciliation.timer` runs the native claim reconciler every minute. The same command runs as Symphony's `ExecStartPre` with `--require-clear`. An active guard heartbeat no older than 120 seconds or a claim inside its initial five-minute grace keeps custody intact. Older unlaunched `claimed` records are released through the broker with the exact last heartbeat, task revision, claim, binding, and custody epoch. If a heartbeat races that release, the broker rejects it and Symphony remains stopped. Stale `running` records are never released by age. They remain fenced for workspace restart or checkpoint transfer. This service needs only the broker endpoint and its own report file. It does not read or edit Freed authority files.
 
@@ -52,6 +52,7 @@ The future authority broker runs under its own service identity beside the canon
 - `/var/lib/aubtown/coordinator/planning-snapshot.json`: protected read-only cross-source planning evidence
 - `/var/lib/aubtown/coordinator/dispatch-intention.json`: protected deterministic proposal or blockers
 - `/var/lib/aubtown/coordinator/pilot-readiness.json`: protected live launch-gate report
+- `/var/lib/aubtown/coordinator/executor-readiness.json`: fresh selected-host installation proof
 - `/var/lib/aubtown/coordinator/freed-broker-conformance.json`: protected disposable broker proof
 - `/var/lib/aubtown/conformance`: disposable broker profile state, never canonical Freed authority
 - `/var/lib/aubtown/coordinator/custody-transfer-plan.json`: non-authoritative verified-checkpoint transfer proposal
@@ -124,7 +125,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 10. Run the read-only upstream, host, quota, issue, task, branch, and workspace checks, then invoke the native publisher for one protected non-authoritative candidate.
 11. Run the fake worker, exact-claim restart, concurrent prelaunch, rolling-week, daily ceiling, and Mac-offline Linux routing proofs.
 12. Install `/etc/aubtown/freed-broker-conformance.json` from `config/repositories/freed-broker-conformance.example.json`, map its `conformance-*` profile to disposable state, then run `systemctl start aubtown-freed-broker-conformance.service`.
-13. Run `systemctl start aubtown-pilot-readiness.service` and inspect both protected reports.
+13. Set `AUBTOWN_PILOT_EXECUTOR_HOST_ID` to the host selected by the protected dispatch, run `systemctl start aubtown-pilot-readiness.service`, and inspect the broker, executor, and pilot reports.
 14. Keep the writer disabled until the audit is ready and the real Freed task-claim integration test passes.
 
 ## macOS executor
@@ -150,6 +151,7 @@ Before enabling a writer, verify:
 - the active guard marks and heartbeats running custody, an expired unlaunched claim is released, and a stale running claim remains fenced
 - a new reconciled authority claim can proceed without deleting the prior crash receipt
 - the native pilot audit reports ready for the exact selected issue and installed immutable release
+- the selected executor report is fresh and matches the dispatch host, repository, workspace root, and exact base head
 - the disposable broker report proves all named lifecycle checks against the exact installed executable digest
 - no container runtime is running or required
 

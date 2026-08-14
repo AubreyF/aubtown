@@ -39,6 +39,7 @@ const report = await auditPilotReadiness({
     hostEnrollmentsFile: absolute("AUBTOWN_HOST_ENROLLMENTS_FILE"),
     accountProfilesFile: absolute("AUBTOWN_ACCOUNT_PROFILES_FILE"),
     hostWorkspaceRootsFile: absolute("AUBTOWN_HOST_WORKSPACE_ROOTS_FILE"),
+    executorReadinessFile: absolute("AUBTOWN_EXECUTOR_READINESS_FILE"),
   },
 });
 const outputFile = absolute("AUBTOWN_PILOT_READINESS_FILE");

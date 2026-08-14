@@ -47,6 +47,8 @@ describe("Symphony workspace guard", () => {
       worktreeRoot: "/var/lib/aubtown/workspaces",
       worktreeHelper: "/srv/freed/repository/scripts/worktree-add.sh",
       gitExecutable: "/usr/bin/git",
+      nodeExecutable: process.execPath,
+      nodeVersion: process.version,
     } as const;
     await writeFile(configFile, JSON.stringify(value), { mode: 0o600 });
     await expect(loadWorkerRuntimeConfig(configFile)).resolves.toEqual(value);
@@ -100,6 +102,8 @@ describe("Symphony workspace guard", () => {
         worktreeRoot,
         worktreeHelper: path.join(repository, "scripts/worktree-add.sh"),
         gitExecutable,
+        nodeExecutable: process.execPath,
+        nodeVersion: process.version,
       },
       runner,
     });
@@ -122,6 +126,8 @@ describe("Symphony workspace guard", () => {
           worktreeRoot,
           worktreeHelper: path.join(repository, "scripts/worktree-add.sh"),
           gitExecutable,
+          nodeExecutable: process.execPath,
+          nodeVersion: process.version,
         },
         runner,
       }),
@@ -171,6 +177,8 @@ describe("Symphony workspace guard", () => {
           worktreeRoot,
           worktreeHelper: path.join(enrolled, "scripts/worktree-add.sh"),
           gitExecutable,
+          nodeExecutable: process.execPath,
+          nodeVersion: process.version,
         },
         runner,
       }),

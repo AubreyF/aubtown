@@ -9,6 +9,10 @@ import type { LivePlanningSnapshot } from "../orchestration/live-planning-snapsh
 import { canonicalJson } from "../security/canonical-json.js";
 import { parseHostEnrollments } from "../security/host-enrollment.js";
 import { loadProtectedJsonFile } from "../security/protected-json.js";
+import {
+  executorReadinessReportSchema,
+  type ExecutorReadinessReport,
+} from "../execution/executor-readiness.js";
 
 const digestPattern = /^[0-9a-f]{64}$/u;
 const commitPattern = /^[0-9a-f]{40}$/u;
@@ -42,6 +46,7 @@ export interface PilotReadinessPaths {
   readonly hostEnrollmentsFile: string;
   readonly accountProfilesFile: string;
   readonly hostWorkspaceRootsFile: string;
+  readonly executorReadinessFile: string;
 }
 
 const repositorySchema = z.object({
@@ -88,6 +93,7 @@ const dispatchSchema = z.discriminatedUnion("status", [
           worktree: z.string().min(1),
           branch: z.string().min(1),
         }),
+        baseHead: z.string().regex(commitPattern),
         now: z.iso.datetime(),
       }),
     }),
@@ -210,6 +216,9 @@ export async function auditPilotReadiness(input: {
   let lock: z.infer<typeof lockSchema> | undefined;
   let planning: z.infer<typeof planningSchema> | undefined;
   let dispatch: z.infer<typeof dispatchSchema> | undefined;
+  let executorReadiness: ExecutorReadinessReport | undefined;
+  let workspacePreparerSha256: string | undefined;
+  let expectedNodeVersion: string | undefined;
   let planningSource: unknown;
   let dispatchSource: unknown;
 
@@ -278,6 +287,17 @@ export async function auditPilotReadiness(input: {
       }
       return dispatch.intention.intentionId;
     }),
+    check("runtime:executor-readiness", async () => {
+      executorReadiness = executorReadinessReportSchema.parse(
+        await loadProtectedJsonFile({
+          file: input.paths.executorReadinessFile,
+          label: "Selected executor readiness",
+          maxBytes: 1024 * 1024,
+        }),
+      );
+      assertFresh(executorReadiness.checkedAt, input.auditedAt, 120);
+      return `${executorReadiness.hostId}:${executorReadiness.baseHead}`;
+    }),
     check("runtime:symphony-executable", async () =>
       await physicalFile({
         file: input.paths.symphonyExecutable,
@@ -302,13 +322,51 @@ export async function auditPilotReadiness(input: {
         maxBytes: 2 * 1024 * 1024,
       }),
     ),
-    check("runtime:workspace-preparer-executable", async () =>
-      await physicalFile({
+    check("runtime:workspace-preparer-executable", async () => {
+      const file = await physicalFile({
         file: path.join(
           input.paths.releaseRoot,
           "dist/cli/prepare-symphony-workspace.js",
         ),
         label: "AubTown remote workspace preparer",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      });
+      workspacePreparerSha256 = sha256(await readFile(file));
+      return workspacePreparerSha256;
+    }),
+    check("runtime:node-version-contract", async () => {
+      const file = await physicalFile({
+        file: path.join(input.paths.releaseRoot, ".nvmrc"),
+        label: "AubTown Node version contract",
+        executable: false,
+        maxBytes: 128,
+      });
+      const version = (await readFile(file, "utf8")).trim();
+      if (!/^[0-9]+\.[0-9]+\.[0-9]+$/u.test(version)) {
+        throw new Error("AubTown Node version contract is invalid.");
+      }
+      expectedNodeVersion = `v${version}`;
+      return expectedNodeVersion;
+    }),
+    check("runtime:executor-probe-client-executable", async () =>
+      await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/probe-executor-readiness.js",
+        ),
+        label: "AubTown executor probe client",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      }),
+    ),
+    check("runtime:executor-probe-host-executable", async () =>
+      await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/probe-executor-readiness-local.js",
+        ),
+        label: "AubTown host-local executor probe",
         executable: false,
         maxBytes: 2 * 1_024 * 1_024,
       }),
@@ -446,6 +504,30 @@ export async function auditPilotReadiness(input: {
         throw new Error("Dispatch intention cannot be reproduced from protected planning inputs.");
       }
       return "dispatch reproduces byte-for-byte from protected source evidence";
+    }),
+    await check("planning:executor-coherence", () => {
+      if (
+        dispatch === undefined ||
+        dispatch.status !== "ready" ||
+        executorReadiness === undefined
+      ) {
+        throw new Error("Dispatch and executor readiness are not both available.");
+      }
+      const candidate = dispatch.intention.candidateInput;
+      if (
+        executorReadiness.hostId !== candidate.intendedClaim.hostId ||
+        repositoryName(executorReadiness.repository) !== input.repository ||
+        executorReadiness.baseHead !== candidate.baseHead ||
+        path.dirname(candidate.intendedClaim.worktree) !==
+          executorReadiness.worktreeRoot ||
+        executorReadiness.preparer.sha256 !== workspacePreparerSha256 ||
+        executorReadiness.node.version !== expectedNodeVersion
+      ) {
+        throw new Error(
+          "Executor readiness disagrees with the selected host, repository, base, workspace root, preparer, or Node version.",
+        );
+      }
+      return `${executorReadiness.hostId}:${executorReadiness.helper.sha256}:${executorReadiness.preparer.sha256}`;
     }),
   );
 

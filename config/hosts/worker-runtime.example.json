@@ -9,5 +9,7 @@
   "repositoryRoot": "/srv/freed/repository",
   "worktreeRoot": "/var/lib/aubtown/workspaces",
   "worktreeHelper": "/srv/freed/repository/scripts/worktree-add.sh",
-  "gitExecutable": "/usr/bin/git"
+  "gitExecutable": "/usr/bin/git",
+  "nodeExecutable": "/opt/aubtown/node/bin/node",
+  "nodeVersion": "v24.14.1"
 }

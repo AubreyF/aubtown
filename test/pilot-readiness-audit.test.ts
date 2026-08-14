@@ -1,4 +1,12 @@
-import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -51,8 +59,14 @@ async function fixture(): Promise<{
   const hostEnrollmentsFile = path.join(root, "config", "hosts.json");
   const accountProfilesFile = path.join(root, "config", "accounts.json");
   const hostWorkspaceRootsFile = path.join(root, "config", "workspaces.json");
+  const executorReadinessFile = path.join(
+    root,
+    "state",
+    "executor-readiness.json",
+  );
 
   await protectedFile(patchFile, patchBytes.toString("utf8"));
+  await protectedFile(path.join(releaseRoot, ".nvmrc"), "24.14.1\n");
   await protectedFile(
     lockFile,
     `${JSON.stringify({
@@ -118,6 +132,14 @@ async function fixture(): Promise<{
   );
   await protectedFile(
     path.join(releaseRoot, "dist/cli/prepare-symphony-workspace.js"),
+    "export {};\n",
+  );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/probe-executor-readiness.js"),
+    "export {};\n",
+  );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/probe-executor-readiness-local.js"),
     "export {};\n",
   );
 
@@ -225,6 +247,32 @@ async function fixture(): Promise<{
   }
   await protectedFile(planningSnapshotFile, `${JSON.stringify(planning)}\n`);
   await protectedFile(dispatchIntentionFile, `${JSON.stringify(dispatch)}\n`);
+  await protectedFile(
+    executorReadinessFile,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      hostId: "linux-control-1",
+      repository: FREED_REPOSITORY,
+      checkedAt: "2026-08-13T20:00:15.000Z",
+      ready: true,
+      repositoryRoot: "/srv/freed/repository",
+      worktreeRoot: "/var/lib/aubtown/workspaces",
+      baseHead: "a".repeat(40),
+      git: { executable: "/usr/bin/git", version: "git version 2.50.1" },
+      node: {
+        executable: "/opt/aubtown/node/bin/node",
+        version: "v24.14.1",
+      },
+      helper: {
+        path: "/srv/freed/repository/scripts/worktree-add.sh",
+        sha256: "b".repeat(64),
+      },
+      preparer: {
+        path: "/opt/aubtown/releases/test/dist/cli/prepare-symphony-workspace.js",
+        sha256: createHash("sha256").update("export {};\n").digest("hex"),
+      },
+    })}\n`,
+  );
 
   return {
     paths: {
@@ -239,6 +287,7 @@ async function fixture(): Promise<{
       hostEnrollmentsFile,
       accountProfilesFile,
       hostWorkspaceRootsFile,
+      executorReadinessFile,
     },
     planning,
     dispatch,
@@ -314,5 +363,24 @@ describe("pilot readiness audit", () => {
 
     expect(report.ready).toBe(false);
     expect(report.blockers).toContain("authority:broker-conformance");
+  });
+
+  it("rejects readiness from another executor host", async () => {
+    const prepared = await fixture();
+    const current = JSON.parse(
+      await readFile(prepared.paths.executorReadinessFile, "utf8"),
+    ) as Record<string, unknown>;
+    await protectedFile(
+      prepared.paths.executorReadinessFile,
+      `${JSON.stringify({ ...current, hostId: "macos-executor-1" })}\n`,
+    );
+    const report = await auditPilotReadiness({
+      repository: "freed-project/freed",
+      issueNumber: 1234,
+      auditedAt,
+      paths: prepared.paths,
+    });
+    expect(report.ready).toBe(false);
+    expect(report.blockers).toContain("planning:executor-coherence");
   });
 });

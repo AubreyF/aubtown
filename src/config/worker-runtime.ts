@@ -14,6 +14,8 @@ export interface WorkerRuntimeConfig {
   readonly worktreeRoot: string;
   readonly worktreeHelper: string;
   readonly gitExecutable: string;
+  readonly nodeExecutable: string;
+  readonly nodeVersion: string;
 }
 
 const absolutePath = z.string().refine((value) => path.isAbsolute(value), {
@@ -32,6 +34,8 @@ const configSchema: z.ZodType<WorkerRuntimeConfig> = z.object({
   worktreeRoot: absolutePath,
   worktreeHelper: absolutePath,
   gitExecutable: absolutePath,
+  nodeExecutable: absolutePath,
+  nodeVersion: z.string().regex(/^v[0-9]+\.[0-9]+\.[0-9]+$/u),
 });
 
 export async function loadWorkerRuntimeConfig(

@@ -1,0 +1,169 @@
+import { createHash } from "node:crypto";
+import { access, lstat, readFile, realpath } from "node:fs/promises";
+import { constants } from "node:fs";
+import path from "node:path";
+import { z } from "zod";
+import type { CommandRunner } from "../adapters/command-runner.js";
+import type { WorkerRuntimeConfig } from "../config/worker-runtime.js";
+
+const digest = z.string().regex(/^[0-9a-f]{64}$/u);
+const commit = z.string().regex(/^[0-9a-f]{40}$/u);
+
+export const executorReadinessReportSchema = z.object({
+  schemaVersion: z.literal(1),
+  hostId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u),
+  repository: z.object({
+    owner: z.string().min(1),
+    name: z.string().min(1),
+    defaultBranch: z.string().min(1),
+  }),
+  checkedAt: z.iso.datetime(),
+  ready: z.literal(true),
+  repositoryRoot: z.string().startsWith("/"),
+  worktreeRoot: z.string().startsWith("/"),
+  baseHead: commit,
+  git: z.object({
+    executable: z.string().startsWith("/"),
+    version: z.string().min(1),
+  }),
+  node: z.object({
+    executable: z.string().startsWith("/"),
+    version: z.string().regex(/^v[0-9]+\.[0-9]+\.[0-9]+$/u),
+  }),
+  helper: z.object({ path: z.string().startsWith("/"), sha256: digest }),
+  preparer: z.object({ path: z.string().startsWith("/"), sha256: digest }),
+});
+
+export type ExecutorReadinessReport = z.infer<
+  typeof executorReadinessReportSchema
+>;
+
+async function physicalDirectory(file: string, label: string): Promise<string> {
+  const stats = await lstat(file);
+  const physical = await realpath(file);
+  if (!stats.isDirectory() || stats.isSymbolicLink() || physical !== file) {
+    throw new Error(`${label} must be one physical directory.`);
+  }
+  return physical;
+}
+
+async function physicalFile(input: {
+  readonly file: string;
+  readonly label: string;
+  readonly executable: boolean;
+  readonly maxBytes?: number;
+}): Promise<{ readonly path: string; readonly sha256: string }> {
+  const stats = await lstat(input.file);
+  const physical = await realpath(input.file);
+  if (
+    !stats.isFile() ||
+    stats.isSymbolicLink() ||
+    physical !== input.file ||
+    stats.size < 1 ||
+    stats.size > (input.maxBytes ?? 64 * 1_024 * 1_024) ||
+    (stats.mode & 0o022) !== 0 ||
+    (input.executable && (stats.mode & 0o111) === 0)
+  ) {
+    throw new Error(`${input.label} must be one protected physical file.`);
+  }
+  return {
+    path: physical,
+    sha256: createHash("sha256").update(await readFile(physical)).digest("hex"),
+  };
+}
+
+export async function probeExecutorReadiness(input: {
+  readonly runtime: WorkerRuntimeConfig;
+  readonly preparerFile: string;
+  readonly runner: CommandRunner;
+  readonly checkedAt: string;
+  readonly runningNodeExecutable?: string;
+  readonly runningNodeVersion?: string;
+}): Promise<ExecutorReadinessReport> {
+  const repositoryRoot = await physicalDirectory(
+    input.runtime.repositoryRoot,
+    "Freed repository root",
+  );
+  const worktreeRoot = await physicalDirectory(
+    input.runtime.worktreeRoot,
+    "AubTown worktree root",
+  );
+  await access(worktreeRoot, constants.R_OK | constants.W_OK | constants.X_OK);
+  const helper = await physicalFile({
+    file: input.runtime.worktreeHelper,
+    label: "Freed worktree helper",
+    executable: true,
+  });
+  if (!helper.path.startsWith(`${repositoryRoot}${path.sep}`)) {
+    throw new Error("Freed worktree helper escapes the repository root.");
+  }
+  const preparer = await physicalFile({
+    file: input.preparerFile,
+    label: "AubTown workspace preparer",
+    executable: false,
+  });
+  const node = await physicalFile({
+    file: input.runtime.nodeExecutable,
+    label: "Pinned Node executable",
+    executable: true,
+    maxBytes: 256 * 1_024 * 1_024,
+  });
+  const runningNode = await realpath(
+    input.runningNodeExecutable ?? process.execPath,
+  );
+  const runningVersion = input.runningNodeVersion ?? process.version;
+  if (runningNode !== node.path || runningVersion !== input.runtime.nodeVersion) {
+    throw new Error("Executor probe is not running under the configured Node runtime.");
+  }
+  const git = await physicalFile({
+    file: input.runtime.gitExecutable,
+    label: "Git executable",
+    executable: true,
+  });
+  const gitVersion = (
+    await input.runner.run({
+      executable: git.path,
+      args: ["--version"],
+      cwd: repositoryRoot,
+      env: {},
+    })
+  ).stdout.trim();
+  const topLevel = (
+    await input.runner.run({
+      executable: git.path,
+      args: ["rev-parse", "--show-toplevel"],
+      cwd: repositoryRoot,
+      env: {},
+    })
+  ).stdout.trim();
+  if ((await realpath(topLevel)) !== repositoryRoot) {
+    throw new Error("Configured Freed checkout resolves to another repository root.");
+  }
+  const baseHead = (
+    await input.runner.run({
+      executable: git.path,
+      args: [
+        "show-ref",
+        "--verify",
+        "--hash",
+        `refs/remotes/origin/${input.runtime.repository.defaultBranch}`,
+      ],
+      cwd: repositoryRoot,
+      env: {},
+    })
+  ).stdout.trim();
+  return executorReadinessReportSchema.parse({
+    schemaVersion: 1,
+    hostId: input.runtime.hostId,
+    repository: input.runtime.repository,
+    checkedAt: input.checkedAt,
+    ready: true,
+    repositoryRoot,
+    worktreeRoot,
+    baseHead,
+    git: { executable: git.path, version: gitVersion },
+    node: { executable: node.path, version: runningVersion },
+    helper,
+    preparer,
+  });
+}

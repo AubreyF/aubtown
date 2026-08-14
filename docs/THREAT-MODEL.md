@@ -62,6 +62,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Two standby coordinators promote themselves | Earliest valid immutable GitHub comment ID wins, followed by a propagation delay and final reread before any launch |
 | Upstream Symphony changes silently | Production commit and source checksum are immutable; tracking and promotion are separate operations |
 | Installed runtime differs from reviewed pilot | Native readiness audit rechecks the immutable executable path, patch digests, workflow, compiled guards, broker, and exact issue dispatch before launch |
+| Selected executor is missing or misconfigured | A fresh SSH probe checks its physical checkout, writable workspace root, exact base ref, pinned Node and Git runtimes, helper, and preparer, then the coordinator binds that report to the selected dispatch |
 | Upstream memory loses blocked or retry state | The active guard marks running custody and heartbeats exact authority; reconciliation releases only expired unlaunched claims, while running or ambiguous custody stays fenced |
 | Dashboard becomes public | Loopback binding plus private Tailscale exposure only |
 | Another backlog appears | No AubTown ticket database, Markdown ticket queue, or CAR dispatcher |

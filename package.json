@@ -20,6 +20,7 @@
     "symphony:reconcile-candidate": "tsx src/cli/reconcile-symphony-candidate.ts",
     "host:monitor": "tsx src/host-monitor.ts",
     "pilot:audit": "tsx src/cli/audit-pilot-readiness.ts",
+    "pilot:probe-executor": "tsx src/cli/probe-executor-readiness.ts",
     "planning:collect": "tsx src/cli/collect-planning-snapshot.ts",
     "custody:plan": "tsx src/cli/plan-custody-transfer.ts",
     "freed:broker-conformance": "tsx src/cli/verify-freed-broker.ts",
