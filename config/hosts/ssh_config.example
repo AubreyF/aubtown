@@ -29,3 +29,35 @@ Host linux-control-1
 Host macos-executor-1
     HostName replace-with-macos-tailscale-name-or-address
     HostKeyAlias macos-executor-1
+
+Host linux-control-1-publisher macos-executor-1-publisher
+    User aubtown-publisher
+    Port 22
+    IdentityFile /etc/aubtown/ssh/publisher_ed25519
+    UserKnownHostsFile /etc/aubtown/ssh/known_hosts
+    GlobalKnownHostsFile /dev/null
+    IdentitiesOnly yes
+    BatchMode yes
+    StrictHostKeyChecking yes
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    PubkeyAuthentication yes
+    PreferredAuthentications publickey
+    GSSAPIAuthentication no
+    HostbasedAuthentication no
+    ForwardAgent no
+    ClearAllForwardings yes
+    RequestTTY no
+    ControlMaster no
+    UpdateHostKeys no
+    ConnectTimeout 5
+    ServerAliveInterval 15
+    ServerAliveCountMax 2
+
+Host linux-control-1-publisher
+    HostName replace-with-linux-tailscale-name-or-address
+    HostKeyAlias linux-control-1-publisher
+
+Host macos-executor-1-publisher
+    HostName replace-with-macos-tailscale-name-or-address
+    HostKeyAlias macos-executor-1-publisher

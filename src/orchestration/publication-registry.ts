@@ -1,21 +1,10 @@
-import { z } from "zod";
 import { workProductIdentitySchema } from "../adjudication/receipts.js";
-import type { DraftPublicationReceipt } from "../publication/draft-publisher.js";
+import {
+  draftPublicationReceiptSchema,
+  type DraftPublicationReceipt,
+} from "../publication/draft-publisher.js";
 import type { PublicationPlan } from "../publication/policy.js";
 import { canonicalJsonEqual } from "../security/canonical-json.js";
-
-const draftPublicationReceiptSchema = z.object({
-  schemaVersion: z.literal(1),
-  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u),
-  checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u),
-  branch: z.string().min(1),
-  head: z.string().regex(/^[0-9a-f]{40}$/u),
-  pullRequestNumber: z.number().int().positive(),
-  pullRequestUrl: z.url(),
-  draft: z.literal(true),
-  publishedAt: z.iso.datetime(),
-  tokenExpiresAt: z.iso.datetime(),
-});
 
 export type PublicationStage = "planned" | "published" | "blocked";
 

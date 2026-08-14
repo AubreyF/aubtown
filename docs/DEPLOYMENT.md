@@ -35,7 +35,9 @@ The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every
 
 `aubtown-freed-broker-conformance.service` runs immediately before pilot readiness against a disposable `conformance-*` broker profile. Each operation starts a separate broker process. The gate checks acquire, exact replay, changed-replay rejection, claim projection, duplicate rejection, heartbeat, checkpoint-backed transfer, stale-epoch fencing, permanent historical-operation fencing, exact release, and post-release restart state. Its protected report binds the exact broker path and SHA-256 digest. Pilot readiness accepts only a complete passing report from the last 10 minutes for the executable it is about to trust.
 
-`aubtown-completion-reconciliation.timer` checks the owner-selected pilot issue once per minute. It reads the exact trusted completion from the selected executor, then rereads GitHub eligibility, current Freed task authority, current broker claim, implementation-turn custody, and subscription usage. A matching completion produces one immutable adjudication command. The same executor validates the clean committed patch using the protected repository validation profile and starts a separate read-only reviewer app-server under `/etc/aubtown/reviewer-runtime.json`. The model is checked for callability at use time. Usage is reread before review and sampled while the reviewer runs. Hard daily or rolling-week decisions interrupt the exact review thread and turn. Coordinator and executor each persist immutable receipts. This service has no draft publication path yet.
+`aubtown-completion-reconciliation.timer` checks the owner-selected pilot issue once per minute. It reads the exact trusted completion from the selected executor, then rereads GitHub eligibility, current Freed task authority, current broker claim, implementation-turn custody, and subscription usage. A matching completion produces one immutable adjudication command. The same executor validates the clean committed patch using the protected repository validation profile and starts a separate read-only reviewer app-server under `/etc/aubtown/reviewer-runtime.json`. The model is checked for callability at use time. Usage is reread before review and sampled while the reviewer runs. Hard daily or rolling-week decisions interrupt the exact review thread and turn. Coordinator and executor each persist immutable receipts.
+
+Draft publication also runs on the custody host because that host owns the exact worktree. The coordinator sends only an admitted, non-secret publication plan through a dedicated `<host>-publisher` SSH alias. That alias uses the separate `aubtown-publisher` OS account and `/etc/aubtown/ssh/publisher_ed25519`; the worker alias cannot log in as that account. The host-local `publish-draft-local.js` loads `/etc/aubtown/publisher-runtime.json`, verifies the selected host and repository, checks the clean committed work product again, and mints a repository-scoped Draft Publisher App token from its own protected key. The token is readable only by the publisher account and never appears in SSH arguments, worker state, or the coordinator environment. The publisher account needs narrowly scoped filesystem access to inspect and push the admitted worktree, but the executor account receives no reciprocal access to publisher credentials. The command returns one exact draft receipt. Coordinator-side planning, durable receipt registration, lifecycle projection, and exact claim cleanup remain pending before this path may be enabled.
 
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
 
@@ -55,8 +57,11 @@ scoped receipts, not authority tokens or direct state-root access.
 - `/etc/aubtown/freed-broker-profiles/freed-pilot.json`: root-owned Linux broker profile with exact runtime checksums
 - `/etc/aubtown/ssh/config`: root-owned worker aliases and host-key policy
 - `/etc/aubtown/ssh/worker_ed25519`: coordinator-to-executor private key, mode 0600
-- `/etc/aubtown/ssh/known_hosts`: explicit host-key aliases for the enrolled Linux and macOS hosts
-- `/etc/aubtown/keys`: service-specific private credentials
+- `/etc/aubtown/ssh/publisher_ed25519`: coordinator-to-publisher private key, mode 0600
+- `/etc/aubtown/ssh/known_hosts`: explicit executor and publisher aliases for the enrolled Linux and macOS hosts
+- `/etc/aubtown/keys`: coordinator and checkpoint service private credentials
+- `/etc/aubtown/publisher`: credentials readable only by the dedicated publisher OS account
+- `/etc/aubtown/publisher-runtime.json`: root-owned host-local Draft Publisher identity and repository allowlist
 - `/var/lib/aubtown/symphony`: coordinator state and `CODEX_HOME`
 - `/var/lib/aubtown/coordinator/host-observations.json`: authenticated heartbeat and quota state
 - `/var/lib/aubtown/coordinator/planning-snapshot.json`: protected read-only cross-source planning evidence
@@ -107,7 +112,7 @@ Installation tokens are short-lived. The native refresher writes `/var/lib/aubto
 
 Symphony and AubTown workspace preparation use `/etc/aubtown/ssh/config`. The Linux executor is also represented as an SSH alias because current upstream Symphony switches to an SSH-only worker pool whenever any SSH host is configured. SSH alias names must exactly match the enrolled AubTown host IDs, including `linux-control-1` and `macos-executor-1` in the initial topology.
 
-Start from `config/hosts/ssh_config.example`. Replace both hostnames, install the private key at mode 0600, and write exact entries for `linux-control-1` and `macos-executor-1` to the private known-hosts file. Do not collect or accept host keys inside an unattended service. Verify each fingerprint out of band before installation.
+Start from `config/hosts/ssh_config.example`. Replace both hostnames, install the worker and publisher private keys at mode 0600, and write exact entries for the executor and `<host>-publisher` aliases to the private known-hosts file. Do not collect or accept host keys inside an unattended service. Verify each fingerprint out of band before installation.
 
 Each alias pins:
 
@@ -145,7 +150,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 3. Install reviewed absolute Git, Node, Codex, SSH, and certificate paths.
 4. Install the pinned Symphony source or binary and verify its checksum.
 5. Install the reviewed AubTown build, `dist/factory-coordinator`, its root-owned broker profile, and native service units, including the GitHub token refresh timer, signed host observation gateway, read-only planning timer, and claim reconciliation timer.
-6. Install the same reviewed AubTown release on each executor, check out Freed, create its handoff root at mode 0700, write the protected worker and reviewer runtime configs, and verify `scripts/worktree-add.sh` at the configured physical path. Use `config/hosts/worker-runtime.example.json` and `config/hosts/reviewer-runtime.example.json` for Linux. Use `config/hosts/worker-runtime.macos.example.json` and `config/hosts/reviewer-runtime.macos.example.json` for macOS.
+6. Install the same reviewed AubTown release on each executor, check out Freed, create its handoff root at mode 0700, write the protected worker, reviewer, and publisher runtime configs, and verify `scripts/worktree-add.sh` at the configured physical path. Use `config/hosts/worker-runtime.example.json`, `config/hosts/reviewer-runtime.example.json`, and `config/hosts/publisher-runtime.example.json` for Linux. Use the matching `.macos.example.json` files for macOS.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
 9. Install the Symphony workflow and the root-owned SSH configuration, identity, and independently verified known-host keys.
@@ -158,6 +163,8 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 ## macOS executor
 
 The Mac needs no coordinator and no Docker runtime. It provides SSH, Codex, the Freed checkout, `scripts/worktree-add.sh`, its private `CODEX_HOME`, native toolchains, a host-owned workspace root, and the private handoff root in `config/hosts/worker-runtime.macos.example.json`.
+
+For draft publication, the Mac also keeps its own host-local Draft Publisher App key and protected `publisher-runtime.json` under the separate `aubtown-publisher` account. The executor account cannot read this credential, and the credential is never transferred from Linux.
 
 When the Mac sleeps or disconnects, it stops receiving work. Linux continues. An unpublished Mac task remains claimed until it returns or the 24-hour checkpoint-backed transfer policy advances custody to a compatible host.
 

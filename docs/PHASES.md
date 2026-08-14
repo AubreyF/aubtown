@@ -64,6 +64,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Run reviewed exact validation and a fresh read-only independent review on the custody host.
 - [x] Recheck and actively monitor rolling-week quota during review, with targeted interruption at a hard boundary.
 - [x] Persist immutable adjudication results, resume durable reviewer handles after restart, and fence an ambiguous reviewer start.
+- [x] Keep draft publication credentials on the custody host and route only a non-secret admitted plan over pinned SSH.
 - [ ] Review and merge the Freed task-claim commands from draft PR #1491.
 - [x] Build the host-neutral `factory-coordinator` broker with pinned runtime verification and bounded lease cleanup.
 - [ ] Install the native Linux authority broker.

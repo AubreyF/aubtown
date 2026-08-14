@@ -51,12 +51,20 @@ describe("native Linux deployment", () => {
     const macReviewerRuntime = JSON.parse(
       await fixture("config/hosts/reviewer-runtime.macos.example.json"),
     ) as Record<string, unknown>;
+    const publisherRuntime = JSON.parse(
+      await fixture("config/hosts/publisher-runtime.example.json"),
+    ) as Record<string, unknown>;
+    const macPublisherRuntime = JSON.parse(
+      await fixture("config/hosts/publisher-runtime.macos.example.json"),
+    ) as Record<string, unknown>;
     expect(environment).toContain("AUBTOWN_SSH_EXECUTABLE=/usr/bin/ssh");
     expect(environment).toContain("prepare-symphony-workspace.js");
     expect(environment).toContain("complete-symphony-workspace.js");
     expect(environment).toContain("read-symphony-completion.js");
     expect(environment).toContain("adjudicate-symphony-completion.js");
+    expect(environment).toContain("publish-draft-local.js");
     expect(environment).toContain("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG=");
+    expect(environment).toContain("AUBTOWN_REMOTE_PUBLISHER_RUNTIME_CONFIG=");
     expect(runtime).toMatchObject({
       hostId: "linux-control-1",
       repository: {
@@ -88,6 +96,17 @@ describe("native Linux deployment", () => {
       accountId: "codex-pro-1",
       quotaSampleIntervalMs: 30_000,
     });
+    expect(publisherRuntime).toMatchObject({
+      hostId: "linux-control-1",
+      selectedRepositories: ["freed-project/freed"],
+    });
+    expect(macPublisherRuntime).toMatchObject({
+      hostId: "macos-executor-1",
+      selectedRepositories: ["freed-project/freed"],
+    });
+    expect(await fixture("package.json")).toContain(
+      '"symphony:publish-draft-local"',
+    );
   });
 
   it("reconciles trusted completion downstream of Symphony without another scheduler", async () => {
@@ -147,6 +166,15 @@ describe("native Linux deployment", () => {
     }
     expect(config).toContain("HostKeyAlias linux-control-1");
     expect(config).toContain("HostKeyAlias macos-executor-1");
+    for (const required of [
+      "Host linux-control-1-publisher macos-executor-1-publisher",
+      "User aubtown-publisher",
+      "IdentityFile /etc/aubtown/ssh/publisher_ed25519",
+      "HostKeyAlias linux-control-1-publisher",
+      "HostKeyAlias macos-executor-1-publisher",
+    ]) {
+      expect(config).toContain(required);
+    }
   });
 
   it("refreshes the coordinator token natively before expiry", async () => {

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "hostId": "linux-control-1",
+  "gitExecutable": "/usr/bin/git",
+  "appId": "replace-with-draft-publisher-app-id",
+  "installationId": 1,
+  "privateKeyFile": "/etc/aubtown/publisher/draft-publisher-private.pem",
+  "selectedRepositories": [
+    "freed-project/freed"
+  ]
+}

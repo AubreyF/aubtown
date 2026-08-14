@@ -2,6 +2,7 @@ import { lstat, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Octokit } from "@octokit/rest";
+import { z } from "zod";
 import type { CommandRunner } from "../adapters/command-runner.js";
 import type { WorkProductStateInspector } from "../adjudication/validation-runner.js";
 import { workProductIdentitySchema } from "../adjudication/receipts.js";
@@ -63,18 +64,22 @@ export interface GitBranchPublisher {
   }): Promise<void>;
 }
 
-export interface DraftPublicationReceipt {
-  readonly schemaVersion: 1;
-  readonly repository: string;
-  readonly checkpointReference: string;
-  readonly branch: string;
-  readonly head: string;
-  readonly pullRequestNumber: number;
-  readonly pullRequestUrl: string;
-  readonly draft: true;
-  readonly publishedAt: string;
-  readonly tokenExpiresAt: string;
-}
+export const draftPublicationReceiptSchema = z.object({
+  schemaVersion: z.literal(1),
+  repository: z.string().regex(REPOSITORY),
+  checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u),
+  branch: z.string().min(1),
+  head: z.string().regex(GIT_SHA),
+  pullRequestNumber: z.number().int().positive(),
+  pullRequestUrl: z.url(),
+  draft: z.literal(true),
+  publishedAt: z.iso.datetime(),
+  tokenExpiresAt: z.iso.datetime(),
+}).strict();
+
+export type DraftPublicationReceipt = z.infer<
+  typeof draftPublicationReceiptSchema
+>;
 
 export class GitHttpsBranchPublisher implements GitBranchPublisher {
   constructor(
