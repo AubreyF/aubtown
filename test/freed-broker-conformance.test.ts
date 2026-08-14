@@ -67,6 +67,7 @@ function config(executable: string): FreedBrokerConformanceInput {
         accountId: "codex-pro-1",
         driverId: "codex-app-server-v1",
         target: "shared",
+        workLane: "runtime-neutral",
         publicationCeiling: "draft-pr",
       },
     },
@@ -103,14 +104,17 @@ describe("Freed broker conformance", () => {
       "acquire-replay",
       "changed-operation-replay",
       "show-after-acquire",
+      "list-after-acquire",
       "duplicate-acquire",
       "heartbeat-replay",
       "changed-heartbeat-replay",
       "transfer-replay",
       "stale-epoch-fenced",
       "show-after-transfer",
+      "list-after-transfer",
       "release-replay",
       "show-after-release",
+      "list-after-release",
     ]);
     expect(report.checks.every((check) => check.passed)).toBe(true);
   });

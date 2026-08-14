@@ -29,6 +29,7 @@
       "accountId": "conformance-account",
       "driverId": "conformance-driver",
       "target": "shared",
+      "workLane": "runtime-neutral",
       "publicationCeiling": "draft-pr"
     }
   },

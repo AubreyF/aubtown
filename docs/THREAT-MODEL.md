@@ -28,6 +28,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | A host lies about being compatible | Enrolled immutable host capabilities and issue-qualified lane are checked by the scheduler patch and authority receipt |
 | Symphony starts in an empty or foreign directory | Admission waits for helper-created host attestation; `after_create` rejects fallback directories and `before_run` verifies a clean worktree under the enrolled Freed repository |
 | Conflicting tasks run concurrently | Qualified path domains and logical locks are compared against every active claim before admission |
+| A missing claim is mistaken for free capacity | Planning requires one complete broker claim-list response with unique task and claim IDs; missing or malformed evidence blocks |
 | A GitHub label alone grants Freed execution | Dispatch also requires an exact active Freed task and supported claim-acquire receipt |
 | A worker edits Freed authority files | Worker has no authority credential or canonical state-root access; bridge uses supported commands only |
 | Claim broker returns another task or claim | AubTown compares operation, task revision, claim, custody epoch, binding digest, conflict digest, and bridge identity before publishing an envelope |

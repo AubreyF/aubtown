@@ -76,7 +76,21 @@ function replay() {
 if (replay()) process.exit(0);
 
 const current = state.tasks[request.taskId];
-if (operation === "claim-acquire") {
+if (operation === "claim-list") {
+  const claims = Object.entries(state.tasks)
+    .filter(([, task]) => task.claim != null)
+    .map(([taskId, task]) => ({
+      taskId,
+      taskRevision: task.taskRevision,
+      bindingDigest: task.bindingDigest,
+      claim: task.claim,
+    }))
+    .sort((left, right) => left.taskId.localeCompare(right.taskId));
+  await respond("task.claim-list", {
+    schemaVersion: 1,
+    claims,
+  });
+} else if (operation === "claim-acquire") {
   if (current?.claim != null) {
     fail("task already has an execution claim", "claim_already_exists");
   }

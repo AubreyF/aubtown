@@ -33,6 +33,7 @@ The claim records:
 - conflict-domain digest
 - execution account and driver IDs
 - qualified target
+- qualified work lane
 - acquired and heartbeat times
 - optional transfer time and checkpoint reference
 - publication ceiling
@@ -48,10 +49,11 @@ Add these operations to `scripts/automation-control.mjs`:
 - `task claim-transfer`
 - `task claim-release`
 - `task claim-show`
+- `task claim-list`
 
 Every mutation includes the task ID, expected task revision, coordinator actor, canonical coordinator lease, operation ID, and exact claim identity. Acquire requires no existing claim. Heartbeat requires the same claim and epoch. Transfer requires an authenticated checkpoint, a compatible destination, and exactly the next epoch. Release requires the exact claim and an allowed terminal reason.
 
-`claim-show` is the sole read operation in the broker protocol. It returns either the exact current claim and binding digest or an explicit null claim. It never infers an empty claim set from missing state.
+`claim-show` returns either the exact current claim and binding digest or an explicit null claim. `claim-list` returns every active task claim with task revision, binding digest, custody, conflict domains, and work lane. Planning uses that complete list for global and per-lane concurrency. Both operations are read-only. Neither infers an empty claim set from missing state.
 
 AubTown calls the root-owned broker with one no-shell command:
 
@@ -83,8 +85,10 @@ The conformance command starts a new broker process for every operation and prov
 - checkpoint-backed transfer by exactly one custody epoch
 - fencing of the prior epoch
 - exact destination custody after restart
+- complete active-claim listing after acquire and transfer
 - exact release and response-loss replay
 - absence of dispatchable claim state after release and restart
+- absence of the released claim from the active-claim list
 
 The report binds the physical broker path and SHA-256 digest. `aubtown-pilot-readiness.service` requires a passing report no older than 10 minutes for the same executable. A self-reported success, a report for another binary, a stale report, or a missing named check blocks launch.
 
@@ -135,4 +139,4 @@ It exposes no generic shell, file, lease, or task-mutation endpoint. The Mac is 
 
 ## Current implementation gate
 
-`FreedAuthorityBridge.inspect`, the native protected reconciler and candidate publisher, one shared exact broker client, disposable lifecycle conformance, exact response validation, response-loss retry, exact release, prelaunch freshness check, exact envelope reuse, protected envelope publication, publication-failure release, live read-only planning collector, and deterministic dispatch-intention stage are implemented and tested in AubTown. The collector reads the matching task through the supported Freed command with an empty child environment. It explicitly reports claim evidence as incomplete until Freed installs a supported task-claim listing operation. The adapter remains fail-closed when the reviewed broker path is absent for a changed candidate. Freed still needs the matching claim commands, transaction schema, events, coordinator actor, and installed Linux broker. No real writer may be enabled before both sides pass integration tests and the installed broker passes the disposable gate.
+`FreedAuthorityBridge.inspect`, the native protected reconciler and candidate publisher, one shared exact broker client, complete broker-backed claim listing, disposable lifecycle conformance, exact response validation, response-loss retry, exact release, prelaunch freshness check, exact envelope reuse, protected envelope publication, publication-failure release, live read-only planning collector, and deterministic dispatch-intention stage are implemented and tested in AubTown. The collector reads the matching task through the supported Freed command and every active claim through the reviewed broker, both with empty child environments. A missing or malformed claim list blocks planning. The adapter remains fail-closed when the reviewed broker path is absent. Freed still needs the matching claim commands, transaction schema, events, coordinator actor, and installed Linux broker. No real writer may be enabled before both sides pass integration tests and the installed broker passes the disposable gate.

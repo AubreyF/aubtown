@@ -35,6 +35,15 @@ const brokerClaimSchema = z.object({
   accountId: z.string().min(1),
   driverId: z.string().min(1),
   target: z.enum(["shared", "desktop", "pwa", "website"]),
+  workLane: z.enum([
+    "runtime-neutral",
+    "behavioral",
+    "provider-visible",
+    "integration",
+    "release",
+    "macos",
+    "sensitive",
+  ]),
   publicationCeiling: z.literal("draft-pr"),
   transferredAt: z.iso.datetime().optional(),
   checkpointReference: digestSchema.optional(),
@@ -94,6 +103,27 @@ const showOutputSchema = z.object({
 }).strict();
 
 export type FreedClaimShowReceipt = z.infer<typeof showOutputSchema>["result"];
+
+const listRequestSchema = z.object({
+  schemaVersion: z.literal(1),
+}).strict();
+
+export type FreedClaimListRequest = z.infer<typeof listRequestSchema>;
+
+const listOutputSchema = z.object({
+  action: z.literal("task.claim-list"),
+  result: z.object({
+    schemaVersion: z.literal(1),
+    claims: z.array(z.object({
+      taskId: z.string().min(1),
+      taskRevision: z.number().int().positive(),
+      bindingDigest: digestSchema,
+      claim: brokerClaimSchema,
+    }).strict()),
+  }).strict(),
+}).strict();
+
+export type FreedClaimListReceipt = z.infer<typeof listOutputSchema>["result"];
 
 const heartbeatRequestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -217,6 +247,41 @@ export class FreedClaimBrokerClient {
     return showOutputSchema.parse(JSON.parse(output)).result;
   }
 
+  async list(request: FreedClaimListRequest): Promise<FreedClaimListReceipt> {
+    const payload = listRequestSchema.parse(request);
+    const output = await this.#run("claim-list", payload, false);
+    const result = listOutputSchema.parse(JSON.parse(output)).result;
+    const taskIds = new Set<string>();
+    const claimIds = new Set<string>();
+    const issueNumbers = new Set<number>();
+    const branches = new Set<string>();
+    const worktrees = new Set<string>();
+    for (const entry of result.claims) {
+      if (
+        taskIds.has(entry.taskId) ||
+        claimIds.has(entry.claim.claimId) ||
+        issueNumbers.has(entry.claim.githubIssue.number) ||
+        branches.has(entry.claim.branch) ||
+        worktrees.has(entry.claim.worktree)
+      ) {
+        throw new Error(
+          "Freed claim list contains duplicate task, claim, issue, branch, or worktree identity.",
+        );
+      }
+      taskIds.add(entry.taskId);
+      claimIds.add(entry.claim.claimId);
+      issueNumbers.add(entry.claim.githubIssue.number);
+      branches.add(entry.claim.branch);
+      worktrees.add(entry.claim.worktree);
+    }
+    return {
+      ...result,
+      claims: [...result.claims].sort((left, right) =>
+        left.taskId.localeCompare(right.taskId),
+      ),
+    };
+  }
+
   async heartbeat(
     request: FreedClaimHeartbeatRequest,
   ): Promise<FreedClaimHeartbeatReceipt> {
@@ -247,6 +312,7 @@ export class FreedClaimBrokerClient {
   async #run(
     operation:
       | "claim-acquire"
+      | "claim-list"
       | "claim-show"
       | "claim-heartbeat"
       | "claim-transfer"

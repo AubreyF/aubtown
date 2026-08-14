@@ -184,6 +184,7 @@ describe("Freed adapter", () => {
         publicationCeiling: "draft-pr",
         accountId: "codex-pro-1",
         driverId: "codex-app-server-v1",
+        workLane: "runtime-neutral",
       },
     });
   });

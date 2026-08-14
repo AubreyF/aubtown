@@ -15,6 +15,7 @@ import type { HostObservationSnapshot } from "../gateway/host-observation-journa
 import { parseDebtIssueBody } from "../adapters/github/issue-parser.js";
 import { qualifyIssue } from "../policy/admission.js";
 import { decideQuota } from "../policy/quota.js";
+import { FreedClaimBrokerClient } from "../adapters/freed/claim-broker.js";
 
 const GIT_SHA = /^[0-9a-f]{40}$/u;
 const HOST_HEARTBEAT_MAX_AGE_SECONDS = 120;
@@ -128,6 +129,58 @@ export class BridgePlanningAuthorityReader implements AuthorityPlanningReader {
       activeLanes: [],
       claimEvidenceComplete: false,
       claimEvidenceReason: "Freed task-scoped claim listing is not installed.",
+    };
+  }
+}
+
+export class FreedBrokerPlanningAuthorityReader
+  implements AuthorityPlanningReader
+{
+  constructor(
+    private readonly bridge: AuthorityBridge,
+    private readonly broker: FreedClaimBrokerClient,
+  ) {}
+
+  async read(input: {
+    readonly qualification: QualificationReport;
+    readonly now: string;
+  }): Promise<AuthorityPlanningObservation> {
+    const [inspection, listed] = await Promise.all([
+      this.bridge.inspect(input.qualification),
+      this.broker.list({ schemaVersion: 1 }),
+    ]);
+    const repository = input.qualification.repository;
+    const issuePrefix = `https://github.com/${repository.owner}/${repository.name}/issues/`;
+    for (const entry of listed.claims) {
+      if (
+        entry.claim.githubIssue.url !==
+          `${issuePrefix}${entry.claim.githubIssue.number.toLocaleString("en-US", {
+            useGrouping: false,
+          })}`
+      ) {
+        throw new Error(
+          "Freed claim list contains an issue outside the configured repository.",
+        );
+      }
+    }
+    return {
+      observedAt: input.now,
+      inspection,
+      activeClaims: listed.claims.map((entry) => ({
+        repository,
+        issueNumber: entry.claim.githubIssue.number,
+        claimId: entry.claim.claimId,
+        custodyEpoch: entry.claim.custodyEpoch,
+        hostId: entry.claim.hostId,
+        workerId: entry.claim.workerId,
+        branch: entry.claim.branch,
+        worktree: entry.claim.worktree,
+        conflictDomains: entry.claim.conflictDomains,
+        claimedAt: entry.claim.claimedAt,
+      })),
+      activeLanes: listed.claims.map((entry) => entry.claim.workLane),
+      claimEvidenceComplete: true,
+      claimEvidenceReason: "supported-broker-claim-list",
     };
   }
 }

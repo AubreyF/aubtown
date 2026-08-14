@@ -160,6 +160,7 @@ export class FreedAuthorityBridge implements AuthorityBridge {
         accountId: binding.accountId,
         driverId: binding.driverId,
         target: binding.target,
+        workLane: binding.qualification.workLane,
         publicationCeiling: "draft-pr" as const,
       },
       requestedAt: input.now,

@@ -331,14 +331,17 @@ export async function auditPilotReadiness(input: {
         "acquire-replay",
         "changed-operation-replay",
         "show-after-acquire",
+        "list-after-acquire",
         "duplicate-acquire",
         "heartbeat-replay",
         "changed-heartbeat-replay",
         "transfer-replay",
         "stale-epoch-fenced",
         "show-after-transfer",
+        "list-after-transfer",
         "release-replay",
         "show-after-release",
+        "list-after-release",
       ];
       const observed = new Set(report.checks.map((candidate) => candidate.id));
       const missing = requiredChecks.filter((candidate) => !observed.has(candidate));

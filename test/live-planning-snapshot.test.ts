@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type { CommandRequest, CommandRunner } from "../src/adapters/command-runner.js";
 import type { AuthorityTask } from "../src/domain/types.js";
+import type { AuthorityBridge } from "../src/adapters/authority.js";
+import { FreedClaimBrokerClient } from "../src/adapters/freed/claim-broker.js";
 import type { HostObservationSnapshot } from "../src/gateway/host-observation-journal.js";
 import {
   LivePlanningSnapshotCollector,
+  FreedBrokerPlanningAuthorityReader,
   GitLocalRepositoryPlanningReader,
   type AuthorityPlanningObservation,
   type GitHubPlanningObservation,
   type LocalRepositoryObservation,
 } from "../src/orchestration/live-planning-snapshot.js";
-import { FREED_REPOSITORY, authorityTask, issue, usage } from "./helpers.js";
+import {
+  FREED_REPOSITORY,
+  authorityTask,
+  issue,
+  report,
+  usage,
+} from "./helpers.js";
 
 const now = "2026-08-13T18:00:00.000Z";
 const baseHead = "a".repeat(40);
@@ -274,6 +283,145 @@ describe("local Git planning reader", () => {
     expect(requests.every((request) => request.env !== process.env)).toBe(true);
     expect(requests.every((request) => request.executable === "/usr/bin/git")).toBe(
       true,
+    );
+  });
+});
+
+describe("Freed broker planning authority reader", () => {
+  function bridge(): AuthorityBridge {
+    return {
+      id: "freed-authority-v1",
+      inspect: async () => ({
+        task: authorityTask(),
+        active: true,
+        reason: "matching-active-task",
+      }),
+      acquire: async () => {
+        throw new Error("not used");
+      },
+      release: async () => {
+        throw new Error("not used");
+      },
+    };
+  }
+
+  function brokerRunner(
+    issueUrl = "https://github.com/freed-project/freed/issues/987",
+    duplicateWorktree = false,
+  ): CommandRunner {
+    const listedClaim = {
+      taskId: "github-issue-987",
+      taskRevision: 3,
+      bindingDigest: "b".repeat(64),
+      claim: {
+        claimId: "claim-987-epoch-2",
+        githubIssue: { number: 987, url: issueUrl },
+        custodyEpoch: 2,
+        hostId: "macos-executor-1",
+        workerId: "worker-macos-executor-1",
+        branch: "fix/issue-987",
+        worktree: "/Users/worker/worktrees/freed-issue-987",
+        conflictDomains: ["logical:storage"],
+        conflictDomainDigest: "c".repeat(64),
+        claimedAt: now,
+        heartbeatAt: now,
+        baseHead,
+        accountId: "codex-pro-1",
+        driverId: "codex-app-server-v1",
+        target: "desktop",
+        workLane: "macos",
+        publicationCeiling: "draft-pr",
+      },
+    };
+    return {
+      async run(request) {
+        expect(request.args.slice(0, 2)).toEqual(["task", "claim-list"]);
+        expect(request.env).toEqual({});
+        return {
+          stderr: "",
+          stdout: JSON.stringify({
+            action: "task.claim-list",
+            result: {
+              schemaVersion: 1,
+              claims: [
+                listedClaim,
+                ...(duplicateWorktree
+                  ? [
+                      {
+                        ...listedClaim,
+                        taskId: "github-issue-988",
+                        claim: {
+                          ...listedClaim.claim,
+                          claimId: "claim-988-epoch-1",
+                          githubIssue: {
+                            number: 988,
+                            url: "https://github.com/freed-project/freed/issues/988",
+                          },
+                          branch: "fix/issue-988",
+                        },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          }),
+        };
+      },
+    };
+  }
+
+  it("projects complete active claims and lane caps from one broker read", async () => {
+    const reader = new FreedBrokerPlanningAuthorityReader(
+      bridge(),
+      new FreedClaimBrokerClient(brokerRunner(), {
+        executable: "/opt/freed/bin/factory-coordinator",
+        cwd: "/srv/freed",
+      }),
+    );
+    await expect(
+      reader.read({ qualification: report(), now }),
+    ).resolves.toMatchObject({
+      claimEvidenceComplete: true,
+      claimEvidenceReason: "supported-broker-claim-list",
+      activeClaims: [
+        {
+          issueNumber: 987,
+          claimId: "claim-987-epoch-2",
+          custodyEpoch: 2,
+          hostId: "macos-executor-1",
+          conflictDomains: ["logical:storage"],
+        },
+      ],
+      activeLanes: ["macos"],
+    });
+  });
+
+  it("rejects a claim projected from another repository", async () => {
+    const reader = new FreedBrokerPlanningAuthorityReader(
+      bridge(),
+      new FreedClaimBrokerClient(
+        brokerRunner("https://github.com/another/repository/issues/987"),
+        {
+          executable: "/opt/freed/bin/factory-coordinator",
+          cwd: "/srv/freed",
+        },
+      ),
+    );
+    await expect(reader.read({ qualification: report(), now })).rejects.toThrow(
+      "outside the configured repository",
+    );
+  });
+
+  it("rejects duplicate worktree custody in the active claim set", async () => {
+    const reader = new FreedBrokerPlanningAuthorityReader(
+      bridge(),
+      new FreedClaimBrokerClient(brokerRunner(undefined, true), {
+        executable: "/opt/freed/bin/factory-coordinator",
+        cwd: "/srv/freed",
+      }),
+    );
+    await expect(reader.read({ qualification: report(), now })).rejects.toThrow(
+      "duplicate task, claim, issue, branch, or worktree identity",
     );
   });
 });

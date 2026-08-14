@@ -4,6 +4,7 @@ import path from "node:path";
 import { Octokit } from "@octokit/rest";
 import { ProcessCommandRunner } from "../adapters/command-runner.js";
 import { FreedAuthorityBridge } from "../adapters/freed/authority-bridge.js";
+import { FreedClaimBrokerClient } from "../adapters/freed/claim-broker.js";
 import { GitHubLivePlanningReader } from "../adapters/github/planning-source.js";
 import { loadExecutionAccountProfiles } from "../config/account-profiles.js";
 import { loadHostWorkspaceRoots } from "../config/host-workspaces.js";
@@ -11,7 +12,7 @@ import { readInstallationTokenFile } from "../credentials/token-file.js";
 import type { RepositoryRef } from "../domain/types.js";
 import { HostObservationJournal } from "../gateway/host-observation-journal.js";
 import {
-  BridgePlanningAuthorityReader,
+  FreedBrokerPlanningAuthorityReader,
   GitLocalRepositoryPlanningReader,
   LivePlanningSnapshotCollector,
 } from "../orchestration/live-planning-snapshot.js";
@@ -65,9 +66,13 @@ const authorityBridge = new FreedAuthorityBridge(runner, {
   stateRoot: absolute("AUBTOWN_FREED_STATE_ROOT"),
   nodeExecutable: absolute("AUBTOWN_FREED_NODE_EXECUTABLE"),
 });
+const authorityBroker = new FreedClaimBrokerClient(runner, {
+  executable: absolute("AUBTOWN_FREED_CLAIM_BROKER"),
+  cwd: freedRoot,
+});
 const collector = new LivePlanningSnapshotCollector(
   new GitHubLivePlanningReader(new Octokit({ auth: token }).rest),
-  new BridgePlanningAuthorityReader(authorityBridge),
+  new FreedBrokerPlanningAuthorityReader(authorityBridge, authorityBroker),
   new HostObservationJournal(
     absolute("AUBTOWN_HOST_OBSERVATION_JOURNAL_FILE"),
     enrollments,

@@ -40,6 +40,15 @@ const acquireSchema = z.object({
     accountId: z.string().min(1),
     driverId: z.string().min(1),
     target: z.enum(["shared", "desktop", "pwa", "website"]),
+    workLane: z.enum([
+      "runtime-neutral",
+      "behavioral",
+      "provider-visible",
+      "integration",
+      "release",
+      "macos",
+      "sensitive",
+    ]),
     publicationCeiling: z.literal("draft-pr"),
   }).strict(),
   requestedAt: z.iso.datetime(),
@@ -292,6 +301,22 @@ export async function runFreedBrokerConformance(input: {
   }
   pass("show-after-acquire", "claim survives a separate broker process");
 
+  try {
+    const listed = await client.list({ schemaVersion: 1 });
+    if (
+      listed.claims.length !== 1 ||
+      listed.claims[0]?.taskId !== acquire.taskId ||
+      listed.claims[0]?.taskRevision !== acquire.expectedTaskRevision ||
+      listed.claims[0]?.bindingDigest !== acquire.bindingDigest ||
+      !canonicalJsonEqual(listed.claims[0]?.claim, expectedClaim(config, acquiredAt))
+    ) {
+      return fail("list-after-acquire", "claim list did not project the exact claim");
+    }
+  } catch (error) {
+    return fail("list-after-acquire", errorMessage(error));
+  }
+  pass("list-after-acquire", "claim list survives a separate broker process");
+
   rejected = await expectRejected(
     "duplicate-acquire",
     "claim_already_exists",
@@ -395,6 +420,19 @@ export async function runFreedBrokerConformance(input: {
   }
   pass("show-after-transfer", "only the destination epoch remains current");
 
+  try {
+    const listed = await client.list({ schemaVersion: 1 });
+    if (
+      listed.claims.length !== 1 ||
+      !canonicalJsonEqual(listed.claims[0]?.claim, transferredClaim)
+    ) {
+      return fail("list-after-transfer", "claim list did not project destination custody");
+    }
+  } catch (error) {
+    return fail("list-after-transfer", errorMessage(error));
+  }
+  pass("list-after-transfer", "claim list projects only destination custody");
+
   const release: FreedClaimReleaseRequest = {
     schemaVersion: 1,
     operationId: operationIds.release,
@@ -434,6 +472,16 @@ export async function runFreedBrokerConformance(input: {
     return fail("show-after-release", "released claim remains dispatchable");
   }
   pass("show-after-release", "released claim is absent after restart");
+
+  try {
+    const listed = await client.list({ schemaVersion: 1 });
+    if (listed.claims.length !== 0) {
+      return fail("list-after-release", "released claim remains in active claim list");
+    }
+  } catch (error) {
+    return fail("list-after-release", errorMessage(error));
+  }
+  pass("list-after-release", "released claim is absent from active claim list");
 
   return {
     schemaVersion: 1,

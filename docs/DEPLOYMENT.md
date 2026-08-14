@@ -70,7 +70,7 @@ The trusted read-only reconciler first runs AubTown's deterministic assembly bou
 /opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reconcile-symphony-candidate.js /var/lib/aubtown/reconciler/dispatch-snapshot.json
 ```
 
-The command reads `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, rejects a symbolic, group-writable, world-writable, oversized, stale, inconsistent, ineligible, route-mismatched, or quota-blocked snapshot, and writes no authority receipt. The source input is transient reconciler state and must be replaced atomically before invocation. The read-only collector now gathers GitHub, Freed task, host-gateway, local ref, pull-request, and worktree evidence, then derives a stable proposed dispatch. It remains fail-closed because Freed does not yet expose complete task-scoped claim evidence. The proposal cannot become an authority-bearing candidate by itself.
+The command reads `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, rejects a symbolic, group-writable, world-writable, oversized, stale, inconsistent, ineligible, route-mismatched, or quota-blocked snapshot, and writes no authority receipt. The source input is transient reconciler state and must be replaced atomically before invocation. The read-only collector gathers GitHub, Freed task, broker claim and work-lane, host-gateway, local ref, pull-request, and worktree evidence, then derives a stable proposed dispatch. Missing, duplicate, foreign-repository, or malformed broker claim evidence fails closed. The proposal cannot become an authority-bearing candidate by itself.
 
 ## GitHub authentication
 
