@@ -35,6 +35,7 @@ The claim records:
 - qualified target
 - qualified work lane
 - acquired and heartbeat times
+- execution stage, `claimed` or `running`
 - optional transfer time and checkpoint reference
 - publication ceiling
 
@@ -51,7 +52,7 @@ Add these operations to `scripts/automation-control.mjs`:
 - `task claim-show`
 - `task claim-list`
 
-Every mutation includes the task ID, expected task revision, coordinator actor, canonical coordinator lease, operation ID, and exact claim identity. Acquire requires no existing claim. Heartbeat requires the same claim and epoch. Transfer requires an authenticated checkpoint, a compatible destination, and exactly the next epoch. Release requires the exact claim and an allowed terminal reason.
+Every mutation includes the task ID, expected task revision, coordinator actor, canonical coordinator lease, operation ID, and exact claim identity. Acquire requires no existing claim. Heartbeat requires the same claim and epoch. Transfer requires an authenticated checkpoint, a compatible destination, and exactly the next epoch. Release requires the exact claim, custody epoch, last observed heartbeat, and an allowed terminal reason. A heartbeat racing a release makes the release fail instead of terminating live custody.
 
 `claim-show` returns either the exact current claim and binding digest or an explicit null claim. `claim-list` returns every active task claim with task revision, binding digest, custody, conflict domains, and work lane. Planning uses that complete list for global and per-lane concurrency. Both operations are read-only. Neither infers an empty claim set from missing state.
 
@@ -98,6 +99,8 @@ The task transaction and event append remain one recoverable Freed operation. Ne
 - `task_execution_claim_heartbeat`
 - `task_execution_claim_transferred`
 - `task_execution_claim_released`
+
+Claims begin at `claimed`. Once Symphony has a live thread and turn, its 30 second active guard moves the claim to `running` and sends an exact heartbeat. Missing or conflicting heartbeat authority interrupts the turn. A native reconciliation timer releases only stale `claimed` records after 120 seconds without a heartbeat and a five-minute initial launch grace. The same reconciler runs before Symphony starts. A stale `running` record remains authoritative custody for workspace recovery or the 24-hour checkpoint transfer path. Heartbeat age never silently discards unpublished work.
 
 Tokens and private credentials never enter task, event, GitHub, Symphony, or checkpoint state.
 

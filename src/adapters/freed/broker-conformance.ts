@@ -144,6 +144,7 @@ function expectedClaim(
     ...input.acquire.claim,
     claimedAt: acquiredAt,
     heartbeatAt: acquiredAt,
+    executionStage: "claimed",
     ...overrides,
   };
 }
@@ -337,6 +338,7 @@ export async function runFreedBrokerConformance(input: {
     custodyEpoch: acquire.claim.custodyEpoch,
     bindingDigest: acquire.bindingDigest,
     heartbeatAt,
+    executionStage: "running",
   };
   try {
     const receipt = await client.heartbeat(heartbeat);
@@ -407,6 +409,7 @@ export async function runFreedBrokerConformance(input: {
     workerId: transfer.destinationWorkerId,
     worktree: transfer.destinationWorktree,
     heartbeatAt: transfer.transferredAt,
+    executionStage: "running",
     transferredAt: transfer.transferredAt,
     checkpointReference: transfer.checkpointReference,
   });
@@ -441,6 +444,7 @@ export async function runFreedBrokerConformance(input: {
     authorityClaimId: acquire.claim.claimId,
     bindingDigest: acquire.bindingDigest,
     custodyEpoch: transfer.nextEpoch,
+    expectedHeartbeatAt: transfer.transferredAt,
     reason: config.release.reason,
     releasedAt,
   };

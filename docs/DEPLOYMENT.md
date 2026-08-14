@@ -31,6 +31,8 @@ The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every
 
 `aubtown-pilot-readiness.service` is a manual, read-only launch gate. It runs only after a fresh planning collection. It verifies protected physical runtime files, the immutable Symphony executable path, every reviewed patch digest, the workflow policy, prelaunch and active-guard builds, the installed Freed claim broker, a planning snapshot no older than 90 seconds, and one coherent ready dispatch for the configured repository and issue. It writes `/var/lib/aubtown/coordinator/pilot-readiness.json` and exits nonzero when any check fails. A blocked report is evidence, not permission to weaken the check.
 
+`aubtown-claim-reconciliation.timer` runs the native claim reconciler every minute. The same command runs as Symphony's `ExecStartPre` with `--require-clear`. An active guard heartbeat no older than 120 seconds or a claim inside its initial five-minute grace keeps custody intact. Older unlaunched `claimed` records are released through the broker with the exact last heartbeat, task revision, claim, binding, and custody epoch. If a heartbeat races that release, the broker rejects it and Symphony remains stopped. Stale `running` records are never released by age. They remain fenced for workspace restart or checkpoint transfer. This service needs only the broker endpoint and its own report file. It does not read or edit Freed authority files.
+
 `aubtown-freed-broker-conformance.service` runs immediately before pilot readiness against a disposable `conformance-*` broker profile. Each operation starts a separate broker process. The gate checks acquire, exact replay, changed-replay rejection, claim projection, duplicate rejection, heartbeat, checkpoint-backed transfer, stale-epoch fencing, exact release, and post-release restart state. Its protected report binds the exact broker path and SHA-256 digest. Pilot readiness accepts only a complete passing report from the last 10 minutes for the executable it is about to trust.
 
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
@@ -56,6 +58,7 @@ The future authority broker runs under its own service identity beside the canon
 - `/var/lib/aubtown/admission/candidates`: protected non-authoritative per-issue dispatch requests
 - `/var/lib/aubtown/admission/envelopes`: protected per-issue Freed authority and quota envelopes
 - `/var/lib/aubtown/admission/receipts`: append-only exact-claim prelaunch receipts
+- `/var/lib/aubtown/admission/claim-reconciliation.json`: latest stale-claim reconciliation result
 - `/var/lib/aubtown/workspaces`: per-issue worktrees
 - `/var/lib/aubtown/checkpoints`: encrypted unpublished-work objects
 - `/var/log/aubtown/symphony`: structured logs
@@ -113,7 +116,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 2. Create dedicated coordinator, checkpoint, and executor users. The MVP token refresher uses the restricted coordinator identity. A later broker split must preserve mode-0600 delivery without widening access.
 3. Install reviewed absolute Git, Node, Codex, SSH, and certificate paths.
 4. Install the pinned Symphony source or binary and verify its checksum.
-5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer, signed host observation gateway, and read-only planning timer.
+5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer, signed host observation gateway, read-only planning timer, and claim reconciliation timer.
 6. Check out Freed and verify `scripts/worktree-add.sh` at the expected path.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
@@ -144,6 +147,7 @@ Before enabling a writer, verify:
 - restart does not duplicate a fake issue
 - daily and rolling-week stops reject new fake dispatches
 - the active Symphony run loop interrupts at the hard quota boundary before unattended operation
+- the active guard marks and heartbeats running custody, an expired unlaunched claim is released, and a stale running claim remains fenced
 - a new reconciled authority claim can proceed without deleting the prior crash receipt
 - the native pilot audit reports ready for the exact selected issue and installed immutable release
 - the disposable broker report proves all named lifecycle checks against the exact installed executable digest

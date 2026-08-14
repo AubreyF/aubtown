@@ -2,6 +2,8 @@
 
 Generated: 2026-08-13
 
+Status: superseded historical evidence. AubTown removed Restate and the container runtime after this dry run. Nothing in this report describes the current production architecture.
+
 Runtime:
 
 - Restate Server 1.7.3

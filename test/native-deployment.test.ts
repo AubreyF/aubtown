@@ -117,6 +117,32 @@ describe("native Linux deployment", () => {
     expect(`${service}\n${timer}`).not.toMatch(/docker|compose|restate/iu);
   });
 
+  it("heartbeats active claims and reconciles stale custody without containers", async () => {
+    const symphony = await fixture("deploy/systemd/aubtown-symphony.service");
+    const service = await fixture(
+      "deploy/systemd/aubtown-claim-reconciliation.service",
+    );
+    const timer = await fixture(
+      "deploy/systemd/aubtown-claim-reconciliation.timer",
+    );
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    const activeGuard = await fixture("src/cli/symphony-active-run-guard.ts");
+    expect(symphony).toContain(
+      "dist/cli/reconcile-freed-claims.js --require-clear",
+    );
+    expect(service).toContain("User=aubtown-symphony");
+    expect(service).toContain("dist/cli/reconcile-freed-claims.js");
+    expect(service).toContain("RestrictAddressFamilies=AF_UNIX");
+    expect(timer).toContain("OnUnitActiveSec=1min");
+    expect(environment).toContain(
+      "AUBTOWN_CLAIM_RECONCILIATION_FILE=/var/lib/aubtown/admission/claim-reconciliation.json",
+    );
+    expect(activeGuard).toContain("heartbeatSymphonyActiveClaim");
+    expect(`${symphony}\n${service}\n${timer}`).not.toMatch(
+      /docker|compose|restate/iu,
+    );
+  });
+
   it("ships a fail-closed native pilot readiness audit", async () => {
     const service = await fixture(
       "deploy/systemd/aubtown-pilot-readiness.service",

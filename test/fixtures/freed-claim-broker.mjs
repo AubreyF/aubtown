@@ -95,7 +95,11 @@ if (operation === "claim-list") {
     fail("task already has an execution claim", "claim_already_exists");
   }
   const expiresAt = new Date(Date.parse(request.requestedAt) + 5 * 60_000).toISOString();
-  const claim = { ...request.claim, heartbeatAt: request.requestedAt };
+  const claim = {
+    ...request.claim,
+    heartbeatAt: request.requestedAt,
+    executionStage: "claimed",
+  };
   state.tasks[request.taskId] = {
     taskRevision: request.expectedTaskRevision,
     bindingDigest: request.bindingDigest,
@@ -145,6 +149,7 @@ if (operation === "claim-list") {
     fail("heartbeat does not match the current claim epoch", "claim_epoch_mismatch");
   }
   current.claim.heartbeatAt = request.heartbeatAt;
+  current.claim.executionStage = request.executionStage;
   await respond("task.claim-heartbeat", request, request.operationId);
 } else if (operation === "claim-transfer") {
   if (
@@ -174,6 +179,7 @@ if (operation === "claim-list") {
     current.taskRevision !== request.expectedTaskRevision ||
     current.bindingDigest !== request.bindingDigest ||
     current.claim.claimId !== request.authorityClaimId ||
+    current.claim.heartbeatAt !== request.expectedHeartbeatAt ||
     (request.custodyEpoch !== undefined &&
       current.claim.custodyEpoch !== request.custodyEpoch)
   ) {
@@ -188,6 +194,7 @@ if (operation === "claim-list") {
     taskRevision: request.expectedTaskRevision,
     authorityClaimId: request.authorityClaimId,
     bindingDigest: request.bindingDigest,
+    expectedHeartbeatAt: request.expectedHeartbeatAt,
     reason: request.reason,
     releasedAt: request.releasedAt,
     ...(request.custodyEpoch === undefined

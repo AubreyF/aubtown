@@ -1,4 +1,6 @@
 import path from "node:path";
+import { ProcessCommandRunner } from "../adapters/command-runner.js";
+import { FreedClaimBrokerClient } from "../adapters/freed/claim-broker.js";
 import { HostObservationJournal } from "../gateway/host-observation-journal.js";
 import {
   evaluateSymphonyActiveRunGuard,
@@ -8,6 +10,7 @@ import {
 } from "../integrations/symphony/active-run-guard.js";
 import { loadSymphonyAdmissionEnvelope } from "../integrations/symphony/admission-envelope.js";
 import { loadHostEnrollments } from "../security/host-enrollment.js";
+import { heartbeatSymphonyActiveClaim } from "../integrations/symphony/active-claim-heartbeat.js";
 
 function requiredAbsoluteEnvironment(name: string): string {
   const value = process.env[name];
@@ -30,13 +33,24 @@ try {
     requiredAbsoluteEnvironment("AUBTOWN_HOST_OBSERVATION_JOURNAL_FILE"),
     enrollments,
   ).snapshot();
+  const now = new Date().toISOString();
   response = evaluateSymphonyActiveRunGuard({
     request,
     envelope,
     observations,
     enrollments,
-    now: new Date().toISOString(),
+    now,
   });
+  if (response.decision === "continue") {
+    await heartbeatSymphonyActiveClaim({
+      envelope,
+      now,
+      broker: new FreedClaimBrokerClient(new ProcessCommandRunner(), {
+        executable: requiredAbsoluteEnvironment("AUBTOWN_FREED_CLAIM_BROKER"),
+        cwd: requiredAbsoluteEnvironment("AUBTOWN_FREED_REPOSITORY_ROOT"),
+      }),
+    });
+  }
 } catch {
   response = interruptSymphonyActiveRun(request, "active-guard-state-invalid");
 }

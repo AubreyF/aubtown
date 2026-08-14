@@ -196,6 +196,18 @@ export class FreedAuthorityBridge implements AuthorityBridge {
     const reason = releaseReasonSchema.parse(input.reason);
     const releasedAt = z.iso.datetime().parse(input.now);
     const broker = this.#brokerExecutable();
+    const client = this.#brokerClient(broker);
+    const current = await client.show({
+      schemaVersion: 1,
+      taskId: admission.taskId,
+    });
+    if (
+      current.taskRevision !== admission.taskRevision ||
+      current.bindingDigest !== admission.bindingDigest ||
+      current.claim?.claimId !== admission.authorityClaimId
+    ) {
+      throw new Error("Freed claim changed before exact release.");
+    }
     const operationId = randomUUID();
     const request: FreedClaimReleaseRequest = {
       schemaVersion: 1,
@@ -204,16 +216,20 @@ export class FreedAuthorityBridge implements AuthorityBridge {
       expectedTaskRevision: admission.taskRevision,
       authorityClaimId: admission.authorityClaimId,
       bindingDigest: admission.bindingDigest,
+      custodyEpoch: current.claim.custodyEpoch,
+      expectedHeartbeatAt: current.claim.heartbeatAt,
       reason,
       releasedAt,
     };
-    const result = await this.#brokerClient(broker).release(request);
+    const result = await client.release(request);
     if (
       result.operationId !== operationId ||
       result.taskId !== admission.taskId ||
       result.taskRevision !== admission.taskRevision ||
       result.authorityClaimId !== admission.authorityClaimId ||
       result.bindingDigest !== admission.bindingDigest ||
+      result.custodyEpoch !== current.claim.custodyEpoch ||
+      result.expectedHeartbeatAt !== current.claim.heartbeatAt ||
       result.reason !== reason ||
       result.releasedAt !== releasedAt
     ) {

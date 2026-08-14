@@ -59,9 +59,8 @@ The native pilot audit is the final read-only proof before launch. It binds the 
 The remaining integration work is:
 
 - connect the admission command to Freed's task-scoped claim operations
-- supply the stable intention with complete Freed task-claim evidence
 - stage and attest deterministic Freed worktrees through `scripts/worktree-add.sh`
-- full startup reconciliation around upstream's memory-only blocked and retry maps so a blocked exact claim can be released and replaced automatically when no worker launched
+- prove active heartbeat and stale-claim restart reconciliation against the installed broker
 
 These remain an auditable patch series against the pin. AubTown will not maintain a TypeScript replacement for Symphony during v1.
 
@@ -100,13 +99,13 @@ Each execution account has its own usage identity and Codex app-server process. 
 
 The governor reserves 10 percent by default, enforces a hard daily ceiling, and compares current use with the permitted rolling-week trajectory. It throttles before the hard boundary and interrupts targeted active turns when continuing would consume the protected reserve. Authority and human blockers do not consume retry budget.
 
-Prelaunch and active-turn quota enforcement are implemented. Every active turn rechecks its exact host and account against the protected observation journal every 30 seconds. Missing, malformed, future-dated, or stale heartbeat or usage state fails closed. The daily admission-stop band blocks new work but lets a current turn continue until the separate hard daily interruption band. A hard result sends `turn/interrupt` for the exact thread and turn. If Codex does not finish cancellation within five seconds, Symphony closes the app-server transport. The telemetry monitor remains observation-only and does not become a second executor.
+Prelaunch and active-turn quota enforcement are implemented. Every active turn rechecks its exact host and account against the protected observation journal every 30 seconds and heartbeats its exact Freed task, claim, binding, and custody epoch. Missing, malformed, future-dated, stale, or conflicting heartbeat or usage state fails closed. The daily admission-stop band blocks new work but lets a current turn continue until the separate hard daily interruption band. A hard result sends `turn/interrupt` for the exact thread and turn. If Codex does not finish cancellation within five seconds, Symphony closes the app-server transport. The telemetry monitor remains observation-only and does not become a second executor.
 
 Future subscriptions and APIs use separate account records, credentials, quotas, and worker drivers. Queue, authority, conflict, custody, and publication contracts remain unchanged.
 
 ## Crash recovery and custody
 
-At startup, AubTown reconciles open issues, lifecycle comments, Freed tasks and claims, Symphony workspaces, local journals, branches, draft pull requests, host heartbeats, and checkpoint receipts. A mismatch blocks the issue. It never guesses that an absent in-memory retry means work is unclaimed. An append-only prelaunch receipt blocks the same exact claim after restart. Reconciliation may release an unlaunched claim and acquire a new claim, which creates a new receipt without erasing the crash record.
+At startup, AubTown reconciles open issues, lifecycle comments, Freed tasks and claims, Symphony workspaces, local journals, branches, draft pull requests, host heartbeats, and checkpoint receipts. A mismatch blocks the issue. It never guesses that an absent in-memory retry means work is unclaimed. An append-only prelaunch receipt blocks the same exact claim after restart. Claims distinguish `claimed` from `running` custody. The active guard moves a claim to `running` and refreshes its authoritative heartbeat while a turn remains safe. A native pre-start and minute timer releases only an unlaunched `claimed` record whose heartbeat is older than 120 seconds and whose initial five-minute launch grace has elapsed. Release binds the last observed heartbeat, so a racing live heartbeat defeats the release. Stale `running` custody remains fenced for workspace restart or checkpoint transfer. A fresh, grace-period, or stranded running claim delays coordinator startup rather than risking duplicate execution.
 
 Every unpublished terminal candidate can be captured as an encrypted, content-addressed Git state archive. At 24 hours offline, portable work may move to a compatible host after the old command is fenced, the custody epoch advances, and the destination verifies the exact restored state. Linux cannot satisfy a macOS-only validation requirement.
 

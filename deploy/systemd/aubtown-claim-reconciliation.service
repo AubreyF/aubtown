@@ -1,0 +1,29 @@
+[Unit]
+Description=AubTown stale Freed claim reconciliation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=aubtown-symphony
+Group=aubtown-symphony
+WorkingDirectory=/var/lib/aubtown/symphony
+EnvironmentFile=/etc/aubtown/symphony.env
+ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reconcile-freed-claims.js
+StateDirectory=aubtown/admission
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed
+ReadWritePaths=/var/lib/aubtown/admission
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=true
+SystemCallArchitectures=native

@@ -45,6 +45,7 @@ const brokerClaimSchema = z.object({
     "sensitive",
   ]),
   publicationCeiling: z.literal("draft-pr"),
+  executionStage: z.enum(["claimed", "running"]),
   transferredAt: z.iso.datetime().optional(),
   checkpointReference: digestSchema.optional(),
 }).strict();
@@ -59,6 +60,7 @@ const acquireRequestSchema = z.object({
   bindingDigest: digestSchema,
   claim: brokerClaimSchema.omit({
     heartbeatAt: true,
+    executionStage: true,
     transferredAt: true,
     checkpointReference: true,
   }),
@@ -134,6 +136,7 @@ const heartbeatRequestSchema = z.object({
   custodyEpoch: z.number().int().positive(),
   bindingDigest: digestSchema,
   heartbeatAt: z.iso.datetime(),
+  executionStage: z.literal("running"),
 }).strict();
 
 export type FreedClaimHeartbeatRequest = z.infer<typeof heartbeatRequestSchema>;
@@ -181,6 +184,7 @@ const releaseRequestSchema = z.object({
   expectedTaskRevision: z.number().int().positive(),
   authorityClaimId: z.string().min(1),
   bindingDigest: digestSchema,
+  expectedHeartbeatAt: z.iso.datetime(),
   reason: releaseReasonSchema,
   releasedAt: z.iso.datetime(),
   custodyEpoch: z.number().int().positive().optional(),
@@ -197,6 +201,7 @@ const releaseOutputSchema = z.object({
     taskRevision: z.number().int().positive(),
     authorityClaimId: z.string().min(1),
     bindingDigest: digestSchema,
+    expectedHeartbeatAt: z.iso.datetime(),
     reason: releaseReasonSchema,
     releasedAt: z.iso.datetime(),
     custodyEpoch: z.number().int().positive().optional(),

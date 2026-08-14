@@ -278,6 +278,43 @@ describe("Freed adapter", () => {
   it("releases only the exact admitted claim and retains one retry identity", async () => {
     const runner = new HandlerRunner((request, attempt) => {
       if (attempt === 1) {
+        return {
+          stderr: "",
+          stdout: JSON.stringify({
+            action: "task.claim-show",
+            result: {
+              schemaVersion: 1,
+              taskId: "github-issue-1234",
+              taskRevision: 1,
+              bindingDigest: "a".repeat(64),
+              claim: {
+                claimId: "claim-1234-epoch-1",
+                githubIssue: {
+                  number: 1_234,
+                  url: "https://github.com/freed-project/freed/issues/1234",
+                },
+                custodyEpoch: 1,
+                hostId: "linux-control-1",
+                workerId: "worker-linux-control-1",
+                branch: "fix/issue-1234",
+                worktree: "/worktrees/1234",
+                conflictDomains: ["logical:tooling-validation"],
+                conflictDomainDigest: "b".repeat(64),
+                claimedAt: "2026-08-13T18:00:00.000Z",
+                heartbeatAt: "2026-08-13T18:03:30.000Z",
+                baseHead: "b".repeat(40),
+                accountId: "codex-pro-1",
+                driverId: "codex-app-server-v1",
+                target: "shared",
+                workLane: "runtime-neutral",
+                publicationCeiling: "draft-pr",
+                executionStage: "running",
+              },
+            },
+          }),
+        };
+      }
+      if (attempt === 2) {
         throw new Error("release response lost");
       }
       const payload = JSON.parse(request.args.at(-1) ?? "null") as {
@@ -285,6 +322,8 @@ describe("Freed adapter", () => {
         taskId: string;
         expectedTaskRevision: number;
         authorityClaimId: string;
+        custodyEpoch: number;
+        expectedHeartbeatAt: string;
         reason: string;
         releasedAt: string;
       };
@@ -299,6 +338,8 @@ describe("Freed adapter", () => {
             taskRevision: payload.expectedTaskRevision,
             authorityClaimId: payload.authorityClaimId,
             bindingDigest: "a".repeat(64),
+            custodyEpoch: payload.custodyEpoch,
+            expectedHeartbeatAt: payload.expectedHeartbeatAt,
             reason: payload.reason,
             releasedAt: payload.releasedAt,
           },
@@ -327,8 +368,8 @@ describe("Freed adapter", () => {
         now: "2026-08-13T18:04:00.000Z",
       }),
     ).resolves.toBeUndefined();
-    expect(runner.requests).toHaveLength(2);
-    expect(runner.requests[0]).toEqual(runner.requests[1]);
+    expect(runner.requests).toHaveLength(3);
+    expect(runner.requests[1]).toEqual(runner.requests[2]);
   });
 
   it("creates workspaces only through Freed's helper and fresh origin/dev", async () => {

@@ -331,6 +331,7 @@ describe("Freed broker planning authority reader", () => {
         target: "desktop",
         workLane: "macos",
         publicationCeiling: "draft-pr",
+        executionStage: "running",
       },
     };
     return {
