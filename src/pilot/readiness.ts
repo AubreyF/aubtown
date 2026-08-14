@@ -4,6 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import { parseExecutionAccountProfiles } from "../config/account-profiles.js";
 import { loadHostWorkspaceRoots } from "../config/host-workspaces.js";
+import { verifyInstalledRelease } from "../deployment/release-manifest.js";
 import { buildStableDispatchIntention } from "../orchestration/dispatch-intention.js";
 import type { LivePlanningSnapshot } from "../orchestration/live-planning-snapshot.js";
 import { canonicalJson } from "../security/canonical-json.js";
@@ -203,6 +204,7 @@ export async function auditPilotReadiness(input: {
   readonly issueNumber: number;
   readonly auditedAt: string;
   readonly publicationEnabled: boolean;
+  readonly releaseRequiredUid: number;
   readonly paths: PilotReadinessPaths;
 }): Promise<PilotReadinessReport> {
   if (
@@ -235,6 +237,13 @@ export async function auditPilotReadiness(input: {
   let dispatchSource: unknown;
 
   const checks = await Promise.all([
+    check("runtime:release-manifest", async () => {
+      const verified = await verifyInstalledRelease({
+        root: input.paths.releaseRoot,
+        requiredUid: input.releaseRequiredUid,
+      });
+      return `${verified.manifest.commit}:${verified.manifest.platform}:${verified.manifest.architecture}:${verified.sha256}`;
+    }),
     check("runtime:symphony-lock", async () => {
       await physicalFile({
         file: input.paths.symphonyLockFile,

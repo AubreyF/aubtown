@@ -34,6 +34,7 @@ const report = await auditPilotReadiness({
   issueNumber,
   auditedAt: new Date().toISOString(),
   publicationEnabled: enabled("AUBTOWN_LIFECYCLE_PROJECTION_ENABLED"),
+  releaseRequiredUid: 0,
   paths: {
     releaseRoot: absolute("AUBTOWN_RELEASE_ROOT"),
     symphonyLockFile: absolute("AUBTOWN_SYMPHONY_LOCK_FILE"),

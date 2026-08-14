@@ -33,7 +33,7 @@ Copy the completed directory to `/opt/aubtown/releases/<commit>`, make the entir
 /opt/aubtown/node/bin/node /opt/aubtown/releases/<commit>/dist/cli/verify-release-install.js /opt/aubtown/releases/<commit>
 ```
 
-The installed verifier rejects the wrong path, platform, architecture, Node version, owner, mode, digest, missing file, unexpected file, or any symbolic link. Point `/opt/aubtown/current` at the release only after this proof succeeds. The pilot audit still binds its critical executables individually. The release manifest closes the broader dependency and stale-file gap around them.
+The installed verifier rejects the wrong path, platform, architecture, Node version, owner, mode, digest, missing file, unexpected file, or any symbolic link. Point `/opt/aubtown/current` at the release only after this proof succeeds. The pilot audit reruns the complete manifest verification at launch and still binds its critical executables individually. The release manifest closes the broader dependency and stale-file gap around them.
 
 ## Service graph
 

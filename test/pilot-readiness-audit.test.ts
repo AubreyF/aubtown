@@ -18,6 +18,10 @@ import {
 } from "../src/orchestration/dispatch-intention.js";
 import type { LivePlanningSnapshot } from "../src/orchestration/live-planning-snapshot.js";
 import { auditPilotReadiness, type PilotReadinessPaths } from "../src/pilot/readiness.js";
+import {
+  createReleaseManifest,
+  writeReleaseManifest,
+} from "../src/deployment/release-manifest.js";
 import { authorityTask, issue, report, usage, FREED_REPOSITORY } from "./helpers.js";
 
 const roots: string[] = [];
@@ -25,6 +29,10 @@ const commit = "8".repeat(40);
 const patchBytes = Buffer.from("reviewed patch\n", "utf8");
 const patchDigest = "7f3d3ee9a3afe9dc0b4bdd3c21cc62c0c8c6d05e17e4258a5254d78042986694";
 const auditedAt = "2026-08-13T20:00:30.000Z";
+const releaseRequiredUid = process.getuid?.();
+if (releaseRequiredUid === undefined) {
+  throw new Error("Pilot readiness tests require a POSIX user identity.");
+}
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(async (root) => await rm(root, { recursive: true })));
@@ -43,7 +51,7 @@ async function fixture(): Promise<{
 }> {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "aubtown-readiness-")));
   roots.push(root);
-  const releaseRoot = path.join(root, "release");
+  const releaseRoot = path.join(root, "releases", commit);
   const patchFile = path.join(releaseRoot, "upstream/patches/0001-reviewed.patch");
   const symphonyExecutable = path.join(root, "symphony", commit, "symphony");
   const workflowFile = path.join(root, "WORKFLOW.md");
@@ -177,6 +185,10 @@ async function fixture(): Promise<{
     path.join(releaseRoot, "dist/cli/probe-publisher-readiness-local.js"),
     "export {};\n",
   );
+  await writeReleaseManifest({
+    root: releaseRoot,
+    manifest: await createReleaseManifest({ root: releaseRoot, commit }),
+  });
 
   const accountProfiles: ExecutionAccountProfiles = {
     "codex-pro-1": {
@@ -418,6 +430,7 @@ describe("pilot readiness audit", () => {
       issueNumber: 1234,
       auditedAt,
       publicationEnabled: true,
+      releaseRequiredUid,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(true);
@@ -432,11 +445,31 @@ describe("pilot readiness audit", () => {
       issueNumber: 1234,
       auditedAt,
       publicationEnabled: false,
+      releaseRequiredUid,
       paths: prepared.paths,
     });
 
     expect(report.ready).toBe(false);
     expect(report.blockers).toContain("policy:lifecycle-projection-gate");
+  });
+
+  it("rejects an installed release changed after manifest verification", async () => {
+    const prepared = await fixture();
+    await protectedFile(
+      path.join(prepared.paths.releaseRoot, "dist/cli/unexpected.js"),
+      "export {};\n",
+    );
+    const report = await auditPilotReadiness({
+      repository: "freed-project/freed",
+      issueNumber: 1234,
+      auditedAt,
+      publicationEnabled: true,
+      releaseRequiredUid,
+      paths: prepared.paths,
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers).toContain("runtime:release-manifest");
   });
 
   it("fails closed for stale planning and an absent authority broker", async () => {
@@ -451,6 +484,7 @@ describe("pilot readiness audit", () => {
       issueNumber: 1234,
       auditedAt,
       publicationEnabled: true,
+      releaseRequiredUid,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(false);
@@ -474,6 +508,7 @@ describe("pilot readiness audit", () => {
       issueNumber: 1234,
       auditedAt,
       publicationEnabled: true,
+      releaseRequiredUid,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(false);
@@ -492,6 +527,7 @@ describe("pilot readiness audit", () => {
       issueNumber: 1234,
       auditedAt,
       publicationEnabled: true,
+      releaseRequiredUid,
       paths: prepared.paths,
     });
 
@@ -520,6 +556,7 @@ describe("pilot readiness audit", () => {
       issueNumber: 1234,
       auditedAt,
       publicationEnabled: true,
+      releaseRequiredUid,
       paths: prepared.paths,
     });
 
@@ -541,6 +578,7 @@ describe("pilot readiness audit", () => {
       issueNumber: 1234,
       auditedAt,
       publicationEnabled: true,
+      releaseRequiredUid,
       paths: prepared.paths,
     });
     expect(report.ready).toBe(false);
