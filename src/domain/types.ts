@@ -147,6 +147,13 @@ export interface AccountUsageSnapshot {
     readonly usedPercent: number;
     readonly resetsAt: string;
   };
+  readonly dailyConsumption: {
+    readonly day: string;
+    readonly baselineLifetimeTokens: number;
+    readonly observedLifetimeTokens: number;
+    readonly grossUsedPercent: number;
+    readonly meterState: "coherent" | "diverged";
+  };
   readonly activeTurnIds: readonly string[];
 }
 
@@ -154,6 +161,7 @@ export interface RawAccountUsageObservation {
   readonly accountId: string;
   readonly observedAt: string;
   readonly primary: UsageWindow;
+  readonly lifetimeTokens: number;
   readonly activeTurnIds: readonly string[];
 }
 

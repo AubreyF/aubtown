@@ -20,7 +20,7 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 ## What is implemented
 
 - Deterministic read-only qualification and conflict-domain derivation
-- Daily and rolling-week Codex quota policy
+- Reset-safe daily and rolling-week Codex quota policy with cumulative token cross-checks
 - Driver-neutral account and host routing contracts
 - GitHub App token brokerage and draft-only publication planning
 - Exact-head validation and fresh-review handoff contracts

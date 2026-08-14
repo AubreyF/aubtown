@@ -28,6 +28,7 @@ describe("QuotaMonitor", () => {
           windowDurationMinutes: 10_080,
           resetsAt: "2026-08-18T08:00:00.000Z",
         },
+        lifetimeTokens: 1_000_000,
         activeTurnIds,
       }),
     };
@@ -78,6 +79,7 @@ describe("QuotaMonitor", () => {
           windowDurationMinutes: 10_080,
           resetsAt: "2026-08-18T08:00:00.000Z",
         },
+        lifetimeTokens: 1_000_000,
         activeTurnIds,
       }),
     };

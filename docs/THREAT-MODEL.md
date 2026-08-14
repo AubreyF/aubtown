@@ -45,7 +45,8 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Malicious issue text executes shell | Qualification data is parsed as data; validation uses reviewed no-shell argv; fixed policy remains outside issue prose |
 | Worker publishes unrelated content | Publication binds repository, branch, admitted base, exact reviewed head, prior remote head, draft number, and checkpoint identity |
 | Worker merges, releases, or deploys | Separate credentials and explicit draft-only publication ceiling |
-| Subscription spends the week in a day | Prelaunch recomputes the 10,080 minute rolling-week window and Los Angeles daily delta, preserves the 10 percent reserve, blocks new work at the daily ceiling, and interrupts targeted active turns at the hard limit |
+| Subscription spends the week in a day | Prelaunch recomputes the 10,080 minute window, accumulates gross positive percentage movement across resets in a Los Angeles daily ledger, cross-checks cumulative token activity, preserves the 10 percent reserve, blocks new work at the daily ceiling, and interrupts targeted active turns at the hard limit |
+| A reset or retreating percentage meter hides same-day use | Previously observed daily consumption never decreases; a new quota window adds its current use, and rising cumulative tokens with a retreating same-window percentage fails closed |
 | Usage telemetry disappears | New dispatch fails closed when observation age exceeds policy; an active turn receives an exact protocol interrupt and a hard transport cutoff after the grace period |
 | Retry loop consumes quota on a human blocker | Authority, approval, rate-limit, and human-input blockers do not receive automatic subscription retries |
 | Candidate is lost before acknowledgement | Encrypted content-addressed checkpoint completes before terminal handoff is acknowledged |

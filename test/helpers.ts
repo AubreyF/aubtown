@@ -104,20 +104,32 @@ export function authorityTask(overrides: Partial<AuthorityTask> = {}): Authority
 export function usage(
   overrides: Partial<AccountUsageSnapshot> = {},
 ): AccountUsageSnapshot {
+  const primary = overrides.primary ?? {
+    usedPercent: 40,
+    windowDurationMinutes: 10_080,
+    resetsAt: "2026-08-18T08:00:00.000Z",
+  };
+  const dailyBaseline = overrides.dailyBaseline ?? {
+    observedAt: "2026-08-13T07:00:00.000Z",
+    usedPercent: 35,
+    resetsAt: "2026-08-18T08:00:00.000Z",
+  };
   return {
     accountId: "codex-pro-1",
     observedAt: "2026-08-13T08:00:00.000Z",
-    primary: {
-      usedPercent: 40,
-      windowDurationMinutes: 10_080,
-      resetsAt: "2026-08-18T08:00:00.000Z",
-    },
-    dailyBaseline: {
-      observedAt: "2026-08-13T07:00:00.000Z",
-      usedPercent: 35,
-      resetsAt: "2026-08-18T08:00:00.000Z",
-    },
     activeTurnIds: [],
     ...overrides,
+    primary,
+    dailyBaseline,
+    dailyConsumption: overrides.dailyConsumption ?? {
+      day: "2026-08-13",
+      baselineLifetimeTokens: 1_000_000,
+      observedLifetimeTokens: 1_050_000,
+      grossUsedPercent: Math.max(
+        0,
+        primary.usedPercent - dailyBaseline.usedPercent,
+      ),
+      meterState: "coherent",
+    },
   };
 }

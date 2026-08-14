@@ -96,7 +96,7 @@ Conflict domains include qualified path prefixes and logical locks such as behav
 
 ## Subscription governance
 
-Each execution account has its own usage identity and Codex app-server process. AubTown samples the rolling-week window and active turns at least once per minute. Missing or stale telemetry stops new dispatch.
+Each execution account has its own usage identity and Codex app-server process. AubTown samples the 10,080 minute window, cumulative lifetime token activity, and active turns at least once per minute. It adds every positive percentage movement to a Los Angeles calendar-day ledger instead of subtracting one baseline from the latest sample. A quota-window reset therefore cannot erase consumption already observed that day. If the percentage meter moves backward while cumulative token activity rises inside the same window, the meters have diverged and execution stops. Missing, backward, or stale telemetry also stops dispatch.
 
 The governor reserves 10 percent by default, enforces a hard daily ceiling, and compares current use with the permitted rolling-week trajectory. It throttles before the hard boundary and interrupts targeted active turns when continuing would consume the protected reserve. Authority and human blockers do not consume retry budget.
 

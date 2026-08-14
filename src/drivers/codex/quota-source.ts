@@ -46,8 +46,22 @@ export class CodexQuotaSource implements UsageSource {
     accountId: string,
     activeTurnIds: readonly string[],
   ): Promise<RawAccountUsageObservation> {
-    const limits = await this.client.readRateLimits();
+    const [limits, usage] = await Promise.all([
+      this.client.readRateLimits(),
+      this.client.readUsage(),
+    ]);
     const weekly = selectRollingWeeklyWindow(limits);
+    const lifetimeTokens = usage.summary?.lifetimeTokens;
+    if (
+      lifetimeTokens === null ||
+      lifetimeTokens === undefined ||
+      !Number.isSafeInteger(lifetimeTokens) ||
+      lifetimeTokens < 0
+    ) {
+      throw new Error(
+        "Codex token activity does not expose a cumulative lifetimeTokens counter. Daily governance must fail closed.",
+      );
+    }
     const resetsAt = new Date(weekly.resetsAt * 1_000).toISOString();
     const observedAt = this.now().toISOString();
     return {
@@ -58,6 +72,7 @@ export class CodexQuotaSource implements UsageSource {
         windowDurationMinutes: weekly.windowDurationMins,
         resetsAt,
       },
+      lifetimeTokens,
       activeTurnIds,
     };
   }

@@ -41,6 +41,7 @@ const usageObservationSchema: z.ZodType<RawAccountUsageObservation> = z.object({
     windowDurationMinutes: z.number().positive(),
     resetsAt: z.iso.datetime(),
   }),
+  lifetimeTokens: z.number().int().nonnegative().safe(),
   activeTurnIds: z.array(z.string().min(1)),
 });
 

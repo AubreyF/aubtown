@@ -34,6 +34,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Run the complete upstream Symphony suite against the pinned commit and patch series, with 303 passing and 6 explicit skips.
 - [x] Prove a fake issue cannot dispatch twice across coordinator restart.
 - [x] Prove daily and rolling-week quota stops through the Symphony admission boundary.
+- [x] Preserve gross daily quota consumption across weekly-window resets and cross-check it against cumulative token activity.
 - [x] Prove Linux continues generic work while the Mac is offline.
 - [x] Add exact active-turn quota interruption and hard transport cutoff to the pinned Symphony runner.
 

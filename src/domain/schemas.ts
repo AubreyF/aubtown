@@ -122,5 +122,12 @@ export const accountUsageSnapshotSchema = z.object({
     usedPercent: z.number().min(0).max(100),
     resetsAt: z.iso.datetime(),
   }),
+  dailyConsumption: z.object({
+    day: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u),
+    baselineLifetimeTokens: z.number().int().nonnegative().safe(),
+    observedLifetimeTokens: z.number().int().nonnegative().safe(),
+    grossUsedPercent: z.number().min(0),
+    meterState: z.enum(["coherent", "diverged"]),
+  }),
   activeTurnIds: z.array(z.string()),
 });

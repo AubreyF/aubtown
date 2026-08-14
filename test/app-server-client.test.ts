@@ -17,6 +17,8 @@ class FakeTransport implements JsonRpcTransport {
   readonly listeners = new Set<(message: unknown) => void>();
   readonly failureListeners = new Set<(error: Error) => void>();
 
+  constructor(private readonly usageResult?: unknown) {}
+
   async send(message: unknown): Promise<unknown> {
     this.messages.push(message);
     const method = (message as { method?: string }).method;
@@ -35,7 +37,10 @@ class FakeTransport implements JsonRpcTransport {
       };
     }
     if (method === "account/usage/read") {
-      return { summary: null, dailyUsageBuckets: null };
+      return this.usageResult ?? {
+        summary: { lifetimeTokens: 1_234_567, peakDailyTokens: 45_678 },
+        dailyUsageBuckets: [{ startDate: "2026-08-13", tokens: 12_345 }],
+      };
     }
     if (method === "model/list") {
       return {
@@ -126,8 +131,22 @@ describe("Codex app-server integration", () => {
     expect(snapshot).toMatchObject({
       accountId: "codex-pro-1",
       primary: { usedPercent: 42, windowDurationMinutes: 10_080 },
+      lifetimeTokens: 1_234_567,
       activeTurnIds: ["turn-1"],
     });
+  });
+
+  it("fails closed when cumulative token activity is unavailable", async () => {
+    const client = new CodexAppServerClient(
+      new FakeTransport({
+        summary: { lifetimeTokens: null },
+        dailyUsageBuckets: null,
+      }),
+    );
+    const source = new CodexQuotaSource(client);
+    await expect(source.read("codex-pro-1", [])).rejects.toThrow(
+      "Daily governance must fail closed",
+    );
   });
 
   it("selects the actual weekly window instead of assuming primary means weekly", () => {

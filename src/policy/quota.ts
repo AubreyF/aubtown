@@ -42,10 +42,22 @@ export function mergeUsageObservation(input: {
   readonly observation: RawAccountUsageObservation;
 }): AccountUsageSnapshot {
   const previous = input.previous;
+  if (
+    previous !== undefined &&
+    previous.accountId !== input.observation.accountId
+  ) {
+    throw new Error("A usage observation cannot change account identity.");
+  }
+  if (
+    !Number.isSafeInteger(input.observation.lifetimeTokens) ||
+    input.observation.lifetimeTokens < 0
+  ) {
+    throw new RangeError("lifetimeTokens must be one nonnegative safe integer.");
+  }
+  const observationDay = losAngelesDayKey(input.observation.observedAt);
   const sameDay =
     previous !== undefined &&
-    losAngelesDayKey(previous.observedAt) ===
-      losAngelesDayKey(input.observation.observedAt);
+    previous.dailyConsumption.day === observationDay;
   const sameWindow =
     previous !== undefined &&
     previous.primary.resetsAt === input.observation.primary.resetsAt;
@@ -57,7 +69,50 @@ export function mergeUsageObservation(input: {
           usedPercent: input.observation.primary.usedPercent,
           resetsAt: input.observation.primary.resetsAt,
         };
-  return { ...input.observation, dailyBaseline };
+  if (
+    previous !== undefined &&
+    input.observation.lifetimeTokens <
+      previous.dailyConsumption.observedLifetimeTokens
+  ) {
+    throw new Error("Cumulative token activity moved backward.");
+  }
+  const positiveWindowDelta =
+    previous === undefined
+      ? 0
+      : sameWindow
+        ? Math.max(
+            0,
+            input.observation.primary.usedPercent - previous.primary.usedPercent,
+          )
+        : input.observation.primary.usedPercent;
+  const tokenDelta =
+    previous === undefined
+      ? 0
+      : input.observation.lifetimeTokens -
+        previous.dailyConsumption.observedLifetimeTokens;
+  const priorGross = sameDay
+    ? (previous?.dailyConsumption.grossUsedPercent ?? 0)
+    : 0;
+  const priorDiverged =
+    sameDay && previous?.dailyConsumption.meterState === "diverged";
+  const dailyConsumption = {
+    day: observationDay,
+    baselineLifetimeTokens:
+      sameDay && previous !== undefined
+        ? previous.dailyConsumption.baselineLifetimeTokens
+        : (previous?.dailyConsumption.observedLifetimeTokens ??
+          input.observation.lifetimeTokens),
+    observedLifetimeTokens: input.observation.lifetimeTokens,
+    grossUsedPercent: priorGross + positiveWindowDelta,
+    meterState:
+      priorDiverged ||
+      (tokenDelta > 0 &&
+        sameWindow &&
+        input.observation.primary.usedPercent < previous.primary.usedPercent)
+        ? ("diverged" as const)
+        : ("coherent" as const),
+  };
+  return { ...input.observation, dailyBaseline, dailyConsumption };
 }
 
 export type QuotaAction =
@@ -72,6 +127,7 @@ export interface QuotaDecision {
     | "headroom-available"
     | "telemetry-stale"
     | "weekly-ceiling"
+    | "daily-meter-diverged"
     | "daily-throttle"
     | "daily-admission-stop"
     | "daily-interrupt";
@@ -80,19 +136,12 @@ export interface QuotaDecision {
   readonly observedAt: string;
 }
 
-function assertPercent(value: number, name: string): void {
-  if (!Number.isFinite(value) || value < 0 || value > 100) {
-    throw new RangeError(`${name} must be between 0 and 100.`);
-  }
-}
-
 export function dailyUsagePercent(snapshot: AccountUsageSnapshot): number {
-  assertPercent(snapshot.primary.usedPercent, "primary.usedPercent");
-  assertPercent(snapshot.dailyBaseline.usedPercent, "dailyBaseline.usedPercent");
-  if (snapshot.primary.resetsAt !== snapshot.dailyBaseline.resetsAt) {
-    return snapshot.primary.usedPercent;
+  const value = snapshot.dailyConsumption.grossUsedPercent;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError("dailyConsumption.grossUsedPercent must be nonnegative.");
   }
-  return Math.max(0, snapshot.primary.usedPercent - snapshot.dailyBaseline.usedPercent);
+  return value;
 }
 
 export function decideQuota(input: {
@@ -129,6 +178,15 @@ export function decideQuota(input: {
   }
   if (weeklyUsedPercent >= policy.autonomousWeeklyCeilingPercent) {
     return decision("interrupt", "weekly-ceiling");
+  }
+  if (
+    input.snapshot.dailyConsumption.meterState === "diverged" ||
+    input.snapshot.dailyConsumption.day !==
+      losAngelesDayKey(input.snapshot.observedAt) ||
+    input.snapshot.dailyConsumption.observedLifetimeTokens <
+      input.snapshot.dailyConsumption.baselineLifetimeTokens
+  ) {
+    return decision("interrupt", "daily-meter-diverged");
   }
   if (dailyUsed >= policy.dailyInterruptPercent) {
     return decision("interrupt", "daily-interrupt");

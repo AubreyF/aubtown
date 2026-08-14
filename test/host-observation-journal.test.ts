@@ -62,6 +62,7 @@ function quota(input: {
   readonly sequence: number;
   readonly observedAt: string;
   readonly usedPercent: number;
+  readonly lifetimeTokens?: number;
 }) {
   return signHostEnvelope(
     {
@@ -79,6 +80,7 @@ function quota(input: {
             windowDurationMinutes: 10_080,
             resetsAt: "2026-08-18T08:00:00.000Z",
           },
+          lifetimeTokens: input.lifetimeTokens ?? 1_000_000 + input.sequence * 1_000,
           activeTurnIds: [],
         },
       },
@@ -182,6 +184,7 @@ describe("host observation journal", () => {
               windowDurationMinutes: 10_080,
               resetsAt: "2026-08-18T08:00:00.000Z",
             },
+            lifetimeTokens: 1_000_000,
             activeTurnIds: [],
           },
         },

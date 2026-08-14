@@ -50,12 +50,13 @@ const quotaDecisionSchema = z.object({
     "headroom-available",
     "telemetry-stale",
     "weekly-ceiling",
+    "daily-meter-diverged",
     "daily-throttle",
     "daily-admission-stop",
     "daily-interrupt",
   ]),
   weeklyUsedPercent: z.number().min(0).max(100),
-  dailyUsedPercent: z.number().min(0).max(100),
+  dailyUsedPercent: z.number().min(0),
   observedAt: z.iso.datetime(),
 });
 
@@ -127,6 +128,7 @@ function rawObservation(snapshot: AccountUsageSnapshot): RawAccountUsageObservat
     accountId: snapshot.accountId,
     observedAt: snapshot.observedAt,
     primary: snapshot.primary,
+    lifetimeTokens: snapshot.dailyConsumption.observedLifetimeTokens,
     activeTurnIds: snapshot.activeTurnIds,
   };
 }

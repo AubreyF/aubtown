@@ -15,18 +15,23 @@ describe("quota governance", () => {
     expect(dailyUsagePercent(usage())).toBe(5);
   });
 
-  it("starts a new daily delta when the rolling window resets", () => {
-    expect(
-      dailyUsagePercent(
-        usage({
-          primary: {
-            usedPercent: 3,
-            windowDurationMinutes: 10_080,
-            resetsAt: "2026-08-25T08:00:00.000Z",
-          },
-        }),
-      ),
-    ).toBe(3);
+  it("keeps prior daily consumption when the weekly window resets", () => {
+    const previous = usage();
+    const merged = mergeUsageObservation({
+      previous,
+      observation: {
+        accountId: previous.accountId,
+        observedAt: "2026-08-13T20:00:00.000Z",
+        primary: {
+          usedPercent: 3,
+          windowDurationMinutes: 10_080,
+          resetsAt: "2026-08-25T08:00:00.000Z",
+        },
+        lifetimeTokens: 1_060_000,
+        activeTurnIds: [],
+      },
+    });
+    expect(dailyUsagePercent(merged)).toBe(8);
   });
 
   it("keeps the same baseline within one Los Angeles day", () => {
@@ -37,6 +42,7 @@ describe("quota governance", () => {
         accountId: previous.accountId,
         observedAt: "2026-08-13T20:00:00.000Z",
         primary: { ...previous.primary, usedPercent: 41 },
+        lifetimeTokens: 1_060_000,
         activeTurnIds: [],
       },
     });
@@ -46,13 +52,20 @@ describe("quota governance", () => {
   it("resets the baseline at Los Angeles midnight", () => {
     expect(losAngelesDayKey("2026-08-13T06:59:59.000Z")).toBe("2026-08-12");
     expect(losAngelesDayKey("2026-08-13T07:00:00.000Z")).toBe("2026-08-13");
-    const previous = usage({ observedAt: "2026-08-13T06:59:59.000Z" });
+    const previous = usage({
+      observedAt: "2026-08-13T06:59:59.000Z",
+      dailyConsumption: {
+        ...usage().dailyConsumption,
+        day: "2026-08-12",
+      },
+    });
     const merged = mergeUsageObservation({
       previous,
       observation: {
         accountId: previous.accountId,
         observedAt: "2026-08-13T07:00:00.000Z",
         primary: { ...previous.primary, usedPercent: 41 },
+        lifetimeTokens: 1_060_000,
         activeTurnIds: [],
       },
     });
@@ -70,6 +83,10 @@ describe("quota governance", () => {
           usedPercent: 35 + delta,
           windowDurationMinutes: 10_080,
           resetsAt: "2026-08-18T08:00:00.000Z",
+        },
+        dailyConsumption: {
+          ...usage().dailyConsumption,
+          grossUsedPercent: delta,
         },
       }),
       now: NOW,
@@ -105,6 +122,57 @@ describe("quota governance", () => {
       now: NOW,
     });
     expect(decision).toMatchObject({ action: "interrupt", reason: "telemetry-stale" });
+  });
+
+  it("interrupts when the quota meter retreats while cumulative tokens rise", () => {
+    const previous = usage();
+    const merged = mergeUsageObservation({
+      previous,
+      observation: {
+        accountId: previous.accountId,
+        observedAt: "2026-08-13T08:01:00.000Z",
+        primary: { ...previous.primary, usedPercent: 39 },
+        lifetimeTokens: 1_060_000,
+        activeTurnIds: [],
+      },
+    });
+    expect(merged.dailyConsumption).toMatchObject({
+      grossUsedPercent: 5,
+      meterState: "diverged",
+    });
+    expect(decideQuota({ snapshot: merged, now: "2026-08-13T08:01:00.000Z" }))
+      .toMatchObject({ action: "interrupt", reason: "daily-meter-diverged" });
+  });
+
+  it("allows token activity below the percentage meter resolution", () => {
+    const previous = usage();
+    const merged = mergeUsageObservation({
+      previous,
+      observation: {
+        accountId: previous.accountId,
+        observedAt: "2026-08-13T08:01:00.000Z",
+        primary: { ...previous.primary },
+        lifetimeTokens: 1_050_001,
+        activeTurnIds: [],
+      },
+    });
+    expect(merged.dailyConsumption.meterState).toBe("coherent");
+  });
+
+  it("rejects a cumulative token counter that moves backward", () => {
+    const previous = usage();
+    expect(() =>
+      mergeUsageObservation({
+        previous,
+        observation: {
+          accountId: previous.accountId,
+          observedAt: "2026-08-13T08:01:00.000Z",
+          primary: { ...previous.primary, usedPercent: 41 },
+          lifetimeTokens: 1_049_999,
+          activeTurnIds: [],
+        },
+      }),
+    ).toThrow("moved backward");
   });
 
   it("rejects telemetry that is not the exact rolling weekly window", () => {
