@@ -131,9 +131,24 @@ describe("native Linux deployment", () => {
     expect(environment).toContain("AUBTOWN_REMOTE_ADJUDICATOR=");
     expect(environment).toContain("AUBTOWN_REMOTE_REVIEWER_RUNTIME_CONFIG=");
     expect(environment).toContain("AUBTOWN_TRUSTED_ADJUDICATION_ROOT=");
+    expect(environment).toContain("AUBTOWN_PUBLICATION_TRANSACTION_ROOT=");
+    expect(environment).toContain("AUBTOWN_SSH_PUBLISHER_USER=aubtown-publisher");
+    expect(environment).toContain(
+      "AUBTOWN_SSH_PUBLISHER_IDENTITY_FILE=/etc/aubtown/ssh/publisher_ed25519",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_GITHUB_MACHINE_AUTHOR_LOGIN=",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_LIFECYCLE_PROJECTION_ENABLED=false",
+    );
     expect(command).toContain("SymphonyCompletionReconciler");
     expect(command).toContain("SshAdjudicationRunner");
     expect(command).toContain("TrustedAdjudicationResultStore");
+    expect(command).toContain("DurablePublicationCoordinator");
+    expect(command).toContain("PublicationTransactionStore");
+    expect(command).toContain("SshDraftPublisher");
+    expect(command).toContain("GitHubProjectionWriter");
     expect(command).toContain("GitHubLivePlanningReader");
     expect(command).toContain("FreedAuthorityBridge");
     expect(packageJson).toContain('"symphony:adjudicate-completion"');

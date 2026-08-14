@@ -13,6 +13,7 @@ EnvironmentFile=/etc/aubtown/symphony.env
 ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reconcile-symphony-completion.js
 StateDirectory=aubtown/admission/completions
 StateDirectory=aubtown/admission/adjudications
+StateDirectory=aubtown/admission/publications
 StateDirectoryMode=0700
 UMask=0077
 NoNewPrivileges=true

@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import { z } from "zod";
 import type { GitHubAppBroker } from "../credentials/github-app-broker.js";
 import { FACTORY_LABELS } from "../domain/types.js";
 import {
@@ -77,13 +78,17 @@ export function planProjectionMutation(input: {
   };
 }
 
-export interface ProjectionWriteReceipt {
-  readonly repository: string;
-  readonly issueNumber: number;
-  readonly labelsChanged: boolean;
-  readonly commentAction: "none" | "create" | "update";
-  readonly tokenExpiresAt: string;
-}
+export const projectionWriteReceiptSchema = z.object({
+  repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u),
+  issueNumber: z.number().int().positive(),
+  labelsChanged: z.boolean(),
+  commentAction: z.enum(["none", "create", "update"]),
+  tokenExpiresAt: z.iso.datetime(),
+}).strict();
+
+export type ProjectionWriteReceipt = z.infer<
+  typeof projectionWriteReceiptSchema
+>;
 
 export class GitHubProjectionWriter {
   constructor(
@@ -157,12 +162,12 @@ export class GitHubProjectionWriter {
         body: plan.comment.body,
       });
     }
-    return {
+    return projectionWriteReceiptSchema.parse({
       repository,
       issueNumber: input.issueNumber,
       labelsChanged: plan.labelsChanged,
       commentAction: plan.comment.action,
       tokenExpiresAt: token.expiresAt,
-    };
+    });
   }
 }

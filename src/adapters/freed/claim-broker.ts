@@ -177,7 +177,7 @@ export type FreedClaimTransferReceipt = z.infer<
   typeof transferOutputSchema
 >["result"];
 
-const releaseRequestSchema = z.object({
+export const freedClaimReleaseRequestSchema = z.object({
   schemaVersion: z.literal(1),
   operationId: z.uuid(),
   taskId: z.string().min(1),
@@ -190,7 +190,9 @@ const releaseRequestSchema = z.object({
   custodyEpoch: z.number().int().positive().optional(),
 }).strict();
 
-export type FreedClaimReleaseRequest = z.infer<typeof releaseRequestSchema>;
+export type FreedClaimReleaseRequest = z.infer<
+  typeof freedClaimReleaseRequestSchema
+>;
 
 const releaseOutputSchema = z.object({
   action: z.literal("task.claim-release"),
@@ -207,6 +209,8 @@ const releaseOutputSchema = z.object({
     custodyEpoch: z.number().int().positive().optional(),
   }).strict(),
 }).strict();
+
+export const freedClaimReleaseReceiptSchema = releaseOutputSchema.shape.result;
 
 export type FreedClaimReleaseReceipt = z.infer<
   typeof releaseOutputSchema
@@ -309,7 +313,7 @@ export class FreedClaimBrokerClient {
   async release(
     request: FreedClaimReleaseRequest,
   ): Promise<FreedClaimReleaseReceipt> {
-    const payload = releaseRequestSchema.parse(request);
+    const payload = freedClaimReleaseRequestSchema.parse(request);
     const output = await this.#run("claim-release", payload);
     return releaseOutputSchema.parse(JSON.parse(output)).result;
   }

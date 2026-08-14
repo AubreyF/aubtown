@@ -63,7 +63,7 @@ function deterministicUuid(value: unknown): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
-function exactCurrentClaim(
+export function currentFreedClaimMatchesEnvelope(
   envelope: SymphonyAdmissionEnvelope,
   current: FreedClaimShowReceipt,
 ): boolean {
@@ -97,7 +97,7 @@ function exactCurrentClaim(
   );
 }
 
-function assertCurrentIssue(
+export function assertIssueEligibleForCompletion(
   expected: IssueRecord,
   current: IssueRecord,
 ): void {
@@ -137,7 +137,10 @@ export class SymphonyCompletionReconciler {
     if (quota.action !== "admit" && quota.action !== "throttle") {
       throw new Error(`Completion adjudication is blocked by quota: ${quota.reason}.`);
     }
-    assertCurrentIssue(envelope.binding.qualification.issue, input.currentIssue);
+    assertIssueEligibleForCompletion(
+      envelope.binding.qualification.issue,
+      input.currentIssue,
+    );
     const expectedManifest = executorHandoffManifestFromRequirement(
       symphonyWorkspaceRequirementFromBinding({
         binding: envelope.binding,
@@ -180,7 +183,7 @@ export class SymphonyCompletionReconciler {
       schemaVersion: 1,
       taskId: envelope.admission.taskId,
     });
-    if (!exactCurrentClaim(envelope, currentClaim)) {
+    if (!currentFreedClaimMatchesEnvelope(envelope, currentClaim)) {
       throw new Error("Freed execution claim changed before adjudication.");
     }
     const implementation = await this.activeTurns.load(manifestDigest);
