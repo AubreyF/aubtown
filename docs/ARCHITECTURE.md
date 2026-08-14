@@ -39,6 +39,8 @@ The reviewed patch now supplies:
 
 That boundary accepts one protected host-side envelope. The envelope binds the eligible issue, selected host, current rolling-week usage, daily baseline, exact Freed task and claim, custody epoch, account, driver, base head, and authority admission. AubTown recomputes quota at launch time and records the exact claim before returning an admission receipt. Missing, stale, mismatched, repeated, or malformed state denies launch.
 
+The AubTown bridge caller now constructs the exact canonical claim request, invokes one absolute reviewed broker without a shell or inherited credentials, verifies every returned identity, and retries one lost local response with the same operation ID. It publishes the envelope only after successful claim acquisition. If envelope publication fails, it requests release of that exact claim. The Freed command and installed broker remain pending, so this code cannot yet grant live authority.
+
 The remaining integration work is:
 
 - connect the admission command to Freed's task-scoped claim operations

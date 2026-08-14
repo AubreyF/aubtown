@@ -39,6 +39,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 ## Phase 3: one Freed issue
 
 - [x] Approve one factory coordinator plus task-scoped execution claims.
+- [x] Implement AubTown's exact broker caller and protected prelaunch envelope handoff.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
 - [ ] Execute one owner-selected low-risk runtime-neutral issue at concurrency one.

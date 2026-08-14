@@ -1,6 +1,7 @@
 import {
   chmod,
   mkdtemp,
+  mkdir,
   readdir,
   realpath,
   rm,
@@ -13,14 +14,20 @@ import {
   createExecutionAdmissionDigest,
   type ExecutionAdmissionBinding,
 } from "../src/adapters/execution-admission.js";
+import type {
+  AuthorityBridge,
+  ExecutionClaimReleaseReason,
+} from "../src/adapters/authority.js";
 import type { HostRecord } from "../src/domain/types.js";
 import {
   authorizeSymphonyPrelaunch,
   loadSymphonyAdmissionEnvelope,
   resolveSymphonyAdmissionEnvelopePath,
+  SymphonyAdmissionEnvelopeStore,
   SymphonyPrelaunchReceiptStore,
   type SymphonyAdmissionEnvelope,
 } from "../src/integrations/symphony/admission-envelope.js";
+import { SymphonyAdmissionPreparer } from "../src/integrations/symphony/prepare-admission.js";
 import { parseSymphonyPrelaunchRequest } from "../src/integrations/symphony/prelaunch.js";
 import { planExecutionRouteFromState } from "../src/orchestration/route-planner.js";
 import { authorityTask, claim, report, usage } from "./helpers.js";
@@ -66,6 +73,7 @@ function envelope(
     claim: claim({
       claimId: overrides.claimId ?? "claim-1234-epoch-1",
       hostId,
+      claimedAt: "2026-08-13T18:00:20.000Z",
     }),
     accountId: "codex-pro-1",
     driverId: "codex-app-server-v1",
@@ -113,6 +121,76 @@ async function temporaryRoot(prefix: string): Promise<string> {
 }
 
 describe("Symphony final admission envelope", () => {
+  it("publishes a protected envelope only after acquiring exact authority", async () => {
+    const root = await temporaryRoot("aubtown-envelope-prepare-");
+    const candidate = envelope();
+    const actions: string[] = [];
+    const authority: AuthorityBridge = {
+      id: "freed-authority-v1",
+      inspect: async () => ({ active: true, reason: "test" }),
+      acquire: async () => {
+        actions.push("acquire");
+        return candidate.admission;
+      },
+      release: async () => {
+        actions.push("release");
+      },
+    };
+    const preparer = new SymphonyAdmissionPreparer(
+      authority,
+      new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
+    );
+    await expect(
+      preparer.prepare({
+        binding: candidate.binding,
+        selectedHost: candidate.selectedHost,
+        usage: candidate.usage,
+        now: candidate.preparedAt,
+      }),
+    ).resolves.toMatchObject({ admission: candidate.admission });
+    expect(actions).toEqual(["acquire"]);
+    await expect(
+      loadSymphonyAdmissionEnvelope(path.join(root, "envelopes"), "1234"),
+    ).resolves.toMatchObject({ admission: candidate.admission });
+  });
+
+  it("releases the exact claim when envelope publication fails", async () => {
+    const root = await temporaryRoot("aubtown-envelope-release-");
+    const publicRoot = path.join(root, "public-envelopes");
+    await mkdir(publicRoot, { mode: 0o755 });
+    const candidate = envelope();
+    const releases: Array<{
+      readonly reason: ExecutionClaimReleaseReason;
+      readonly claimId: string;
+    }> = [];
+    const authority: AuthorityBridge = {
+      id: "freed-authority-v1",
+      inspect: async () => ({ active: true, reason: "test" }),
+      acquire: async () => candidate.admission,
+      release: async (input) => {
+        releases.push({
+          reason: input.reason,
+          claimId: input.admission.authorityClaimId,
+        });
+      },
+    };
+    const preparer = new SymphonyAdmissionPreparer(
+      authority,
+      new SymphonyAdmissionEnvelopeStore(publicRoot),
+    );
+    await expect(
+      preparer.prepare({
+        binding: candidate.binding,
+        selectedHost: candidate.selectedHost,
+        usage: candidate.usage,
+        now: candidate.preparedAt,
+      }),
+    ).rejects.toThrow("private directory");
+    expect(releases).toEqual([
+      { reason: "prelaunch-denied", claimId: "claim-1234-epoch-1" },
+    ]);
+  });
+
   it("admits one exact claim and blocks it after a coordinator restart", async () => {
     const root = await temporaryRoot("aubtown-prelaunch-");
     const receiptRoot = path.join(root, "receipts");

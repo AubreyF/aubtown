@@ -6,6 +6,7 @@ import {
   open,
   readFile,
   realpath,
+  rename,
   unlink,
 } from "node:fs/promises";
 import path from "node:path";
@@ -30,6 +31,7 @@ import {
 
 const MAX_ENVELOPE_BYTES = 1024 * 1024;
 const MAX_RECEIPT_BYTES = 64 * 1024;
+const CLAIM_MAX_AGE_SECONDS = 120;
 
 export interface SymphonyAdmissionEnvelope {
   readonly schemaVersion: 1;
@@ -173,7 +175,15 @@ export function evaluateSymphonyAdmission(input: {
   const issue = qualification.issue;
   const nowMs = Date.parse(input.now);
   const preparedAtMs = Date.parse(envelope.preparedAt);
-  if (!Number.isFinite(nowMs) || !Number.isFinite(preparedAtMs) || preparedAtMs > nowMs) {
+  const claimedAtMs = Date.parse(binding.claim.claimedAt);
+  if (
+    !Number.isFinite(nowMs) ||
+    !Number.isFinite(preparedAtMs) ||
+    !Number.isFinite(claimedAtMs) ||
+    preparedAtMs > nowMs ||
+    claimedAtMs > nowMs ||
+    nowMs - claimedAtMs > CLAIM_MAX_AGE_SECONDS * 1_000
+  ) {
     return denySymphonyPrelaunch(input.request, "admission-envelope-time-invalid");
   }
   if (
@@ -249,17 +259,70 @@ function receiptPath(root: string, receipt: SymphonyPrelaunchReceipt): string {
   );
 }
 
-async function admitReceiptRoot(root: string): Promise<void> {
+async function admitPrivateDirectory(root: string, label: string): Promise<void> {
   if (!path.isAbsolute(root)) {
-    throw new Error("Symphony prelaunch receipt root must be absolute.");
+    throw new Error(`${label} must be absolute.`);
   }
   await mkdir(root, { recursive: true, mode: 0o700 });
   if ((await realpath(root)) !== root) {
-    throw new Error("Symphony prelaunch receipt root cannot contain symbolic links.");
+    throw new Error(`${label} cannot contain symbolic links.`);
   }
   const stats = await lstat(root);
   if (!stats.isDirectory() || stats.isSymbolicLink() || (stats.mode & 0o077) !== 0) {
-    throw new Error("Symphony prelaunch receipt root must be a private directory.");
+    throw new Error(`${label} must be a private directory.`);
+  }
+}
+
+async function syncDirectory(directoryPath: string): Promise<void> {
+  const directory = await open(directoryPath, "r");
+  try {
+    await directory.sync();
+  } finally {
+    await directory.close();
+  }
+}
+
+export class SymphonyAdmissionEnvelopeStore {
+  constructor(private readonly root: string) {}
+
+  async publish(envelope: SymphonyAdmissionEnvelope): Promise<string> {
+    const parsed = symphonyAdmissionEnvelopeSchema.parse(envelope);
+    const issueId = parsed.binding.qualification.issue.number.toLocaleString(
+      "en-US",
+      { useGrouping: false },
+    );
+    if (!exactIssueBinding(parsed.binding)) {
+      throw new Error("Symphony admission envelope does not bind one exact issue.");
+    }
+    await admitPrivateDirectory(
+      this.root,
+      "Symphony admission envelope root",
+    );
+    const file = resolveSymphonyAdmissionEnvelopePath(this.root, issueId);
+    const staging = `${file}.staging-${randomUUID()}`;
+    const handle = await open(staging, "wx", 0o600);
+    try {
+      await handle.writeFile(`${JSON.stringify(parsed, null, 2)}\n`);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    try {
+      await rename(staging, file);
+      await syncDirectory(this.root);
+    } catch (error) {
+      await unlink(staging).catch((cleanupError: NodeJS.ErrnoException) => {
+        if (cleanupError.code !== "ENOENT") {
+          throw cleanupError;
+        }
+      });
+      throw error;
+    }
+    const admitted = await loadSymphonyAdmissionEnvelope(this.root, issueId);
+    if (!Buffer.from(canonicalJson(admitted)).equals(canonicalJson(parsed))) {
+      throw new Error("Symphony admission envelope readback changed after publication.");
+    }
+    return file;
   }
 }
 
@@ -268,7 +331,10 @@ export class SymphonyPrelaunchReceiptStore {
 
   async reserve(receipt: SymphonyPrelaunchReceipt): Promise<boolean> {
     const parsed = receiptSchema.parse(receipt);
-    await admitReceiptRoot(this.root);
+    await admitPrivateDirectory(
+      this.root,
+      "Symphony prelaunch receipt root",
+    );
     const file = receiptPath(this.root, parsed);
     const bytes = Buffer.from(`${JSON.stringify(parsed, null, 2)}\n`, "utf8");
     const staging = `${file}.staging-${randomUUID()}`;
@@ -308,12 +374,7 @@ export class SymphonyPrelaunchReceiptStore {
         }
       });
     }
-    const directory = await open(this.root, "r");
-    try {
-      await directory.sync();
-    } finally {
-      await directory.close();
-    }
+    await syncDirectory(this.root);
     return true;
   }
 }

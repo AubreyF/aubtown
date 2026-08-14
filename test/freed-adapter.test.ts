@@ -19,6 +19,82 @@ class RecordingRunner implements CommandRunner {
   }
 }
 
+class HandlerRunner implements CommandRunner {
+  readonly requests: CommandRequest[] = [];
+
+  constructor(
+    private readonly handler: (
+      request: CommandRequest,
+      attempt: number,
+    ) => Promise<CommandResult> | CommandResult,
+  ) {}
+
+  async run(request: CommandRequest): Promise<CommandResult> {
+    this.requests.push(request);
+    return await this.handler(request, this.requests.length);
+  }
+}
+
+function binding() {
+  return {
+    qualification: report(),
+    authorityTask: authorityTask({
+      state: "approved_for_pr",
+      executionAuthority: "pr-only",
+    }),
+    claim: claim({
+      claimId: "claim-1234-epoch-1",
+      claimedAt: "2026-08-13T18:00:00.000Z",
+    }),
+    accountId: "codex-pro-1",
+    driverId: "codex-app-server-v1",
+    baseHead: "b".repeat(40),
+    target: "shared" as const,
+  };
+}
+
+function brokerResponse(request: CommandRequest): CommandResult {
+  const requestIndex = request.args.indexOf("--request-json");
+  const payload = JSON.parse(request.args[requestIndex + 1] ?? "null") as {
+    readonly operationId: string;
+    readonly taskId: string;
+    readonly expectedTaskRevision: number;
+    readonly bindingDigest: string;
+    readonly claim: {
+      readonly claimId: string;
+      readonly custodyEpoch: number;
+      readonly conflictDomainDigest: string;
+    };
+    readonly requestedAt: string;
+  };
+  return {
+    stderr: "",
+    stdout: JSON.stringify({
+      action: "task.claim-acquire",
+      result: {
+        schemaVersion: 1,
+        operationId: payload.operationId,
+        taskId: payload.taskId,
+        taskRevision: payload.expectedTaskRevision,
+        authorityClaimId: payload.claim.claimId,
+        custodyEpoch: payload.claim.custodyEpoch,
+        bindingDigest: payload.bindingDigest,
+        conflictDomainDigest: payload.claim.conflictDomainDigest,
+        admission: {
+          schemaVersion: 1,
+          bridgeId: "freed-authority-v1",
+          authorityClaimId: payload.claim.claimId,
+          taskId: payload.taskId,
+          taskRevision: payload.expectedTaskRevision,
+          bindingDigest: payload.bindingDigest,
+          authorizedAt: payload.requestedAt,
+          expiresAt: "2026-08-13T18:05:00.000Z",
+        },
+      },
+    }),
+  };
+}
+
 describe("Freed adapter", () => {
   it("reads authority only through the supported control command", async () => {
     const runner = new RecordingRunner({
@@ -67,28 +143,174 @@ describe("Freed adapter", () => {
     });
   });
 
-  it("refuses worker leases until the task-scoped claim contract exists", async () => {
-    const bridge = new FreedAuthorityBridge(new RecordingRunner(), {
+  it("acquires one exact task-scoped claim through the reviewed broker", async () => {
+    const runner = new HandlerRunner((request) => brokerResponse(request));
+    const bridge = new FreedAuthorityBridge(runner, {
       repositoryRoot: "/repo/freed",
       stateRoot: "/state/freed",
       nodeExecutable: "/node/bin/node",
+      claimBrokerExecutable: "/opt/freed/bin/factory-coordinator",
+      claimBrokerArgs: ["--profile", "freed"],
+    });
+    const admission = await bridge.acquire({
+      binding: binding(),
+      now: "2026-08-13T18:00:00.000Z",
+    });
+    expect(admission).toMatchObject({
+      authorityClaimId: "claim-1234-epoch-1",
+      taskId: "github-issue-1234",
+    });
+    expect(runner.requests).toHaveLength(1);
+    expect(runner.requests[0]).toMatchObject({
+      executable: "/opt/freed/bin/factory-coordinator",
+      cwd: "/repo/freed",
+      env: {},
+    });
+    expect(runner.requests[0]?.args.slice(0, -1)).toEqual([
+      "--profile",
+      "freed",
+      "task",
+      "claim-acquire",
+      "--request-json",
+    ]);
+    const requestJson = runner.requests[0]?.args.at(-1);
+    expect(JSON.parse(requestJson ?? "null")).toMatchObject({
+      schemaVersion: 1,
+      taskId: "github-issue-1234",
+      expectedTaskRevision: 1,
+      claim: {
+        claimId: "claim-1234-epoch-1",
+        publicationCeiling: "draft-pr",
+        accountId: "codex-pro-1",
+        driverId: "codex-app-server-v1",
+      },
+    });
+  });
+
+  it("retries response loss with the identical claim operation", async () => {
+    const runner = new HandlerRunner((request, attempt) => {
+      if (attempt === 1) {
+        throw new Error("broker response lost");
+      }
+      return brokerResponse(request);
+    });
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+      claimBrokerExecutable: "/opt/freed/bin/factory-coordinator",
     });
     await expect(
       bridge.acquire({
+        binding: binding(),
+        now: "2026-08-13T18:00:00.000Z",
+      }),
+    ).resolves.toMatchObject({ authorityClaimId: "claim-1234-epoch-1" });
+    expect(runner.requests).toHaveLength(2);
+    expect(runner.requests[0]).toEqual(runner.requests[1]);
+  });
+
+  it("rejects a broker response for another claim", async () => {
+    const runner = new HandlerRunner((request) => {
+      const response = JSON.parse(brokerResponse(request).stdout) as {
+        result: { authorityClaimId: string; admission: { authorityClaimId: string } };
+      };
+      response.result.authorityClaimId = "claim-substituted";
+      response.result.admission.authorityClaimId = "claim-substituted";
+      return { stdout: JSON.stringify(response), stderr: "" };
+    });
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+      claimBrokerExecutable: "/opt/freed/bin/factory-coordinator",
+    });
+    await expect(
+      bridge.acquire({
+        binding: binding(),
+        now: "2026-08-13T18:00:00.000Z",
+      }),
+    ).rejects.toThrow("does not match the exact dispatch");
+  });
+
+  it("blocks non-pilot authority before invoking the broker", async () => {
+    const runner = new HandlerRunner((request) => brokerResponse(request));
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+      claimBrokerExecutable: "/opt/freed/bin/factory-coordinator",
+    });
+    const candidate = binding();
+    await expect(
+      bridge.acquire({
         binding: {
-          qualification: report(),
-          authorityTask: authorityTask(),
-        claim: claim(),
-        accountId: "codex-pro-1",
-        driverId: "codex-app-server-v1",
-          baseHead: "b".repeat(40),
-          target: "shared",
+          ...candidate,
+          authorityTask: {
+            ...candidate.authorityTask,
+            providerAuthority: "approval-required",
+          },
         },
         now: "2026-08-13T18:00:00.000Z",
       }),
-    ).rejects.toThrow(
-      "Do not overload nightly-writer or provision worker-specific actors",
-    );
+    ).rejects.toThrow("outside the runtime-neutral pilot policy");
+    expect(runner.requests).toHaveLength(0);
+  });
+
+  it("releases only the exact admitted claim and retains one retry identity", async () => {
+    const runner = new HandlerRunner((request, attempt) => {
+      if (attempt === 1) {
+        throw new Error("release response lost");
+      }
+      const payload = JSON.parse(request.args.at(-1) ?? "null") as {
+        operationId: string;
+        taskId: string;
+        expectedTaskRevision: number;
+        authorityClaimId: string;
+        reason: string;
+        releasedAt: string;
+      };
+      return {
+        stderr: "",
+        stdout: JSON.stringify({
+          action: "task.claim-release",
+          result: {
+            schemaVersion: 1,
+            operationId: payload.operationId,
+            taskId: payload.taskId,
+            taskRevision: payload.expectedTaskRevision,
+            authorityClaimId: payload.authorityClaimId,
+            bindingDigest: "a".repeat(64),
+            reason: payload.reason,
+            releasedAt: payload.releasedAt,
+          },
+        }),
+      };
+    });
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+      claimBrokerExecutable: "/opt/freed/bin/factory-coordinator",
+    });
+    await expect(
+      bridge.release({
+        admission: {
+          schemaVersion: 1,
+          bridgeId: "freed-authority-v1",
+          authorityClaimId: "claim-1234-epoch-1",
+          taskId: "github-issue-1234",
+          taskRevision: 1,
+          bindingDigest: "a".repeat(64),
+          authorizedAt: "2026-08-13T18:00:00.000Z",
+          expiresAt: "2026-08-13T18:05:00.000Z",
+        },
+        reason: "worker-completed",
+        now: "2026-08-13T18:04:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    expect(runner.requests).toHaveLength(2);
+    expect(runner.requests[0]).toEqual(runner.requests[1]);
   });
 
   it("creates workspaces only through Freed's helper and fresh origin/dev", async () => {

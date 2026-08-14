@@ -10,6 +10,13 @@ export interface AuthorityInspection {
   readonly reason: string;
 }
 
+export type ExecutionClaimReleaseReason =
+  | "prelaunch-denied"
+  | "worker-completed"
+  | "worker-failed"
+  | "worker-interrupted"
+  | "reconciled-unlaunched";
+
 export interface AuthorityBridge {
   readonly id: string;
   inspect(report: QualificationReport): Promise<AuthorityInspection>;
@@ -17,5 +24,9 @@ export interface AuthorityBridge {
     readonly binding: ExecutionAdmissionBinding;
     readonly now: string;
   }): Promise<ExecutionAdmission>;
-  release(admission: ExecutionAdmission): Promise<void>;
+  release(input: {
+    readonly admission: ExecutionAdmission;
+    readonly reason: ExecutionClaimReleaseReason;
+    readonly now: string;
+  }): Promise<void>;
 }

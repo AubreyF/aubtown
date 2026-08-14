@@ -29,6 +29,8 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Conflicting tasks run concurrently | Qualified path domains and logical locks are compared against every active claim before admission |
 | A GitHub label alone grants Freed execution | Dispatch also requires an exact active Freed task and supported claim-acquire receipt |
 | A worker edits Freed authority files | Worker has no authority credential or canonical state-root access; bridge uses supported commands only |
+| Claim broker returns another task or claim | AubTown compares operation, task revision, claim, custody epoch, binding digest, conflict digest, and bridge identity before publishing an envelope |
+| Claim commits but broker response is lost | One local retry reuses byte-identical canonical JSON and the same operation ID; Freed must return the original idempotent receipt |
 | Coordinator credential reaches Codex | GitHub App token remains host-side and is scrubbed from the child environment |
 | Installation token becomes long-lived | Broker refreshes a mode-restricted short-lived token; workflow contains no literal token |
 | Malicious issue text executes shell | Qualification data is parsed as data; validation uses reviewed no-shell argv; fixed policy remains outside issue prose |

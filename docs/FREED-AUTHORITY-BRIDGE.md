@@ -1,6 +1,6 @@
 # Freed authority bridge
 
-Status: architecture approved, Freed implementation pending
+Status: AubTown broker caller and envelope handoff implemented, Freed commands and actor pending
 
 ## Purpose
 
@@ -31,6 +31,8 @@ The claim records:
 - branch and worktree identity
 - qualified base commit
 - conflict-domain digest
+- execution account and driver IDs
+- qualified target
 - acquired and heartbeat times
 - optional transfer time and checkpoint reference
 - publication ceiling
@@ -49,7 +51,16 @@ Add these operations to `scripts/automation-control.mjs`:
 
 Every mutation includes the task ID, expected task revision, coordinator actor, canonical coordinator lease, operation ID, and exact claim identity. Acquire requires no existing claim. Heartbeat requires the same claim and epoch. Transfer requires an authenticated checkpoint, a compatible destination, and exactly the next epoch. Release requires the exact claim and an allowed terminal reason.
 
-Retries with the same operation ID and byte-equivalent payload are idempotent. A changed retry fails.
+AubTown calls the root-owned broker with one no-shell command:
+
+```text
+/opt/freed/bin/factory-coordinator task claim-acquire --request-json <canonical-json>
+/opt/freed/bin/factory-coordinator task claim-release --request-json <canonical-json>
+```
+
+The acquire request binds the operation ID, task and expected revision, complete AubTown binding digest, issue, claim and custody epoch, host, worker, branch, worktree, conflict domains and digest, base head, account, driver, target, draft-only ceiling, and request time. Release binds the original admission, operation ID, exact claim, binding digest, reason, and release time. The JSON contains no credential or lease token. The broker supplies its pinned state root, actor, and short-lived coordinator lease internally.
+
+Retries with the same operation ID and byte-equivalent payload are idempotent. AubTown performs one exact local retry after command failure using the same argv and operation ID. A changed retry or mismatched broker response fails.
 
 The task transaction and event append remain one recoverable Freed operation. New events are:
 
@@ -70,6 +81,7 @@ Immediately before Symphony launches a worker, the bridge must:
 4. Check quota, host capability, branch, worktree, pull-request, and conflict state.
 5. Acquire or reconcile the exact task claim through the supported command.
 6. Return a redacted receipt that binds task revision, claim ID, custody epoch, host, worker, base commit, conflict digest, and expiry of the admission decision.
+7. Publish one protected per-issue admission envelope, then let the final Symphony boundary recompute quota and atomically record the exact claim before returning success.
 
 Symphony may start work only when the receipt still matches a final prelaunch reread. A receipt is not transferable to another issue, host, branch, account, driver, or base commit.
 
@@ -96,4 +108,4 @@ It exposes no generic shell, file, lease, or task-mutation endpoint. The Mac is 
 
 ## Current implementation gate
 
-`FreedAuthorityBridge.inspect` is implemented and read-only. `acquire` and `release` deliberately fail until the matching Freed commands and coordinator actor exist. No real AubTown writer may be enabled before both sides pass integration tests.
+`FreedAuthorityBridge.inspect`, the broker caller, exact response validation, response-loss retry, exact release, protected envelope publication, and publication-failure release are implemented and tested in AubTown. The adapter remains fail-closed when the reviewed broker path is absent. Freed still needs the matching commands, transaction schema, events, coordinator actor, and installed Linux broker. No real AubTown writer may be enabled before both sides pass integration tests.
