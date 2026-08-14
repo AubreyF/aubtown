@@ -21,6 +21,7 @@ import {
 import { accountUsageSnapshotSchema } from "../../domain/schemas.js";
 import type { AccountUsageSnapshot } from "../../domain/types.js";
 import { decideQuota } from "../../policy/quota.js";
+import { evaluateRuntimeNeutralPilotBinding } from "../../policy/pilot-binding.js";
 import { canonicalJson } from "../../security/canonical-json.js";
 import {
   admitSymphonyPrelaunch,
@@ -31,7 +32,6 @@ import {
 
 const MAX_ENVELOPE_BYTES = 1024 * 1024;
 const MAX_RECEIPT_BYTES = 64 * 1024;
-const CLAIM_MAX_AGE_SECONDS = 120;
 
 export interface SymphonyAdmissionEnvelope {
   readonly schemaVersion: 1;
@@ -119,24 +119,12 @@ function repositoryName(binding: ExecutionAdmissionBinding): string {
   return `${binding.qualification.repository.owner}/${binding.qualification.repository.name}`;
 }
 
-function sameRepository(
-  left: ExecutionAdmissionBinding["qualification"]["repository"],
-  right: ExecutionAdmissionBinding["claim"]["repository"],
-): boolean {
-  return (
-    left.owner === right.owner &&
-    left.name === right.name &&
-    left.defaultBranch === right.defaultBranch
-  );
-}
-
 function exactIssueBinding(binding: ExecutionAdmissionBinding): boolean {
   const issue = binding.qualification.issue;
   return (
     binding.claim.issueNumber === issue.number &&
     binding.authorityTask.githubIssue.number === issue.number &&
-    binding.authorityTask.githubIssue.url === issue.url &&
-    sameRepository(binding.qualification.repository, binding.claim.repository)
+    binding.authorityTask.githubIssue.url === issue.url
   );
 }
 
@@ -213,36 +201,32 @@ export function evaluateSymphonyAdmission(input: {
   const issue = qualification.issue;
   const nowMs = Date.parse(input.now);
   const preparedAtMs = Date.parse(envelope.preparedAt);
-  const claimedAtMs = Date.parse(binding.claim.claimedAt);
   if (
     !Number.isFinite(nowMs) ||
     !Number.isFinite(preparedAtMs) ||
-    !Number.isFinite(claimedAtMs) ||
-    preparedAtMs > nowMs ||
-    claimedAtMs > nowMs ||
-    nowMs - claimedAtMs > CLAIM_MAX_AGE_SECONDS * 1_000
+    preparedAtMs > nowMs
   ) {
+    return denySymphonyPrelaunch(input.request, "admission-envelope-time-invalid");
+  }
+  const pilotBindingDecision = evaluateRuntimeNeutralPilotBinding({
+    binding,
+    now: input.now,
+  });
+  if (pilotBindingDecision === "time-invalid") {
     return denySymphonyPrelaunch(input.request, "admission-envelope-time-invalid");
   }
   if (
     input.request.issueId !== issue.number.toLocaleString("en-US", { useGrouping: false }) ||
     input.request.workerHost !== envelope.selectedHost.id ||
     binding.claim.hostId !== envelope.selectedHost.id ||
-    !exactIssueBinding(binding)
+    !exactIssueBinding(binding) ||
+    pilotBindingDecision === "binding-mismatch" ||
+    pilotBindingDecision === "conflict-mismatch"
   ) {
     return denySymphonyPrelaunch(input.request, "admission-binding-mismatch");
   }
   if (
-    issue.state !== "open" ||
-    !issue.labels.includes("debt") ||
-    !issue.labels.includes("factory:ready") ||
-    !qualification.eligible ||
-    qualification.workLane !== "runtime-neutral" ||
-    qualification.evidence.behavioral !== false ||
-    binding.authorityTask.behavioral ||
-    binding.authorityTask.state !== "approved_for_pr" ||
-    !["pr-only", "merge-safe"].includes(binding.authorityTask.executionAuthority) ||
-    binding.authorityTask.providerAuthority !== "forbidden"
+    pilotBindingDecision !== "eligible"
   ) {
     return denySymphonyPrelaunch(input.request, "pilot-policy-blocked");
   }

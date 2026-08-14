@@ -45,6 +45,14 @@ No service resolves a security-sensitive executable from an interactive shell co
 
 The Symphony service sets `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, `AUBTOWN_PRELAUNCH_ENVELOPE_ROOT`, and `AUBTOWN_PRELAUNCH_RECEIPT_ROOT` to those absolute admission directories. It also receives absolute reviewed paths for the Freed checkout, canonical state root, pinned Node executable, and claim broker. The coordinator may read candidates and envelopes and create receipts. Workers receive none of these paths. A candidate cannot grant authority. Missing, unsafe, or mismatched paths keep the writer closed.
 
+The trusted read-only reconciler publishes a candidate with the native command below after it has assembled one current qualified route in a mode-0600 JSON file:
+
+```sh
+/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/publish-symphony-candidate.js /var/lib/aubtown/reconciler/candidate-input.json
+```
+
+The command reads `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, rejects a symbolic, group-writable, world-writable, oversized, stale, ineligible, route-mismatched, or quota-blocked input, and writes no authority receipt. The source input is transient reconciler state and must be replaced atomically before invocation. The current repository ships this command, but the live reconciler invocation remains disabled until the Freed claim side is installed.
+
 ## GitHub authentication
 
 The Coordinator GitHub App reads issues and manages approved lifecycle labels and one status comment. The Draft Publisher App receives repository-scoped contents and pull-request access only for an admitted exact-head plan.
@@ -91,7 +99,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
 9. Install the Symphony workflow and SSH configuration.
-10. Run the read-only upstream, host, quota, issue, task, branch, and workspace checks, then publish one protected non-authoritative candidate.
+10. Run the read-only upstream, host, quota, issue, task, branch, and workspace checks, then invoke the native publisher for one protected non-authoritative candidate.
 11. Run the fake worker, exact-claim restart, concurrent prelaunch, rolling-week, daily ceiling, and Mac-offline Linux routing proofs.
 12. Keep the writer disabled until the Freed task-claim integration test passes.
 

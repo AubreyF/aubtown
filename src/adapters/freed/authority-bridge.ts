@@ -19,6 +19,7 @@ import {
   executionAdmissionSchema,
 } from "../execution-admission.js";
 import { canonicalJson } from "../../security/canonical-json.js";
+import { assertRuntimeNeutralPilotBinding } from "../../policy/pilot-binding.js";
 
 const freedTaskSchema = z.object({
   taskId: z.string(),
@@ -65,8 +66,6 @@ const releaseReasonSchema = z.enum([
   "worker-interrupted",
   "reconciled-unlaunched",
 ]);
-const CLAIM_MAX_AGE_SECONDS = 120;
-
 const releaseOutputSchema = z.object({
   action: z.literal("task.claim-release"),
   result: z.object({
@@ -119,52 +118,6 @@ function conflictDomainDigest(binding: ExecutionAdmissionBinding): string {
     .digest("hex");
 }
 
-function normalizedConflictDomains(domains: readonly string[]): readonly string[] {
-  return [...new Set(domains)].sort((left, right) => left.localeCompare(right));
-}
-
-function assertPilotBinding(binding: ExecutionAdmissionBinding, now: string): void {
-  const issue = binding.qualification.issue;
-  const task = binding.authorityTask;
-  const qualificationDomains = normalizedConflictDomains(
-    binding.qualification.conflictDomains,
-  );
-  const claimDomains = normalizedConflictDomains(binding.claim.conflictDomains);
-  const nowMs = Date.parse(now);
-  const claimedAtMs = Date.parse(binding.claim.claimedAt);
-  const repositoriesMatch =
-    binding.qualification.repository.owner === binding.claim.repository.owner &&
-    binding.qualification.repository.name === binding.claim.repository.name &&
-    binding.qualification.repository.defaultBranch ===
-      binding.claim.repository.defaultBranch;
-  if (
-    !Number.isFinite(nowMs) ||
-    !Number.isFinite(claimedAtMs) ||
-    claimedAtMs > nowMs ||
-    nowMs - claimedAtMs > CLAIM_MAX_AGE_SECONDS * 1_000 ||
-    issue.state !== "open" ||
-    !issue.labels.includes("debt") ||
-    !issue.labels.includes("factory:ready") ||
-    !binding.qualification.eligible ||
-    binding.qualification.workLane !== "runtime-neutral" ||
-    binding.qualification.evidence.behavioral !== false ||
-    task.behavioral ||
-    task.state !== "approved_for_pr" ||
-    !["pr-only", "merge-safe"].includes(task.executionAuthority) ||
-    task.providerAuthority !== "forbidden" ||
-    task.githubIssue.number !== issue.number ||
-    task.githubIssue.url !== issue.url ||
-    binding.claim.issueNumber !== issue.number ||
-    !repositoriesMatch ||
-    claimDomains.length === 0 ||
-    !Buffer.from(canonicalJson(qualificationDomains)).equals(
-      canonicalJson(claimDomains),
-    )
-  ) {
-    throw new Error("Freed claim acquisition is outside the runtime-neutral pilot policy.");
-  }
-}
-
 export class FreedAuthorityBridge implements AuthorityBridge {
   readonly id = "freed-authority-v1";
 
@@ -207,7 +160,7 @@ export class FreedAuthorityBridge implements AuthorityBridge {
     },
   ): Promise<ExecutionAdmission> {
     const binding = executionAdmissionBindingSchema.parse(input.binding);
-    assertPilotBinding(binding, input.now);
+    assertRuntimeNeutralPilotBinding({ binding, now: input.now });
     const broker = this.#brokerExecutable();
     const operationId = randomUUID();
     const bindingDigest = createExecutionAdmissionDigest(binding);

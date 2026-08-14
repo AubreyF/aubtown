@@ -166,7 +166,7 @@ describe("Symphony final admission envelope", () => {
     const resolved = await new SymphonyAdmissionPreparer(
       authority,
       new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
-    ).resolve({ candidate: candidate(), currentEnvelope: current });
+    ).resolve({ candidate: candidate(), currentEnvelope: current, now });
     expect(resolved).toEqual(current);
     expect(acquisitions).toBe(0);
     expect(
@@ -198,12 +198,38 @@ describe("Symphony final admission envelope", () => {
     ).resolve({
       candidate: candidate({ claimId: "claim-1234-epoch-2" }),
       currentEnvelope: current,
+      now,
     });
     expect(resolved.admission.authorityClaimId).toBe("claim-1234-epoch-2");
     expect(acquisitions).toBe(1);
     await expect(
       loadSymphonyAdmissionEnvelope(envelopeRoot, "1234"),
     ).resolves.toEqual(resolved);
+  });
+
+  it("rejects a stale candidate before invoking the authority broker", async () => {
+    const root = await temporaryRoot("aubtown-envelope-stale-");
+    let acquisitions = 0;
+    const current = envelope();
+    const authority: AuthorityBridge = {
+      id: "freed-authority-v1",
+      inspect: async () => ({ active: true, reason: "test" }),
+      acquire: async () => {
+        acquisitions += 1;
+        return current.admission;
+      },
+      release: async () => {},
+    };
+    await expect(
+      new SymphonyAdmissionPreparer(
+        authority,
+        new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
+      ).resolve({
+        candidate: candidate(),
+        now: "2026-08-13T18:03:00.001Z",
+      }),
+    ).rejects.toThrow("time-invalid");
+    expect(acquisitions).toBe(0);
   });
 
   it("publishes a protected envelope only after acquiring exact authority", async () => {

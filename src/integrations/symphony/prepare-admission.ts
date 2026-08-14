@@ -10,6 +10,7 @@ import {
   type SymphonyAdmissionEnvelope,
 } from "./admission-envelope.js";
 import { canonicalJson } from "../../security/canonical-json.js";
+import { prepareSymphonyAdmissionCandidate } from "./admission-candidate.js";
 
 export function symphonyEnvelopeMatchesCandidate(input: {
   readonly envelope: SymphonyAdmissionEnvelope;
@@ -42,6 +43,7 @@ export class SymphonyAdmissionPreparer {
     };
     readonly usage: AccountUsageSnapshot;
     readonly now: string;
+    readonly preparedAt?: string;
   }): Promise<SymphonyAdmissionEnvelope> {
     const usage = accountUsageSnapshotSchema.parse(input.usage);
     if (
@@ -61,7 +63,7 @@ export class SymphonyAdmissionPreparer {
     try {
       const envelope = symphonyAdmissionEnvelopeSchema.parse({
         schemaVersion: 1,
-        preparedAt: input.now,
+        preparedAt: input.preparedAt ?? input.now,
         selectedHost: input.selectedHost,
         usage,
         binding: input.binding,
@@ -89,8 +91,12 @@ export class SymphonyAdmissionPreparer {
   async resolve(input: {
     readonly candidate: SymphonyAdmissionCandidate;
     readonly currentEnvelope?: SymphonyAdmissionEnvelope;
+    readonly now: string;
   }): Promise<SymphonyAdmissionEnvelope> {
-    const candidate = symphonyAdmissionCandidateSchema.parse(input.candidate);
+    const candidate = prepareSymphonyAdmissionCandidate(
+      input.candidate,
+      input.now,
+    );
     if (
       input.currentEnvelope !== undefined &&
       symphonyEnvelopeMatchesCandidate({
@@ -104,7 +110,8 @@ export class SymphonyAdmissionPreparer {
       binding: candidate.binding,
       selectedHost: candidate.selectedHost,
       usage: candidate.usage,
-      now: candidate.preparedAt,
+      now: input.now,
+      preparedAt: candidate.preparedAt,
     });
   }
 }

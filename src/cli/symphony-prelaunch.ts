@@ -47,7 +47,7 @@ async function optionalCurrentEnvelope(
   }
 }
 
-async function resolveEnvelope(): Promise<SymphonyAdmissionEnvelope> {
+async function resolveEnvelope(now: string): Promise<SymphonyAdmissionEnvelope> {
   if (envelopeRoot === undefined) {
     throw new Error("AUBTOWN_PRELAUNCH_ENVELOPE_ROOT is missing.");
   }
@@ -85,6 +85,7 @@ async function resolveEnvelope(): Promise<SymphonyAdmissionEnvelope> {
     new SymphonyAdmissionEnvelopeStore(envelopeRoot),
   ).resolve({
     candidate,
+    now,
     ...(currentEnvelope === undefined ? {} : { currentEnvelope }),
   });
 }
@@ -102,12 +103,13 @@ if (
   );
 } else {
   try {
-    const envelope = await resolveEnvelope();
+    const now = new Date().toISOString();
+    const envelope = await resolveEnvelope(now);
     response = await authorizeSymphonyPrelaunch({
       request,
       envelope,
       receiptStore: new SymphonyPrelaunchReceiptStore(receiptRoot),
-      now: new Date().toISOString(),
+      now,
     });
   } catch {
     response = denySymphonyPrelaunch(request, "prelaunch-state-invalid");

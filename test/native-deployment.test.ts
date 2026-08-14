@@ -43,6 +43,17 @@ describe("native Linux deployment", () => {
     expect(service).not.toMatch(/docker|compose|restate/iu);
   });
 
+  it("ships a native non-authoritative admission candidate publisher", async () => {
+    const packageJson = await fixture("package.json");
+    const publisher = await fixture(
+      "src/cli/publish-symphony-candidate.ts",
+    );
+    expect(packageJson).toContain('"symphony:publish-candidate"');
+    expect(publisher).toContain("AUBTOWN_PRELAUNCH_CANDIDATE_ROOT");
+    expect(publisher).toContain("publishSymphonyAdmissionCandidateFile");
+    expect(publisher).not.toContain("FreedAuthorityBridge");
+  });
+
   it("keeps coordinator and checkpoint credentials under distinct users", async () => {
     const symphony = await fixture("deploy/systemd/aubtown-symphony.service");
     const checkpoint = await fixture(
