@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "name": "AubTown Coordinator",
+  "description": "Coordinates the AubTown issue lifecycle without source publication authority.",
+  "homepageUrl": "https://github.com/AubreyF/aubtown",
   "repositorySelection": "selected",
   "permissions": {
     "metadata": "read",
@@ -18,5 +20,7 @@
     "check_run",
     "check_suite"
   ],
-  "public": false
+  "public": false,
+  "webhookActive": false,
+  "requestOauthOnInstall": false
 }

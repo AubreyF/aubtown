@@ -2,6 +2,19 @@
 
 AubTown uses two private GitHub Apps installed only on selected repositories. Splitting them prevents routine queue observation from inheriting source publication authority.
 
+## Registration handoff
+
+Generate the exact private registration URLs without changing GitHub:
+
+```sh
+npm run github-app:registration -- coordinator
+npm run github-app:registration -- draft-publisher
+```
+
+Each command validates its checked-in policy, converts permission names to GitHub's registration parameters, disables webhooks and user OAuth, and prints a deterministic policy digest. Use the returned URL only after owner approval. After registration, install each App with `Only select repositories` and select `freed-project/freed` for the pilot. Repository selection occurs during installation, not registration.
+
+Generate one Coordinator private key for the Linux control host. Generate a separate Draft Publisher private key for each enrolled custody host so one host key can be revoked without copying authentication state from another host. Record the App ID, installation ID, App slug, bot login, selected repository, and registration digest outside the repository. Private keys never enter Git, issue state, checkpoints, logs, or worker environments.
+
 ## Coordinator
 
 The Coordinator App reads issues, repository contents, pull requests, checks, and Actions state. In Phase 2 it may apply lifecycle labels and update one machine-managed issue comment. It cannot push source, create branches, or open pull requests.
@@ -14,6 +27,8 @@ Permissions:
 - Pull requests: read
 - Checks: read
 - Actions: read
+
+GitHub's Issues write permission also covers broader issue mutation. GitHub does not expose a narrower label-and-one-comment permission. AubTown therefore mints a write token only behind the explicit lifecycle projection gate and keeps the default scheduler token read-only.
 
 Phase 1 uses polling and performs no writes. Webhook events remain disabled until a signed public ingress or private relay is approved.
 
@@ -28,6 +43,8 @@ Permissions:
 - Pull requests: write
 
 If a future task must modify `.github/workflows`, that class requires a separate approval before adding GitHub's Workflows permission. The initial App deliberately lacks it.
+
+GitHub's Contents write permission is also broader than draft-branch publication. AubTown narrows it with the admitted publication plan, repository-scoped token, root-owned forced-command gateway, exact worktree and head checks, force-with-lease, and branch protection that grants neither App bypass authority. Do not add administration, deployments, environments, secrets, workflows, or Actions write permission.
 
 ## Credential handling
 

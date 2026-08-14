@@ -16,6 +16,7 @@
     "check:symphony": "node scripts/check-symphony-upstream.mjs",
     "check:symphony:upstream": "node scripts/check-symphony-upstream.mjs --network",
     "github:refresh-token": "tsx src/cli/refresh-github-token.ts",
+    "github-app:registration": "tsx src/cli/render-github-app-registration.ts",
     "symphony:active-guard": "tsx src/cli/symphony-active-run-guard.ts",
     "symphony:prelaunch": "tsx src/cli/symphony-prelaunch.ts",
     "symphony:prepare-workspace": "tsx src/cli/prepare-symphony-workspace.ts",

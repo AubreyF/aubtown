@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "name": "AubTown Draft Publisher",
+  "description": "Publishes only admitted AubTown draft pull requests from custody hosts.",
+  "homepageUrl": "https://github.com/AubreyF/aubtown",
   "repositorySelection": "selected",
   "permissions": {
     "metadata": "read",
@@ -9,6 +11,8 @@
   },
   "events": [],
   "public": false,
+  "webhookActive": false,
+  "requestOauthOnInstall": false,
   "publicationCeiling": "draft-pr",
   "workflowFilesAllowed": false
 }
