@@ -54,6 +54,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Materialize the exact checkpoint-backed work product durably as part of accepting a successful terminal executor receipt.
 - [x] Accept validation and independent-review receipts only through the signed current-custody host edge and advance the durable handoff to ready.
 - [x] Dispatch immutable, quota-gated adjudication plans through the signed host edge without executing issue prose.
+- [x] Persist host validation and fresh-review progress so crashes cannot silently duplicate commands or subscription turns.
 - [x] Execute reviewed no-shell validation recipes and prove complete Git state is unchanged after every command.
 - [x] Run structured independent review in a fresh read-only, network-disabled Codex thread.
 - [x] Persist one immutable checkpoint-keyed validation and review handoff through Restate.

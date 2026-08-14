@@ -31,6 +31,10 @@
     <string>/usr/bin/git</string>
     <key>FREEDWORKS_EXECUTION_JOURNAL_FILE</key>
     <string>/Users/freedworks/Library/Application Support/Freedworks/state/execution.json</string>
+    <key>FREEDWORKS_ADJUDICATION_JOURNAL_FILE</key>
+    <string>/Users/freedworks/Library/Application Support/Freedworks/state/adjudication.json</string>
+    <key>FREEDWORKS_VALIDATION_PATH</key>
+    <string>/opt/freedworks/node/bin:/usr/bin:/bin</string>
     <key>FREEDWORKS_CHECKPOINT_EDGE_URL</key>
     <string>https://replace-private-linux-checkpoint-edge</string>
     <key>FREEDWORKS_CHECKPOINT_KEY_FILE</key>

@@ -20,6 +20,13 @@ import { HostRestoreSupervisor } from "./execution/restore-supervisor.js";
 import { FreedWorkspaceManager } from "./execution/workspace-manager.js";
 import { HostWorkspaceSupervisor } from "./execution/workspace-supervisor.js";
 import { GitExecutionCandidateFinalizer } from "./execution/candidate-finalizer.js";
+import {
+  ExactValidationRunner,
+  GitWorkProductStateInspector,
+} from "./adjudication/validation-runner.js";
+import { CodexIndependentReviewer } from "./adjudication/codex-reviewer.js";
+import { HostAdjudicationJournal } from "./adjudication/journal.js";
+import { HostAdjudicationSupervisor } from "./adjudication/supervisor.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -33,6 +40,16 @@ function requiredAbsoluteEnvironment(name: string): string {
   const value = requiredEnvironment(name);
   if (!value.startsWith("/")) {
     throw new Error(`${name} must be an absolute path.`);
+  }
+  return value;
+}
+
+function validationPath(): string {
+  const value = requiredEnvironment("FREEDWORKS_VALIDATION_PATH");
+  if (value.split(":").some((entry) => !entry.startsWith("/"))) {
+    throw new Error(
+      "FREEDWORKS_VALIDATION_PATH must contain only absolute directories.",
+    );
   }
   return value;
 }
@@ -158,6 +175,19 @@ const execution = new HostExecutionSupervisor(
   candidateFinalizer,
 );
 await execution.recover();
+const adjudication = new HostAdjudicationSupervisor(
+  accountId,
+  new ExactValidationRunner(
+    new GitWorkProductStateInspector(custodyService),
+  ),
+  new CodexIndependentReviewer(client, { model, effort }),
+  new HostAdjudicationJournal(
+    requiredEnvironment("FREEDWORKS_ADJUDICATION_JOURNAL_FILE"),
+  ),
+  governor,
+  { PATH: validationPath(), CI: "true" },
+  (event) => process.stdout.write(`${JSON.stringify(event)}\n`),
+);
 
 let stopped = false;
 let timer: NodeJS.Timeout | undefined;
@@ -192,6 +222,7 @@ async function stop(signal: string): Promise<void> {
     timer = undefined;
   }
   try {
+    await adjudication.shutdown();
     await execution.shutdown();
     await client.close();
     process.exitCode = 0;
@@ -215,6 +246,7 @@ async function stop(signal: string): Promise<void> {
 async function sample(): Promise<void> {
   try {
     await execution.flush();
+    await adjudication.flush();
   } catch (error) {
     process.stderr.write(
       `${JSON.stringify({
@@ -224,9 +256,13 @@ async function sample(): Promise<void> {
     );
   }
   try {
+    const activeClaims = new Set([
+      ...(await execution.activeClaimIds()),
+      ...(await adjudication.activeClaimIds()),
+    ]);
     const heartbeat = await governor.heartbeat({
       lane: hostLane,
-      activeClaims: await execution.activeClaimIds(),
+      activeClaims: [...activeClaims].sort(),
       accountIds: [accountId],
     });
     process.stdout.write(`${JSON.stringify({ event: "host-heartbeat", ...heartbeat })}\n`);
@@ -250,9 +286,25 @@ async function sample(): Promise<void> {
     process.stdout.write(
       `${JSON.stringify({ event: "custody-restore-reconciled", status: restoreStatus })}\n`,
     );
+    let adjudicationStatus = "not-polled";
+    try {
+      adjudicationStatus = await adjudication.reconcile();
+      process.stdout.write(
+        `${JSON.stringify({ event: "adjudication-reconciled", status: adjudicationStatus })}\n`,
+      );
+    } catch (error) {
+      process.stderr.write(
+        `${JSON.stringify({
+          event: "adjudication-reconcile-failed",
+          message: error instanceof Error ? error.message : String(error),
+        })}\n`,
+      );
+    }
+    const adjudicationClaims = await adjudication.activeClaimIds();
     if (
-      receipt.decision.action === "admit" ||
-      receipt.decision.action === "throttle"
+      (receipt.decision.action === "admit" ||
+        receipt.decision.action === "throttle") &&
+        adjudicationClaims.length === 0
     ) {
       const poll = await governor.pollExecutor(accountId);
       process.stdout.write(
