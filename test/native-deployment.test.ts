@@ -117,6 +117,24 @@ describe("native Linux deployment", () => {
     expect(`${service}\n${timer}`).not.toMatch(/docker|compose|restate/iu);
   });
 
+  it("ships a fail-closed native pilot readiness audit", async () => {
+    const service = await fixture(
+      "deploy/systemd/aubtown-pilot-readiness.service",
+    );
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    const packageJson = await fixture("package.json");
+    expect(service).toContain("Type=oneshot");
+    expect(service).toContain("dist/cli/audit-pilot-readiness.js");
+    expect(service).toContain("Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service");
+    expect(service).toContain("ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed /var/lib/freed/automation");
+    expect(service).toContain("ReadWritePaths=/var/lib/aubtown/coordinator");
+    expect(environment).toContain("AUBTOWN_PILOT_READINESS_FILE=");
+    expect(environment).toContain("AUBTOWN_SYMPHONY_LOCK_FILE=");
+    expect(environment).toContain("AUBTOWN_SYMPHONY_EXECUTABLE=");
+    expect(packageJson).toContain('"pilot:audit"');
+    expect(`${service}\n${environment}`).not.toMatch(/docker|compose|restate/iu);
+  });
+
   it("ships a native non-authoritative admission candidate publisher", async () => {
     const packageJson = await fixture("package.json");
     const publisher = await fixture(

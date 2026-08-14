@@ -18,6 +18,7 @@
     "symphony:publish-candidate": "tsx src/cli/publish-symphony-candidate.ts",
     "symphony:reconcile-candidate": "tsx src/cli/reconcile-symphony-candidate.ts",
     "host:monitor": "tsx src/host-monitor.ts",
+    "pilot:audit": "tsx src/cli/audit-pilot-readiness.ts",
     "planning:collect": "tsx src/cli/collect-planning-snapshot.ts",
     "shadow": "tsx src/cli/shadow.ts",
     "shadow:github": "tsx src/cli/shadow-github.ts",

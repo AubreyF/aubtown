@@ -52,6 +52,8 @@ The native AubTown candidate publisher accepts that candidate as one protected p
 
 The AubTown bridge caller constructs the exact canonical claim request, invokes one absolute reviewed broker without a shell or inherited credentials, verifies every returned identity, and retries one lost local response with the same operation ID. It publishes the envelope only after successful claim acquisition. If envelope publication fails, it requests release of that exact claim. The prelaunch hook resolves candidates through this bridge and reuses only byte-equivalent dispatch state. The Freed command and installed broker remain pending, so this code cannot yet grant live authority.
 
+The native pilot audit is the final read-only proof before launch. It binds the installed Symphony commit and patch digests, reviewed workflow, compiled policy hooks, Freed broker, fresh planning snapshot, ready dispatch, repository, issue, task, and intended claim into one protected report. It does not grant authority. A missing broker, stale snapshot, blocked dispatch, changed patch, unsafe mode, or identity substitution produces a named blocker and a nonzero exit.
+
 The remaining integration work is:
 
 - connect the admission command to Freed's task-scoped claim operations

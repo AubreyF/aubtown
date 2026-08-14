@@ -1,0 +1,394 @@
+import { createHash } from "node:crypto";
+import { lstat, readFile, realpath } from "node:fs/promises";
+import path from "node:path";
+import { z } from "zod";
+import { parseExecutionAccountProfiles } from "../config/account-profiles.js";
+import { loadHostWorkspaceRoots } from "../config/host-workspaces.js";
+import { buildStableDispatchIntention } from "../orchestration/dispatch-intention.js";
+import type { LivePlanningSnapshot } from "../orchestration/live-planning-snapshot.js";
+import { canonicalJson } from "../security/canonical-json.js";
+import { parseHostEnrollments } from "../security/host-enrollment.js";
+import { loadProtectedJsonFile } from "../security/protected-json.js";
+
+const digestPattern = /^[0-9a-f]{64}$/u;
+const commitPattern = /^[0-9a-f]{40}$/u;
+const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
+
+export interface PilotReadinessCheck {
+  readonly id: string;
+  readonly passed: boolean;
+  readonly evidence: string;
+}
+
+export interface PilotReadinessReport {
+  readonly schemaVersion: 1;
+  readonly auditedAt: string;
+  readonly repository: string;
+  readonly issueNumber: number;
+  readonly ready: boolean;
+  readonly checks: readonly PilotReadinessCheck[];
+  readonly blockers: readonly string[];
+}
+
+export interface PilotReadinessPaths {
+  readonly releaseRoot: string;
+  readonly symphonyLockFile: string;
+  readonly symphonyExecutable: string;
+  readonly workflowFile: string;
+  readonly claimBrokerExecutable: string;
+  readonly planningSnapshotFile: string;
+  readonly dispatchIntentionFile: string;
+  readonly hostEnrollmentsFile: string;
+  readonly accountProfilesFile: string;
+  readonly hostWorkspaceRootsFile: string;
+}
+
+const repositorySchema = z.object({
+  owner: z.string().min(1),
+  name: z.string().min(1),
+  defaultBranch: z.string().min(1),
+});
+
+const planningSchema = z.object({
+  schemaVersion: z.literal(1),
+  generatedAt: z.iso.datetime(),
+  repository: repositorySchema,
+  issueNumber: z.number().int().positive(),
+  planningSafe: z.boolean(),
+  blockers: z.array(z.string().min(1)),
+});
+
+const dispatchSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("blocked"),
+    blockers: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({
+    status: z.literal("ready"),
+    intention: z.object({
+      schemaVersion: z.literal(1),
+      intentionId: z.string().regex(/^dispatch-[0-9a-f]{64}$/u),
+      sourceDigest: z.string().regex(digestPattern),
+      plannedAt: z.iso.datetime(),
+      candidateInput: z.object({
+        qualification: z.object({
+          repository: repositorySchema,
+          issue: z.object({ number: z.number().int().positive(), url: z.url() }),
+          eligible: z.literal(true),
+        }),
+        authorityTask: z.object({
+          githubIssue: z.object({ number: z.number().int().positive(), url: z.url() }),
+        }),
+        intendedClaim: z.object({
+          repository: repositorySchema,
+          issueNumber: z.number().int().positive(),
+          claimId: z.string().min(1),
+          hostId: z.string().min(1),
+          worktree: z.string().min(1),
+          branch: z.string().min(1),
+        }),
+        now: z.iso.datetime(),
+      }),
+    }),
+  }),
+]);
+
+const lockSchema = z.object({
+  schemaVersion: z.literal(1),
+  repository: z.literal("https://github.com/openai/symphony.git"),
+  production: z.object({
+    commit: z.string().regex(commitPattern),
+    sourceSha256: z.string().regex(digestPattern),
+  }),
+  patches: z.array(
+    z.object({
+      path: z.string().regex(/^upstream\/patches\/[A-Za-z0-9._-]+\.patch$/u),
+      sha256: z.string().regex(digestPattern),
+      verifiedAgainst: z.string().regex(commitPattern),
+    }),
+  ).min(1),
+  reviewedCapabilities: z.array(z.string().min(1)),
+  knownGaps: z.array(z.string().min(1)),
+});
+
+function repositoryName(value: z.infer<typeof repositorySchema>): string {
+  return `${value.owner}/${value.name}`;
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function physicalFile(input: {
+  readonly file: string;
+  readonly label: string;
+  readonly executable: boolean;
+  readonly maxBytes: number;
+}): Promise<string> {
+  if (!path.isAbsolute(input.file) || (await realpath(input.file)) !== input.file) {
+    throw new Error(`${input.label} is not one absolute physical file.`);
+  }
+  const stats = await lstat(input.file);
+  if (
+    !stats.isFile() ||
+    stats.isSymbolicLink() ||
+    stats.size < 1 ||
+    stats.size > input.maxBytes ||
+    (stats.mode & 0o022) !== 0 ||
+    (input.executable && (stats.mode & 0o111) === 0)
+  ) {
+    throw new Error(`${input.label} has unsafe type, mode, size, or executability.`);
+  }
+  return input.file;
+}
+
+function check(
+  id: string,
+  operation: () => string | Promise<string>,
+): Promise<PilotReadinessCheck> {
+  return Promise.resolve()
+    .then(operation)
+    .then(
+      (evidence) => ({ id, passed: true, evidence }),
+      (error: unknown) => ({
+        id,
+        passed: false,
+        evidence: error instanceof Error ? error.message : String(error),
+      }),
+    );
+}
+
+function assertFresh(timestamp: string, now: string, maxAgeSeconds: number): void {
+  const ageSeconds = (Date.parse(now) - Date.parse(timestamp)) / 1_000;
+  if (
+    !Number.isFinite(ageSeconds) ||
+    ageSeconds < 0 ||
+    ageSeconds > maxAgeSeconds
+  ) {
+    throw new Error(`Evidence is outside the ${maxAgeSeconds.toLocaleString()} second freshness window.`);
+  }
+}
+
+export async function auditPilotReadiness(input: {
+  readonly repository: string;
+  readonly issueNumber: number;
+  readonly auditedAt: string;
+  readonly paths: PilotReadinessPaths;
+}): Promise<PilotReadinessReport> {
+  if (
+    !repositoryPattern.test(input.repository) ||
+    !Number.isSafeInteger(input.issueNumber) ||
+    input.issueNumber < 1 ||
+    !Number.isFinite(Date.parse(input.auditedAt))
+  ) {
+    throw new Error("Pilot readiness identity or audit timestamp is invalid.");
+  }
+  for (const [name, value] of Object.entries(input.paths)) {
+    if (!path.isAbsolute(value)) {
+      throw new Error(`Pilot readiness path ${name} must be absolute.`);
+    }
+  }
+
+  let lock: z.infer<typeof lockSchema> | undefined;
+  let planning: z.infer<typeof planningSchema> | undefined;
+  let dispatch: z.infer<typeof dispatchSchema> | undefined;
+  let planningSource: unknown;
+  let dispatchSource: unknown;
+
+  const checks = await Promise.all([
+    check("runtime:symphony-lock", async () => {
+      await physicalFile({
+        file: input.paths.symphonyLockFile,
+        label: "Symphony lock",
+        executable: false,
+        maxBytes: 1024 * 1024,
+      });
+      lock = lockSchema.parse(
+        JSON.parse(await readFile(input.paths.symphonyLockFile, "utf8")),
+      );
+      return `production:${lock.production.commit}`;
+    }),
+    check("runtime:workflow", async () => {
+      await physicalFile({
+        file: input.paths.workflowFile,
+        label: "Symphony workflow",
+        executable: false,
+        maxBytes: 1024 * 1024,
+      });
+      const workflow = await readFile(input.paths.workflowFile, "utf8");
+      for (const required of [
+        "kind: github",
+        "factory:ready",
+        "symphony-prelaunch.js",
+        "symphony-active-run-guard.js",
+        "max_concurrent_agents: 1",
+      ]) {
+        if (!workflow.includes(required)) {
+          throw new Error(`Symphony workflow lacks ${required}.`);
+        }
+      }
+      return "reviewed admission, active guard, and concurrency contract present";
+    }),
+    check("runtime:planning-snapshot", async () => {
+      planningSource = await loadProtectedJsonFile({
+          file: input.paths.planningSnapshotFile,
+          label: "Pilot planning snapshot",
+          maxBytes: 8 * 1024 * 1024,
+        });
+      planning = planningSchema.parse(planningSource);
+      assertFresh(planning.generatedAt, input.auditedAt, 90);
+      if (
+        repositoryName(planning.repository) !== input.repository ||
+        planning.issueNumber !== input.issueNumber
+      ) {
+        throw new Error("Planning snapshot binds another repository or issue.");
+      }
+      if (!planning.planningSafe || planning.blockers.length > 0) {
+        throw new Error(`Planning remains blocked: ${planning.blockers.join(", ") || "unsafe"}.`);
+      }
+      return `fresh planning evidence for issue ${input.issueNumber.toLocaleString()}`;
+    }),
+    check("runtime:dispatch-intention", async () => {
+      dispatchSource = await loadProtectedJsonFile({
+          file: input.paths.dispatchIntentionFile,
+          label: "Pilot dispatch intention",
+          maxBytes: 8 * 1024 * 1024,
+        });
+      dispatch = dispatchSchema.parse(dispatchSource);
+      if (dispatch.status !== "ready") {
+        throw new Error(`Dispatch remains blocked: ${dispatch.blockers.join(", ")}.`);
+      }
+      return dispatch.intention.intentionId;
+    }),
+    check("runtime:symphony-executable", async () =>
+      await physicalFile({
+        file: input.paths.symphonyExecutable,
+        label: "Pinned Symphony executable",
+        executable: true,
+        maxBytes: 512 * 1024 * 1024,
+      }),
+    ),
+    check("runtime:prelaunch-executable", async () =>
+      await physicalFile({
+        file: path.join(input.paths.releaseRoot, "dist/cli/symphony-prelaunch.js"),
+        label: "AubTown prelaunch executable",
+        executable: false,
+        maxBytes: 2 * 1024 * 1024,
+      }),
+    ),
+    check("runtime:active-guard-executable", async () =>
+      await physicalFile({
+        file: path.join(input.paths.releaseRoot, "dist/cli/symphony-active-run-guard.js"),
+        label: "AubTown active guard executable",
+        executable: false,
+        maxBytes: 2 * 1024 * 1024,
+      }),
+    ),
+    check("authority:claim-broker", async () =>
+      await physicalFile({
+        file: input.paths.claimBrokerExecutable,
+        label: "Freed claim broker",
+        executable: true,
+        maxBytes: 64 * 1024 * 1024,
+      }),
+    ),
+  ]);
+
+  checks.push(
+    await check("runtime:pin-and-patch-integrity", async () => {
+      if (lock === undefined) {
+        throw new Error("Symphony lock did not validate.");
+      }
+      if (path.basename(path.dirname(input.paths.symphonyExecutable)) !== lock.production.commit) {
+        throw new Error("Symphony executable path does not bind the production commit.");
+      }
+      for (const patch of lock.patches) {
+        if (patch.verifiedAgainst !== lock.production.commit) {
+          throw new Error(`Patch ${patch.path} targets another Symphony commit.`);
+        }
+        const patchFile = path.join(input.paths.releaseRoot, patch.path);
+        await physicalFile({
+          file: patchFile,
+          label: `Symphony patch ${patch.path}`,
+          executable: false,
+          maxBytes: 8 * 1024 * 1024,
+        });
+        if (sha256(await readFile(patchFile)) !== patch.sha256) {
+          throw new Error(`Symphony patch digest changed: ${patch.path}.`);
+        }
+      }
+      for (const capability of [
+        "fail-closed-prelaunch-admission-command",
+        "fail-closed-active-turn-guard",
+      ]) {
+        if (!lock.reviewedCapabilities.includes(capability)) {
+          throw new Error(`Symphony lock lacks reviewed capability ${capability}.`);
+        }
+      }
+      return `${lock.patches.length.toLocaleString()} reviewed patches match ${lock.production.commit}`;
+    }),
+    await check("planning:dispatch-coherence", () => {
+      if (planning === undefined || dispatch === undefined || dispatch.status !== "ready") {
+        throw new Error("Planning and dispatch evidence are not both ready.");
+      }
+      const candidate = dispatch.intention.candidateInput;
+      const issueUrl = candidate.qualification.issue.url;
+      if (
+        dispatch.intention.plannedAt !== planning.generatedAt ||
+        candidate.now !== planning.generatedAt ||
+        repositoryName(candidate.qualification.repository) !== input.repository ||
+        repositoryName(candidate.intendedClaim.repository) !== input.repository ||
+        candidate.qualification.issue.number !== input.issueNumber ||
+        candidate.authorityTask.githubIssue.number !== input.issueNumber ||
+        candidate.intendedClaim.issueNumber !== input.issueNumber ||
+        candidate.authorityTask.githubIssue.url !== issueUrl
+      ) {
+        throw new Error("Dispatch intention disagrees with its planning, issue, claim, or task identity.");
+      }
+      return `${dispatch.intention.sourceDigest}:${candidate.intendedClaim.claimId}`;
+    }),
+    await check("planning:dispatch-reproduction", async () => {
+      if (planningSource === undefined || dispatchSource === undefined) {
+        throw new Error("Raw planning and dispatch evidence are unavailable.");
+      }
+      const enrollments = parseHostEnrollments(
+        await loadProtectedJsonFile({
+          file: input.paths.hostEnrollmentsFile,
+          label: "Host enrollments",
+        }),
+      );
+      const accountProfiles = parseExecutionAccountProfiles(
+        await loadProtectedJsonFile({
+          file: input.paths.accountProfilesFile,
+          label: "Execution account profiles",
+        }),
+        enrollments,
+      );
+      const hostWorkspaceRoots = await loadHostWorkspaceRoots(
+        input.paths.hostWorkspaceRootsFile,
+        enrollments,
+      );
+      const reproduced = buildStableDispatchIntention({
+        snapshot: planningSource as LivePlanningSnapshot,
+        accountProfiles,
+        hostWorkspaceRoots,
+      });
+      if (!Buffer.from(canonicalJson(reproduced)).equals(canonicalJson(dispatchSource))) {
+        throw new Error("Dispatch intention cannot be reproduced from protected planning inputs.");
+      }
+      return "dispatch reproduces byte-for-byte from protected source evidence";
+    }),
+  );
+
+  const ordered = checks.sort((left, right) => left.id.localeCompare(right.id));
+  const blockers = ordered.filter((candidate) => !candidate.passed).map((candidate) => candidate.id);
+  return {
+    schemaVersion: 1,
+    auditedAt: input.auditedAt,
+    repository: input.repository,
+    issueNumber: input.issueNumber,
+    ready: blockers.length === 0,
+    checks: ordered,
+    blockers,
+  };
+}
