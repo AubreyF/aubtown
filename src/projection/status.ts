@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { DispatchClaim } from "../domain/types.js";
 
 export type FactoryProjectionState =
@@ -18,11 +19,13 @@ export type FactoryExecutionStage =
   | "handoff"
   | "blocked";
 
-export interface StatusProjection {
-  readonly labelsToAdd: readonly string[];
-  readonly labelsToRemove: readonly string[];
-  readonly commentBody: string;
-}
+export const statusProjectionSchema = z.object({
+  labelsToAdd: z.array(z.string().min(1)),
+  labelsToRemove: z.array(z.string().min(1)),
+  commentBody: z.string().startsWith("(AI Generated).\n\n"),
+}).strict();
+
+export type StatusProjection = z.infer<typeof statusProjectionSchema>;
 
 const LABEL_BY_STATE: Record<FactoryProjectionState, string> = {
   ready: "factory:ready",
@@ -70,7 +73,7 @@ export function buildStatusProjection(input: {
   const claim = input.claim;
   const value = (name: string, candidate: string | undefined): string =>
     candidate === undefined ? "none" : oneLine(name, candidate);
-  return {
+  return statusProjectionSchema.parse({
     labelsToAdd: [activeLabel],
     labelsToRemove: machineLabels.filter((label) => label !== activeLabel),
     commentBody: [
@@ -93,7 +96,7 @@ export function buildStatusProjection(input: {
       `Summary: ${oneLine("Summary", input.summary)}`,
       `Next action: ${value("Next action", input.nextAction)}`,
     ].join("\n"),
-  };
+  });
 }
 
 export function findManagedStatusComment<T extends { readonly body?: string | null }>(

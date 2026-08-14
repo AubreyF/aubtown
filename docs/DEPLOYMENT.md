@@ -41,6 +41,8 @@ Draft publication also runs on the custody host because that host owns the exact
 
 The completion reconciler now owns the entire draft handoff transaction. It rereads GitHub, current quota, Freed task authority, and the exact claim after independent review. It records the admitted plan before contacting the custody host, records the exact draft receipt, projects `factory:human-review` through the Coordinator App, persists a deterministic `worker-completed` release command, and records the exact broker receipt. Every stage is a separate immutable protected file under `/var/lib/aubtown/admission/publications`. A lost release response replays the same operation ID and payload. A completed transaction exits before requiring the claim or `factory:ready` label again. `AUBTOWN_LIFECYCLE_PROJECTION_ENABLED=false` keeps this entire write path disabled until the owner-selected pilot gate is deliberately enabled.
 
+A failed validation or independent review never publishes a branch or pull request. The coordinator instead records a blocked-handoff plan containing the exact work product, `factory:blocked` projection, and deterministic claim-release command. It projects the blocker through the same single managed comment, then releases the completed worker claim. A restart can reconcile an already-written comment or replay an ambiguously acknowledged release without inventing a second operation.
+
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
 
 The `factory-coordinator` broker is a one-shot Go binary beside the canonical

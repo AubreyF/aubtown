@@ -149,6 +149,7 @@ describe("native Linux deployment", () => {
     expect(command).toContain("PublicationTransactionStore");
     expect(command).toContain("SshDraftPublisher");
     expect(command).toContain("GitHubProjectionWriter");
+    expect(command).toContain("BlockedHandoffCoordinator");
     expect(command).toContain("GitHubLivePlanningReader");
     expect(command).toContain("FreedAuthorityBridge");
     expect(packageJson).toContain('"symphony:adjudicate-completion"');

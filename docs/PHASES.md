@@ -66,6 +66,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Persist immutable adjudication results, resume durable reviewer handles after restart, and fence an ambiguous reviewer start.
 - [x] Keep draft publication credentials on the custody host and route only a non-secret admitted plan over pinned SSH.
 - [x] Persist publication, projection, and exact claim-release stages as restart-safe immutable transactions.
+- [x] Project blocked adjudication and release its exact running claim without publishing a draft.
 - [ ] Review and merge the Freed task-claim commands from draft PR #1491.
 - [x] Build the host-neutral `factory-coordinator` broker with pinned runtime verification and bounded lease cleanup.
 - [ ] Install the native Linux authority broker.

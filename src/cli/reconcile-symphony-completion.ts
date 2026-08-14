@@ -24,6 +24,11 @@ import {
   assertIssueEligibleForCompletion,
   currentFreedClaimMatchesEnvelope,
 } from "../orchestration/completion-reconciler.js";
+import {
+  BlockedHandoffCoordinator,
+  BlockedHandoffTransactionStore,
+  planBlockedHandoff,
+} from "../orchestration/blocked-handoff.js";
 import { DurablePublicationCoordinator } from "../orchestration/publication-coordinator.js";
 import { PublicationTransactionStore } from "../orchestration/publication-transaction.js";
 import { HostObservationJournal } from "../gateway/host-observation-journal.js";
@@ -74,6 +79,23 @@ function pullRequestTitle(issueTitle: string): string {
   return `fix: ${title}`;
 }
 
+function githubProjectionWriter(repository: string): GitHubProjectionWriter {
+  const coordinatorIdentity = {
+    appId: required("AUBTOWN_GITHUB_APP_ID"),
+    installationId: positiveInteger("AUBTOWN_GITHUB_INSTALLATION_ID"),
+    privateKeyReference: absolute("AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE"),
+    selectedRepositories: [repository],
+  };
+  return new GitHubProjectionWriter(
+    new GitHubAppBroker(
+      coordinatorIdentity,
+      undefined,
+      new FilePrivateKeyProvider(),
+    ),
+    required("AUBTOWN_GITHUB_MACHINE_AUTHOR_LOGIN"),
+  );
+}
+
 async function writeTerminalEvent(value: unknown): Promise<never> {
   await new Promise<void>((resolve, reject) => {
     process.stdout.write(`${JSON.stringify(value)}\n`, (error) => {
@@ -105,6 +127,9 @@ const adjudicationStore = new TrustedAdjudicationResultStore(
 const transactionStore = new PublicationTransactionStore(
   absolute("AUBTOWN_PUBLICATION_TRANSACTION_ROOT"),
 );
+const blockedHandoffStore = new BlockedHandoffTransactionStore(
+  absolute("AUBTOWN_PUBLICATION_TRANSACTION_ROOT"),
+);
 const manifestDigest = executorHandoffManifestDigest(
   executorHandoffManifestFromRequirement(
     symphonyWorkspaceRequirementFromBinding({
@@ -114,10 +139,11 @@ const manifestDigest = executorHandoffManifestDigest(
   ),
 );
 const priorCompletion = await completionStore.load(manifestDigest);
+const priorAdjudication =
+  priorCompletion === null
+    ? null
+    : await adjudicationStore.load(priorCompletion.command.commandId);
 if (priorCompletion !== null) {
-  const priorAdjudication = await adjudicationStore.load(
-    priorCompletion.command.commandId,
-  );
   if (priorAdjudication?.outcome === "ready") {
     let priorPublication = await transactionStore.load(
       priorAdjudication.validation.workProduct.checkpointReference,
@@ -154,6 +180,39 @@ if (priorCompletion !== null) {
         },
       });
     }
+  } else if (priorAdjudication?.outcome === "blocked") {
+    let priorBlockedHandoff = await blockedHandoffStore.load(
+      priorAdjudication.validation.workProduct.checkpointReference,
+    );
+    if (
+      priorBlockedHandoff?.projection !== undefined &&
+      priorBlockedHandoff.release === undefined
+    ) {
+      const earlyRunner = new ProcessCommandRunner();
+      const earlyClaims = new FreedClaimBrokerClient(earlyRunner, {
+        executable: absolute("AUBTOWN_FREED_CLAIM_BROKER"),
+        cwd: absolute("AUBTOWN_FREED_REPOSITORY_ROOT"),
+      });
+      const releaseReceipt = await earlyClaims.release(
+        priorBlockedHandoff.plan.releaseCommand,
+      );
+      priorBlockedHandoff = await blockedHandoffStore.recordRelease(
+        priorBlockedHandoff.plan.workProduct.checkpointReference,
+        releaseReceipt,
+      );
+    }
+    if (priorBlockedHandoff?.stage === "released") {
+      await writeTerminalEvent({
+        event: "symphony-blocked-handoff-already-released",
+        issueNumber: priorCompletion.command.workProduct.issueNumber,
+        hostId: priorCompletion.command.workProduct.hostId,
+        head: priorCompletion.command.workProduct.head,
+        commandId: priorCompletion.command.commandId,
+        completionReference: priorCompletion.completionReference,
+        outcome: priorAdjudication.outcome,
+        blockedHandoff: { stage: "released" },
+      });
+    }
   }
 }
 const token = await readInstallationTokenFile(absolute("GITHUB_TOKEN_FILE"));
@@ -187,6 +246,58 @@ const claims = new FreedClaimBrokerClient(runner, {
   executable: brokerExecutable,
   cwd: freedRepositoryRoot,
 });
+if (priorCompletion !== null && priorAdjudication?.outcome === "blocked") {
+  const priorBlockedHandoff = await blockedHandoffStore.load(
+    priorAdjudication.validation.workProduct.checkpointReference,
+  );
+  if (priorBlockedHandoff !== null) {
+    const expectedIssue = envelope.binding.qualification.issue;
+    if (
+      current.issue.number !== expectedIssue.number ||
+      current.issue.url !== expectedIssue.url ||
+      current.issue.state !== "open" ||
+      (!current.issue.labels.includes("factory:ready") &&
+        !current.issue.labels.includes("factory:blocked")) ||
+      current.issue.labels.includes("factory:human-review")
+    ) {
+      throw new Error("GitHub issue changed before blocked handoff recovery.");
+    }
+    const [inspection, currentClaim] = await Promise.all([
+      authority.inspect(envelope.binding.qualification),
+      claims.show({ schemaVersion: 1, taskId: envelope.admission.taskId }),
+    ]);
+    const task = inspection.task;
+    const expectedTask = envelope.binding.authorityTask;
+    if (
+      !inspection.active ||
+      task === undefined ||
+      task.id !== expectedTask.id ||
+      task.revision !== expectedTask.revision ||
+      !canonicalJsonEqual(task.githubIssue, expectedTask.githubIssue) ||
+      !currentFreedClaimMatchesEnvelope(envelope, currentClaim)
+    ) {
+      throw new Error("Authority changed before blocked handoff recovery.");
+    }
+    const recovered = await new BlockedHandoffCoordinator(
+      blockedHandoffStore,
+      githubProjectionWriter(priorBlockedHandoff.plan.repository),
+      claims,
+    ).run({
+      plan: priorBlockedHandoff.plan,
+      projectionApproved: enabled("AUBTOWN_LIFECYCLE_PROJECTION_ENABLED"),
+    });
+    await writeTerminalEvent({
+      event: "symphony-blocked-handoff-recovered",
+      issueNumber: priorCompletion.command.workProduct.issueNumber,
+      hostId: priorCompletion.command.workProduct.hostId,
+      head: priorCompletion.command.workProduct.head,
+      commandId: priorCompletion.command.commandId,
+      completionReference: priorCompletion.completionReference,
+      outcome: priorAdjudication.outcome,
+      blockedHandoff: { stage: recovered.stage },
+    });
+  }
+}
 const reconciler = new SymphonyCompletionReconciler(
   new SshTrustedCompletionReader(runner, {
     sshExecutable: absolute("AUBTOWN_SSH_EXECUTABLE"),
@@ -246,6 +357,7 @@ if (result === null) {
   let publication:
     | { readonly stage: "released"; readonly pullRequestUrl: string }
     | undefined;
+  let blockedHandoff: { readonly stage: "released" } | undefined;
   if (trustedAdjudication.outcome === "ready") {
     const workProduct = trustedAdjudication.validation.workProduct;
     const review = trustedAdjudication.review;
@@ -265,12 +377,6 @@ if (result === null) {
       throw new Error("Stored publication transaction names another work product.");
     }
     const repositoryName = `${envelope.binding.qualification.repository.owner}/${envelope.binding.qualification.repository.name}`;
-    const coordinatorIdentity = {
-      appId: required("AUBTOWN_GITHUB_APP_ID"),
-      installationId: positiveInteger("AUBTOWN_GITHUB_INSTALLATION_ID"),
-      privateKeyReference: absolute("AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE"),
-      selectedRepositories: [repositoryName],
-    };
     const publicationCoordinator = new DurablePublicationCoordinator(
       transactionStore,
       new SshDraftPublisher(runner, {
@@ -288,14 +394,7 @@ if (result === null) {
         expectedKnownHostsFile: absolute("AUBTOWN_SSH_KNOWN_HOSTS_FILE"),
         requiredConfigUid: 0,
       }),
-      new GitHubProjectionWriter(
-        new GitHubAppBroker(
-          coordinatorIdentity,
-          undefined,
-          new FilePrivateKeyProvider(),
-        ),
-        required("AUBTOWN_GITHUB_MACHINE_AUTHOR_LOGIN"),
-      ),
+      githubProjectionWriter(repositoryName),
       claims,
     );
     const projectionApproved = enabled(
@@ -440,6 +539,72 @@ if (result === null) {
         pullRequestUrl: completed.publication!.pullRequestUrl,
       };
     }
+  } else {
+    const blockedAt = new Date().toISOString();
+    const freshCurrent = await github.read({
+      repository: envelope.binding.qualification.repository,
+      issueNumber: Number(issueId),
+      now: blockedAt,
+    });
+    assertIssueEligibleForCompletion(
+      envelope.binding.qualification.issue,
+      freshCurrent.issue,
+    );
+    const [inspection, currentClaim] = await Promise.all([
+      authority.inspect(envelope.binding.qualification),
+      claims.show({ schemaVersion: 1, taskId: envelope.admission.taskId }),
+    ]);
+    const task = inspection.task;
+    const expectedTask = envelope.binding.authorityTask;
+    if (
+      !inspection.active ||
+      task === undefined ||
+      task.id !== expectedTask.id ||
+      task.revision !== expectedTask.revision ||
+      !canonicalJsonEqual(task.githubIssue, expectedTask.githubIssue) ||
+      task.executionAuthority !== expectedTask.executionAuthority ||
+      task.providerAuthority !== expectedTask.providerAuthority ||
+      task.behavioral !== expectedTask.behavioral ||
+      !currentFreedClaimMatchesEnvelope(envelope, currentClaim)
+    ) {
+      throw new Error("Authority changed before blocked handoff.");
+    }
+    const brokerClaim = currentClaim.claim!;
+    const claim = {
+      repository: envelope.binding.qualification.repository,
+      issueNumber: brokerClaim.githubIssue.number,
+      claimId: brokerClaim.claimId,
+      custodyEpoch: brokerClaim.custodyEpoch,
+      hostId: brokerClaim.hostId,
+      workerId: brokerClaim.workerId,
+      branch: brokerClaim.branch,
+      worktree: brokerClaim.worktree,
+      conflictDomains: brokerClaim.conflictDomains,
+      claimedAt: brokerClaim.claimedAt,
+    };
+    const repositoryName = `${claim.repository.owner}/${claim.repository.name}`;
+    const plan = planBlockedHandoff({
+      adjudication: trustedAdjudication,
+      claim,
+      repository: repositoryName,
+      taskId: currentClaim.taskId,
+      taskRevision: currentClaim.taskRevision,
+      bindingDigest: currentClaim.bindingDigest!,
+      heartbeatAt: brokerClaim.heartbeatAt,
+      now: blockedAt,
+    });
+    const completed = await new BlockedHandoffCoordinator(
+      blockedHandoffStore,
+      githubProjectionWriter(repositoryName),
+      claims,
+    ).run({
+      plan,
+      projectionApproved: enabled("AUBTOWN_LIFECYCLE_PROJECTION_ENABLED"),
+    });
+    if (completed.stage !== "released") {
+      throw new Error("Blocked handoff did not finish exact claim cleanup.");
+    }
+    blockedHandoff = { stage: "released" };
   }
   process.stdout.write(
     `${JSON.stringify({
@@ -451,6 +616,7 @@ if (result === null) {
       completionReference: published.completionReference,
       outcome: trustedAdjudication.outcome,
       ...(publication === undefined ? {} : { publication }),
+      ...(blockedHandoff === undefined ? {} : { blockedHandoff }),
     })}\n`,
   );
 }
