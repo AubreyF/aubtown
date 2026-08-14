@@ -27,14 +27,14 @@ async function git(cwd: string, args: readonly string[]): Promise<string> {
 
 describe("HostRestoreSupervisor", () => {
   it("downloads, restores, verifies, and reports the exact next-epoch worktree", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-restore-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-restore-"));
     roots.push(root);
     const source = path.join(root, "source");
     const worktreeRoot = path.join(root, "worktrees");
     const destination = path.join(worktreeRoot, "destination");
     await mkdir(worktreeRoot);
     await runner.run({ executable: "git", args: ["init", "-b", "dev", source], cwd: root });
-    await git(source, ["config", "user.name", "Freedworks Test"]);
+    await git(source, ["config", "user.name", "AubTown Test"]);
     await git(source, ["config", "user.email", "test@example.invalid"]);
     await mkdir(path.join(source, "scripts"));
     await writeFile(path.join(source, "scripts", "worktree-add.sh"), "#!/bin/sh\n", {

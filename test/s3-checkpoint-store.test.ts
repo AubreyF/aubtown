@@ -70,10 +70,10 @@ describe("S3CheckpointStore", () => {
   it("moves one encrypted checkpoint between independent host adapters", async () => {
     const objectService = new MemoryS3();
     const sourceStore = new S3CheckpointStore(objectService as unknown as S3Client, {
-      bucket: "freedworks-pilot",
+      bucket: "aubtown-pilot",
     });
     const destinationStore = new S3CheckpointStore(objectService as unknown as S3Client, {
-      bucket: "freedworks-pilot",
+      bucket: "aubtown-pilot",
     });
     const cipher = new XChaChaCheckpointCipher(
       keyProvider(randomBytes(32)),
@@ -106,11 +106,11 @@ describe("S3CheckpointStore", () => {
   it("rejects an object whose bytes do not match its content address", async () => {
     const objectService = new MemoryS3();
     const store = new S3CheckpointStore(objectService as unknown as S3Client, {
-      bucket: "freedworks-pilot",
+      bucket: "aubtown-pilot",
     });
     const reference = "a".repeat(64);
     objectService.objects.set(
-      `freedworks/checkpoints/active/${reference}.checkpoint`,
+      `aubtown/checkpoints/active/${reference}.checkpoint`,
       new TextEncoder().encode("wrong bytes"),
     );
     await expect(store.get(reference)).rejects.toThrow("digest");

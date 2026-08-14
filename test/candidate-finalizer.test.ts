@@ -22,10 +22,10 @@ async function git(cwd: string, args: readonly string[]): Promise<string> {
 }
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "freedworks-finalizer-"));
+  const root = await mkdtemp(join(tmpdir(), "aubtown-finalizer-"));
   roots.push(root);
   await runner.run({ executable: "git", args: ["init", "-b", "dev", root], cwd: root });
-  await git(root, ["config", "user.name", "Freedworks Test"]);
+  await git(root, ["config", "user.name", "AubTown Test"]);
   await git(root, ["config", "user.email", "test@example.invalid"]);
   await writeFile(join(root, "owned.txt"), "before\n");
   await git(root, ["add", "owned.txt"]);

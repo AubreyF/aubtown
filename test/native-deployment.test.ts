@@ -11,27 +11,27 @@ async function fixture(relative: string): Promise<string> {
 describe("native Linux deployment", () => {
   it("runs every production service without Docker", async () => {
     const units = await Promise.all([
-      fixture("deploy/systemd/freedworks-restate.service"),
-      fixture("deploy/systemd/freedworks-control-plane.service"),
-      fixture("deploy/systemd/freedworks-host-edge.service"),
-      fixture("deploy/systemd/freedworks-checkpoint-edge.service"),
-      fixture("deploy/systemd/freedworks-register.service"),
+      fixture("deploy/systemd/aubtown-restate.service"),
+      fixture("deploy/systemd/aubtown-control-plane.service"),
+      fixture("deploy/systemd/aubtown-host-edge.service"),
+      fixture("deploy/systemd/aubtown-checkpoint-edge.service"),
+      fixture("deploy/systemd/aubtown-register.service"),
     ]);
     expect(units.join("\n")).not.toMatch(/docker/i);
     expect(units.join("\n")).not.toContain("0.0.0.0");
-    expect(units.join("\n")).toContain("FREEDWORKS_BIND_HOST=127.0.0.1");
-    expect(units.join("\n")).toContain("FREEDWORKS_ENABLE_INTEGRATION_HARNESS=false");
+    expect(units.join("\n")).toContain("AUBTOWN_BIND_HOST=127.0.0.1");
+    expect(units.join("\n")).toContain("AUBTOWN_ENABLE_INTEGRATION_HARNESS=false");
   });
 
   it("pins Restate and keeps its interfaces on loopback", async () => {
-    const unit = await fixture("deploy/systemd/freedworks-restate.service");
+    const unit = await fixture("deploy/systemd/aubtown-restate.service");
     const config = await fixture("deploy/restate/restate.toml");
     const installer = await fixture("scripts/install-restate-linux.sh");
-    expect(unit).toContain("/opt/freedworks/restate/1.7.3/restate-server");
+    expect(unit).toContain("/opt/aubtown/restate/1.7.3/restate-server");
     expect(unit).toContain(
       "RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=",
     );
-    expect(config).toContain('base-dir = "/var/lib/freedworks/restate"');
+    expect(config).toContain('base-dir = "/var/lib/aubtown/restate"');
     expect(config.match(/127\.0\.0\.1/g)?.length).toBeGreaterThanOrEqual(6);
     expect(config).toContain('disable-web-ui = true');
     expect(installer).toContain('version="1.7.3"');
@@ -49,15 +49,15 @@ describe("native Linux deployment", () => {
 
   it("uses distinct users for state and secret boundaries", async () => {
     const users = await Promise.all([
-      fixture("deploy/systemd/freedworks-restate.service"),
-      fixture("deploy/systemd/freedworks-control-plane.service"),
-      fixture("deploy/systemd/freedworks-host-edge.service"),
-      fixture("deploy/systemd/freedworks-checkpoint-edge.service"),
+      fixture("deploy/systemd/aubtown-restate.service"),
+      fixture("deploy/systemd/aubtown-control-plane.service"),
+      fixture("deploy/systemd/aubtown-host-edge.service"),
+      fixture("deploy/systemd/aubtown-checkpoint-edge.service"),
     ]);
-    expect(users[0]).toContain("User=freedworks-restate");
-    expect(users[1]).toContain("User=freedworks-control");
-    expect(users[2]).toContain("User=freedworks-edge");
-    expect(users[3]).toContain("User=freedworks-checkpoint");
+    expect(users[0]).toContain("User=aubtown-restate");
+    expect(users[1]).toContain("User=aubtown-control");
+    expect(users[2]).toContain("User=aubtown-edge");
+    expect(users[3]).toContain("User=aubtown-checkpoint");
     expect(new Set(users.map((unit) => unit.match(/^User=(.+)$/m)?.[1])).size).toBe(4);
   });
 

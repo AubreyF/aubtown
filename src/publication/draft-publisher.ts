@@ -132,7 +132,7 @@ export class GitHttpsBranchPublisher implements GitBranchPublisher {
     if (branch !== input.branch || head !== input.head || status !== "") {
       throw new Error("Draft push worktree does not match the admitted plan.");
     }
-    const temporary = await mkdtemp(path.join(os.tmpdir(), "freedworks-askpass-"));
+    const temporary = await mkdtemp(path.join(os.tmpdir(), "aubtown-askpass-"));
     const askpass = path.join(temporary, "git-askpass.sh");
     try {
       await writeFile(
@@ -141,7 +141,7 @@ export class GitHttpsBranchPublisher implements GitBranchPublisher {
           "#!/bin/sh",
           "case \"$1\" in",
           "  *Username*) printf '%s\\n' 'x-access-token' ;;",
-          "  *) printf '%s\\n' \"$FREEDWORKS_GITHUB_TOKEN\" ;;",
+          "  *) printf '%s\\n' \"$AUBTOWN_GITHUB_TOKEN\" ;;",
           "esac",
           "",
         ].join("\n"),
@@ -163,7 +163,7 @@ export class GitHttpsBranchPublisher implements GitBranchPublisher {
         cwd: input.repositoryRoot,
         env: {
           ...process.env,
-          FREEDWORKS_GITHUB_TOKEN: input.token,
+          AUBTOWN_GITHUB_TOKEN: input.token,
           GIT_ASKPASS: askpass,
           GIT_TERMINAL_PROMPT: "0",
         },

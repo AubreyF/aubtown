@@ -1,7 +1,7 @@
 services:
   restate:
     image: docker.restate.dev/restatedev/restate:1.7.3
-    command: ["--node-name=freedworks-restate-1"]
+    command: ["--node-name=aubtown-restate-1"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
@@ -15,10 +15,10 @@ services:
       dockerfile: deploy/Dockerfile
     environment:
       - PORT=9080
-      - FREEDWORKS_BIND_HOST=0.0.0.0
-      - FREEDWORKS_HOST_ENROLLMENTS_JSON
-      - FREEDWORKS_ACCOUNT_PROFILES_JSON
-      - FREEDWORKS_ENABLE_INTEGRATION_HARNESS=true
+      - AUBTOWN_BIND_HOST=0.0.0.0
+      - AUBTOWN_HOST_ENROLLMENTS_JSON
+      - AUBTOWN_ACCOUNT_PROFILES_JSON
+      - AUBTOWN_ENABLE_INTEGRATION_HARNESS=true
     restart: unless-stopped
     depends_on:
       - restate
@@ -30,8 +30,8 @@ services:
     command: ["node", "dist/edge-gateway.js"]
     environment:
       - PORT=8090
-      - FREEDWORKS_BIND_HOST=0.0.0.0
-      - FREEDWORKS_RESTATE_INGRESS=http://restate:8080
+      - AUBTOWN_BIND_HOST=0.0.0.0
+      - AUBTOWN_RESTATE_INGRESS=http://restate:8080
     restart: unless-stopped
     depends_on:
       - restate
@@ -57,8 +57,8 @@ services:
     command: ["node", "dist/checkpoint-edge.js"]
     environment:
       - PORT=8091
-      - FREEDWORKS_BIND_HOST=0.0.0.0
-      - FREEDWORKS_CHECKPOINT_STORE_ROOT=/checkpoint-data
+      - AUBTOWN_BIND_HOST=0.0.0.0
+      - AUBTOWN_CHECKPOINT_STORE_ROOT=/checkpoint-data
     restart: unless-stopped
     depends_on:
       checkpoint-data-init:

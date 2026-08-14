@@ -92,7 +92,7 @@ function checkpointManager(): ExecutionCheckpointManager {
 
 describe("HostExecutionSupervisor", () => {
   it("rejects a command bound to another local worker driver", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     let starts = 0;
@@ -134,7 +134,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("quarantines a persisted command after the configured driver changes", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     await journal.accept(command(), "2026-08-13T18:00:00.000Z");
@@ -171,10 +171,11 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("persists a host receipt before checkpointing the finalized candidate", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     const completion = deferred<"completed" | "interrupted" | "failed">();
+    const terminalReport = deferred<void>();
     const reports: string[] = [];
     let observedNonce = "";
     const supervisor = new HostExecutionSupervisor(
@@ -196,6 +197,9 @@ describe("HostExecutionSupervisor", () => {
       {
         reportExecutor: async (receipt) => {
           reports.push(receipt.stage);
+          if (receipt.stage !== "started") {
+            terminalReport.resolve();
+          }
           return {
             kind: "executor-receipt",
             hostId: "linux-control-1",
@@ -225,9 +229,7 @@ describe("HostExecutionSupervisor", () => {
     );
     await supervisor.accept(command());
     completion.resolve("completed");
-    for (let attempt = 0; attempt < 20 && reports.length < 2; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await terminalReport.promise;
     expect(observedNonce).toMatch(/^[0-9a-f-]{36}$/u);
     expect(reports).toEqual(["started", "completed"]);
     await expect(journal.read()).resolves.toMatchObject({
@@ -238,7 +240,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("starts once, records before reporting, and persists completion", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     const completion = deferred<"completed" | "interrupted" | "failed">();
@@ -320,7 +322,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("recovers a persisted turn without starting a duplicate", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     await journal.accept(command(), "2026-08-13T18:00:00.000Z");
@@ -384,7 +386,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("interrupts and drains an active turn during planned shutdown", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     const completion = deferred<"completed" | "interrupted" | "failed">();
@@ -453,7 +455,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("persists capture and storage before retrying catalog admission and terminal reporting", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     const completion = deferred<"completed" | "interrupted" | "failed">();
@@ -580,7 +582,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("downgrades completion to failure when trusted finalization fails", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     const completion = deferred<"completed" | "interrupted" | "failed">();
@@ -647,7 +649,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("fails closed when a crash leaves the start outcome ambiguous", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     await journal.accept(command(), "2026-08-13T18:00:00.000Z");
@@ -691,7 +693,7 @@ describe("HostExecutionSupervisor", () => {
   });
 
   it("quarantines a stale persisted turn before app-server resume", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-supervisor-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     await journal.accept(command(), "2026-08-13T18:00:00.000Z");

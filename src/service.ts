@@ -13,7 +13,7 @@ import { loadExecutionAccountProfiles } from "./config/account-profiles.js";
 import { createRoutePlanner } from "./orchestration/route-planner.js";
 import { parseBindHost, parseServicePort } from "./config/network.js";
 
-const identityKeys = (process.env.FREEDWORKS_RESTATE_IDENTITY_KEYS ?? "")
+const identityKeys = (process.env.AUBTOWN_RESTATE_IDENTITY_KEYS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
@@ -22,7 +22,7 @@ const accountProfiles = await loadExecutionAccountProfiles(
   process.env,
   hostEnrollments,
 );
-const checkpointGrantKeyFile = process.env.FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE?.trim();
+const checkpointGrantKeyFile = process.env.AUBTOWN_CHECKPOINT_GRANT_PRIVATE_KEY_FILE?.trim();
 const checkpointGrantIssuer =
   checkpointGrantKeyFile === undefined || checkpointGrantKeyFile.length === 0
     ? undefined
@@ -30,7 +30,7 @@ const checkpointGrantIssuer =
         await loadPrivateKeyPem(checkpointGrantKeyFile, "Checkpoint grant private key"),
       );
 const checkpointReceiptKeyFile =
-  process.env.FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE?.trim();
+  process.env.AUBTOWN_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE?.trim();
 const checkpointReceiptPublicKeyPem =
   checkpointReceiptKeyFile === undefined || checkpointReceiptKeyFile.length === 0
     ? undefined
@@ -44,12 +44,12 @@ const hostGateway = createHostGateway(
   checkpointReceiptPublicKeyPem,
 );
 const enableIntegrationHarness = integrationHarnessEnabled(
-  process.env.FREEDWORKS_ENABLE_INTEGRATION_HARNESS,
+  process.env.AUBTOWN_ENABLE_INTEGRATION_HARNESS,
 );
 const routePlanner = createRoutePlanner(hostEnrollments, accountProfiles);
 
 const port = parseServicePort(process.env.PORT, 9_080);
-const bindHost = parseBindHost(process.env.FREEDWORKS_BIND_HOST);
+const bindHost = parseBindHost(process.env.AUBTOWN_BIND_HOST);
 const server = createServer(
   restate.createEndpointHandler({
     services: controlPlaneServices(
@@ -70,7 +70,7 @@ await new Promise<void>((resolve, reject) => {
 });
 
 process.stdout.write(
-  `Freedworks Restate endpoint listening on ${bindHost}:${port.toLocaleString()}.\n`,
+  `AubTown Restate endpoint listening on ${bindHost}:${port.toLocaleString()}.\n`,
 );
 
 function stop(): void {

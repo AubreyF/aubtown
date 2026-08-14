@@ -22,7 +22,7 @@ async function git(cwd: string, args: readonly string[]): Promise<string> {
 
 describe("HostWorkspaceSupervisor", () => {
   it("creates and attests the exact clean initial worktree", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-workspace-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-workspace-"));
     roots.push(root);
     const repository = path.join(root, "repository");
     const worktreeRoot = path.join(root, "worktrees");
@@ -33,7 +33,7 @@ describe("HostWorkspaceSupervisor", () => {
       args: ["init", "-b", "dev", repository],
       cwd: root,
     });
-    await git(repository, ["config", "user.name", "Freedworks Test"]);
+    await git(repository, ["config", "user.name", "AubTown Test"]);
     await git(repository, ["config", "user.email", "test@example.invalid"]);
     await mkdir(path.join(repository, "scripts"));
     const helper = path.join(repository, "scripts", "worktree-add.sh");

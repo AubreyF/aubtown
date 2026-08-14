@@ -29,7 +29,7 @@ function command(commandId = "50e13459-412e-41f7-809f-0d91dc660d52") {
 
 describe("HostExecutionJournal", () => {
   it("persists one command and turn across process replacement", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-execution-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-execution-"));
     roots.push(root);
     const file = join(root, "state", "execution.json");
     const journal = new HostExecutionJournal(file);
@@ -75,7 +75,7 @@ describe("HostExecutionJournal", () => {
   });
 
   it("does not replace an active command with another claim", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-execution-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-execution-"));
     roots.push(root);
     const journal = new HostExecutionJournal(join(root, "execution.json"));
     await journal.accept(command(), "2026-08-13T18:00:01.000Z");

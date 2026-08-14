@@ -14,7 +14,7 @@ TRANSFER_WORKFLOW_KEY="dry-run-transfer-${RUN_ID}"
 MISSING_RECEIPT_WORKFLOW_KEY="dry-run-transfer-missing-receipt-${RUN_ID}"
 LANE_MISMATCH_WORKFLOW_KEY="dry-run-transfer-lane-mismatch-${RUN_ID}"
 RECONCILE_WORKFLOW_KEY="dry-run-reconcile-${RUN_ID}"
-INGRESS="${FREEDWORKS_RESTATE_INGRESS:-http://127.0.0.1:8080}"
+INGRESS="${AUBTOWN_RESTATE_INGRESS:-http://127.0.0.1:8080}"
 HARNESS="${INGRESS}/IntegrationHarness"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -177,7 +177,7 @@ jq \
   '.claim.issueNumber = 1235 |
    .claim.claimId = "claim-conflict-second" |
    .claim.branch = "fix/conflict-second" |
-   .claim.worktree = "/srv/freedworks/worktrees/freed/1235" |
+   .claim.worktree = "/srv/aubtown/worktrees/freed/1235" |
    .qualification.issue.number = 1235 |
    .qualification.issue.url = "https://github.com/freed-project/freed/issues/1235" |
    .qualification.issue.title = "Second conflicting issue"' \
@@ -219,7 +219,7 @@ jq '.claim' "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
 
 harness_file claim "$CUSTODY_KEY" claim "${TMP_DIR}/custody-claim.json" /dev/null
 
-jq -n '{claimId: "dry-run-claim-1234", priorEpoch: 1, nextEpoch: 2, destinationHostId: "linux-control-1", destinationWorkerId: "worker-2", destinationWorktree: "/srv/freedworks/worktrees/freed/1234-epoch-2", transferredAt: "2026-08-14T08:00:00.000Z"}' \
+jq -n '{claimId: "dry-run-claim-1234", priorEpoch: 1, nextEpoch: 2, destinationHostId: "linux-control-1", destinationWorkerId: "worker-2", destinationWorktree: "/srv/aubtown/worktrees/freed/1234-epoch-2", transferredAt: "2026-08-14T08:00:00.000Z"}' \
   > "${TMP_DIR}/custody-transfer-input.json"
 harness_file \
   transferClaim \
@@ -229,7 +229,7 @@ harness_file \
   "${TMP_DIR}/custody-transfer.json"
 
 jq -e \
-  '.custodyEpoch == 2 and .hostId == "linux-control-1" and .workerId == "worker-2" and .worktree == "/srv/freedworks/worktrees/freed/1234-epoch-2"' \
+  '.custodyEpoch == 2 and .hostId == "linux-control-1" and .workerId == "worker-2" and .worktree == "/srv/aubtown/worktrees/freed/1234-epoch-2"' \
   "${TMP_DIR}/custody-transfer.json" \
   > /dev/null
 
@@ -260,7 +260,7 @@ harness_file \
 
 jq \
   --arg host "$SOURCE_HOST_ID" \
-  '.claim | .hostId = $host | .workerId = "offline-worker" | .worktree = "/srv/freedworks/worktrees/freed/1234-offline"' \
+  '.claim | .hostId = $host | .workerId = "offline-worker" | .worktree = "/srv/aubtown/worktrees/freed/1234-offline"' \
   "${ROOT_DIR}/test/fixtures/dry-run-admitted.json" \
   > "${TMP_DIR}/workflow-custody-claim.json"
 
@@ -387,7 +387,7 @@ jq -n \
     destinations: {
       ($destination): {
         workerId: "worker-linux-1",
-        worktree: "/srv/freedworks/worktrees/freed/1234-epoch-2"
+        worktree: "/srv/aubtown/worktrees/freed/1234-epoch-2"
       }
     },
     now: "2026-08-13T08:00:00.000Z"
@@ -449,7 +449,7 @@ jq -e \
   .decision.action == "transfer" and
   .decision.destinationHostId == $destination and
   .transferredClaim.custodyEpoch == 2 and
-  .transferredClaim.worktree == "/srv/freedworks/worktrees/freed/1234-epoch-2"
+  .transferredClaim.worktree == "/srv/aubtown/worktrees/freed/1234-epoch-2"
 ' "${TMP_DIR}/workflow-custody-result.json" > /dev/null
 
 harness_key readRestore "$DESTINATION_HOST_ID" "${TMP_DIR}/workflow-restore-required.json"

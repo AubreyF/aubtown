@@ -17,7 +17,7 @@ export function parseBindHost(value: string | undefined): string {
   const host = value?.trim() || "127.0.0.1";
   if (isIP(host) === 0 || !ALLOWED_BIND_HOSTS.has(host)) {
     throw new Error(
-      "FREEDWORKS_BIND_HOST must be an explicit loopback or wildcard IP address.",
+      "AUBTOWN_BIND_HOST must be an explicit loopback or wildcard IP address.",
     );
   }
   return host;

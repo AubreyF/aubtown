@@ -1,16 +1,16 @@
 [Unit]
-Description=Register the Freedworks endpoint with Restate
-Requires=freedworks-restate.service freedworks-control-plane.service
-After=freedworks-restate.service freedworks-control-plane.service
-PartOf=freedworks-control-plane.service
+Description=Register the AubTown endpoint with Restate
+Requires=aubtown-restate.service aubtown-control-plane.service
+After=aubtown-restate.service aubtown-control-plane.service
+PartOf=aubtown-control-plane.service
 StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
-User=freedworks-control
-Group=freedworks-control
+User=aubtown-control
+Group=aubtown-control
 Environment=CI=true
-ExecStart=/opt/freedworks/restate/1.7.3/restate deployments register --force --yes http://127.0.0.1:9080
+ExecStart=/opt/aubtown/restate/1.7.3/restate deployments register --force --yes http://127.0.0.1:9080
 RemainAfterExit=true
 Restart=on-failure
 RestartSec=5

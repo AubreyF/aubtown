@@ -1,6 +1,6 @@
-cluster-name = "freedworks-pilot"
-node-name = "freedworks-restate-1"
-base-dir = "/var/lib/freedworks/restate"
+cluster-name = "aubtown-pilot"
+node-name = "aubtown-restate-1"
+base-dir = "/var/lib/aubtown/restate"
 auto-provision = true
 listen-mode = "tcp"
 bind-address = "127.0.0.1:5122"

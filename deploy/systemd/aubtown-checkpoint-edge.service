@@ -1,20 +1,19 @@
 [Unit]
-Description=Freedworks Restate durable runtime
+Description=AubTown encrypted checkpoint edge
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=simple
-User=freedworks-restate
-Group=freedworks-restate
-WorkingDirectory=/var/lib/freedworks/restate
-Environment=RESTATE_CONFIG=/etc/freedworks/restate.toml
-Environment=RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=/etc/freedworks/keys/restate-identity-private.pem
-ExecStart=/opt/freedworks/restate/1.7.3/restate-server --production --no-logo
+User=aubtown-checkpoint
+Group=aubtown-checkpoint
+WorkingDirectory=/opt/aubtown/current
+EnvironmentFile=/etc/aubtown/checkpoint-edge.env
+ExecStart=/usr/bin/env PORT=8091 AUBTOWN_BIND_HOST=127.0.0.1 AUBTOWN_CHECKPOINT_STORE_ROOT=/var/lib/aubtown/checkpoints /opt/aubtown/node/bin/node /opt/aubtown/current/dist/checkpoint-edge.js
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=90
-StateDirectory=freedworks/restate
+TimeoutStopSec=30
+StateDirectory=aubtown/checkpoints
 StateDirectoryMode=0700
 UMask=0077
 NoNewPrivileges=true
@@ -26,10 +25,10 @@ ProtectHostname=true
 ProtectKernelModules=true
 ProtectKernelTunables=true
 ProtectSystem=strict
+ReadWritePaths=/var/lib/aubtown/checkpoints
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictSUIDSGID=true
 SystemCallArchitectures=native
-LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target

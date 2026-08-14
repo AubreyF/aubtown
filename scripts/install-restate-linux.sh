@@ -5,7 +5,7 @@ export PATH
 
 version="1.7.3"
 release_base="https://github.com/restatedev/restate/releases/download/v${version}"
-install_root="${FREEDWORKS_RESTATE_INSTALL_ROOT:-/opt/freedworks/restate/${version}}"
+install_root="${AUBTOWN_RESTATE_INSTALL_ROOT:-/opt/aubtown/restate/${version}}"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "This installer supports Linux only." >&2

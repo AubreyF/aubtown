@@ -90,6 +90,9 @@ export function qualifyIssue(input: {
   const { repository, issue, evidence, authorityTask } = input;
   const requireAuthority = input.requireExecutionAuthority ?? true;
   const labels = new Set(issue.labels);
+  const factoryLabels = issue.labels.filter((label) =>
+    label.startsWith("factory:"),
+  );
   const authorityMatches =
     authorityTask !== undefined &&
     authorityTask.githubIssue.number === issue.number &&
@@ -101,9 +104,9 @@ export function qualifyIssue(input: {
     check("debt-label", labels.has("debt"), true, "Issue carries the debt label."),
     check(
       "factory-ready",
-      labels.has("factory:ready"),
+      labels.has("factory:ready") && factoryLabels.length === 1,
       true,
-      "Owner applied factory:ready.",
+      "Owner applied factory:ready as the sole lifecycle label.",
     ),
     check(
       "incident-excluded",

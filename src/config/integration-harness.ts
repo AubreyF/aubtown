@@ -6,6 +6,6 @@ export function integrationHarnessEnabled(value: string | undefined): boolean {
     return true;
   }
   throw new Error(
-    "FREEDWORKS_ENABLE_INTEGRATION_HARNESS must be exactly true or false.",
+    "AUBTOWN_ENABLE_INTEGRATION_HARNESS must be exactly true or false.",
   );
 }

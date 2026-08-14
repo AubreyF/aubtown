@@ -1,6 +1,6 @@
 # GitHub Apps
 
-Freedworks uses two private GitHub Apps installed only on selected repositories. Splitting them prevents routine queue observation from inheriting source publication authority.
+AubTown uses two private GitHub Apps installed only on selected repositories. Splitting them prevents routine queue observation from inheriting source publication authority.
 
 ## Coordinator
 

@@ -122,7 +122,7 @@ export class GitCustodyCheckpointService {
       throw new Error("Destination worktree must be clean before checkpoint restore.");
     }
     if (archive.patch.length > 0) {
-      const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "freedworks-patch-"));
+      const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "aubtown-patch-"));
       try {
         const patchPath = path.join(temporaryRoot, "custody.patch");
         await writeFile(patchPath, archive.patch, { flag: "wx", mode: 0o600 });

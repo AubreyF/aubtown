@@ -67,7 +67,7 @@ Proposed qualification additions:
 
 The read-only Freed task-list command failed with `authority_generation_conflict`: `Control event history pending staging does not match one exact owning operation namespace.`
 
-Freedworks therefore records repository authority as unhealthy and cannot dispatch. It will not inspect around the conflict, edit authority files, acquire another actor, or use `nightly-writer`. Supported Freed host recovery must reconcile this state before the single-worker pilot.
+AubTown therefore records repository authority as unhealthy and cannot dispatch. It will not inspect around the conflict, edit authority files, acquire another actor, or use `nightly-writer`. Supported Freed host recovery must reconcile this state before the single-worker pilot.
 
 ## Schema proposal for Freed
 

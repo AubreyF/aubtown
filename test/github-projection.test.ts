@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { planProjectionMutation } from "../src/projection/github-writer.js";
 import { buildStatusProjection, STATUS_COMMENT_MARKER } from "../src/projection/status.js";
+import { claim } from "./helpers.js";
 
 const projection = buildStatusProjection({
   state: "running",
+  stage: "implementation",
   summary: "Worker owns the current claim.",
-  claimId: "claim-1234",
+  claim: claim(),
+  lastHeartbeatAt: "2026-08-13T17:59:45.000Z",
+  nextAction: "Wait for the implementation turn.",
   updatedAt: "2026-08-13T18:00:00.000Z",
 });
 
@@ -14,7 +18,7 @@ describe("GitHub lifecycle projection", () => {
     const plan = planProjectionMutation({
       currentLabels: ["debt", "priority:high", "factory:ready"],
       comments: [],
-      machineAuthorLogin: "freedworks-coordinator[bot]",
+      machineAuthorLogin: "aubtown-coordinator[bot]",
       projection,
     });
     expect(plan.allowed).toBe(true);
@@ -28,7 +32,7 @@ describe("GitHub lifecycle projection", () => {
       comments: [
         {
           id: 10,
-          authorLogin: "freedworks-coordinator[bot]",
+          authorLogin: "aubtown-coordinator[bot]",
           body: `(AI Generated).\n\n${STATUS_COMMENT_MARKER}\nOld state`,
         },
         {
@@ -37,7 +41,7 @@ describe("GitHub lifecycle projection", () => {
           body: `${STATUS_COMMENT_MARKER}\nSpoofed marker`,
         },
       ],
-      machineAuthorLogin: "freedworks-coordinator[bot]",
+      machineAuthorLogin: "aubtown-coordinator[bot]",
       projection,
     });
     expect(plan.comment).toMatchObject({ action: "update", id: 10 });
@@ -46,13 +50,13 @@ describe("GitHub lifecycle projection", () => {
   it("fails closed instead of choosing among duplicate managed comments", () => {
     const comments = [1, 2].map((id) => ({
       id,
-      authorLogin: "freedworks-coordinator[bot]",
+      authorLogin: "aubtown-coordinator[bot]",
       body: `(AI Generated).\n\n${STATUS_COMMENT_MARKER}`,
     }));
     const plan = planProjectionMutation({
       currentLabels: ["debt"],
       comments,
-      machineAuthorLogin: "freedworks-coordinator[bot]",
+      machineAuthorLogin: "aubtown-coordinator[bot]",
       projection,
     });
     expect(plan).toMatchObject({ allowed: false, reason: "duplicate-managed-comments" });

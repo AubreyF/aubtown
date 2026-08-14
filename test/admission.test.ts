@@ -25,6 +25,19 @@ describe("qualifyIssue", () => {
     ).toEqual(["factory-ready", "active-authority"]);
   });
 
+  it("rejects a ready issue that also carries another lifecycle label", () => {
+    const result = qualifyIssue({
+      repository: FREED_REPOSITORY,
+      issue: issue({
+        labels: ["debt", "factory:ready", "factory:running"],
+      }),
+      evidence: evidence(),
+      requireExecutionAuthority: false,
+    });
+    expect(result.eligible).toBe(false);
+    expect(result.checks.find((check) => check.id === "factory-ready")?.passed).toBe(false);
+  });
+
   it("excludes automation incidents and provider-visible work", () => {
     const result = qualifyIssue({
       repository: FREED_REPOSITORY,

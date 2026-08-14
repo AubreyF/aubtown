@@ -111,15 +111,15 @@ export function createCheckpointServer(options: CheckpointServerOptions): Server
       }
       const reference = match[1]!;
       const authorization = header(request, "authorization");
-      if (!authorization.startsWith("FreedworksGrant ")) {
+      if (!authorization.startsWith("AubTownGrant ")) {
         respond(response, 401, '{"error":"authorization"}\n');
         return;
       }
       const grant = parseSignedCheckpointGrant(
-        decodeCheckpointAuthorization(authorization.slice("FreedworksGrant ".length)),
+        decodeCheckpointAuthorization(authorization.slice("AubTownGrant ".length)),
       );
       const proof = parseSignedCheckpointProof(
-        decodeCheckpointAuthorization(header(request, "x-freedworks-host-proof")),
+        decodeCheckpointAuthorization(header(request, "x-aubtown-host-proof")),
       );
       const enrollment = options.hostEnrollments[grant.hostId];
       if (enrollment === undefined || !enrollment.enabled) {
@@ -200,7 +200,7 @@ export function createCheckpointServer(options: CheckpointServerOptions): Server
         throw new Error("Checkpoint download does not match its transfer grant.");
       }
       response.writeHead(200, {
-        "content-type": "application/vnd.freedworks.checkpoint+json",
+        "content-type": "application/vnd.aubtown.checkpoint+json",
         "cache-control": "no-store",
         "content-length": bytes.length.toLocaleString("en-US", { useGrouping: false }),
       });

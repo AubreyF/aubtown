@@ -6,6 +6,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 
 - [x] Record the approved authority, host, quota, custody, concurrency, and publication boundaries.
 - [x] Create a private-ops repository structure with no embedded credentials or mutable service state.
+- [x] Establish AubTown as the single project identity across package, protocol, service, host, and deployment contracts.
 - [x] Keep worker, tracker, authority, storage, and hosting integrations replaceable.
 - [x] Complete the executable domain contracts and threat model tests.
 
@@ -28,6 +29,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Prove startup reconciliation against canonical task, issue, branch, and worktree state.
 - [x] Enforce exact-head draft publication planning and scoped GitHub App token minting.
 - [x] Implement approved-only lifecycle status projection, disabled by default until external write authorization.
+- [x] Make the lifecycle label and one managed comment the complete operator-visible view without rewriting issue descriptions.
 - [x] Authenticate Linux and macOS host telemetry with per-host Ed25519 identities and durable replay fencing.
 - [x] Keep general Restate ingress loopback-only and expose only the narrow signed host edge to remote executors.
 - [x] Make every durable internal Restate service ingress-private and omit the local integration harness from production.

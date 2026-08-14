@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INGRESS="${FREEDWORKS_RESTATE_INGRESS:-http://127.0.0.1:8080}"
-HOST_EDGE="${FREEDWORKS_HOST_EDGE:-http://127.0.0.1:8090}"
-CHECKPOINT_EDGE="${FREEDWORKS_CHECKPOINT_EDGE:-http://127.0.0.1:8091}"
+INGRESS="${AUBTOWN_RESTATE_INGRESS:-http://127.0.0.1:8080}"
+HOST_EDGE="${AUBTOWN_HOST_EDGE:-http://127.0.0.1:8090}"
+CHECKPOINT_EDGE="${AUBTOWN_CHECKPOINT_EDGE:-http://127.0.0.1:8091}"
 HARNESS="${INGRESS}/IntegrationHarness"
 TMP_DIR="$(mktemp -d)"
 RUN_ID="$(date +%s)-$$"
@@ -128,26 +128,26 @@ chmod 600 "$RECEIPT_PRIVATE_KEY"
 openssl pkey -in "$RECEIPT_PRIVATE_KEY" -pubout -out "$RECEIPT_PUBLIC_KEY" >/dev/null 2>&1
 PUBLIC_KEY_VALUE="$(<"$PUBLIC_KEY")"
 LINUX_PUBLIC_KEY_VALUE="$(<"$LINUX_PUBLIC_KEY")"
-FREEDWORKS_HOST_ENROLLMENTS_JSON="$(jq -cn \
+AUBTOWN_HOST_ENROLLMENTS_JSON="$(jq -cn \
   --arg host "$HOST_ID" \
   --arg linuxHost "$LINUX_HOST_ID" \
   --arg publicKeyPem "$PUBLIC_KEY_VALUE" \
   --arg linuxPublicKeyPem "$LINUX_PUBLIC_KEY_VALUE" \
   '{($host): {enabled: true, lane: "macos", accountIds: ["codex-pro-integration"], publicKeyPem: $publicKeyPem}, ($linuxHost): {enabled: true, lane: "linux", accountIds: ["codex-pro-integration"], publicKeyPem: $linuxPublicKeyPem}}')"
-export FREEDWORKS_HOST_ENROLLMENTS_JSON
-FREEDWORKS_ACCOUNT_PROFILES_JSON="$(jq -cn \
+export AUBTOWN_HOST_ENROLLMENTS_JSON
+AUBTOWN_ACCOUNT_PROFILES_JSON="$(jq -cn \
   --arg host "$HOST_ID" \
   --arg linuxHost "$LINUX_HOST_ID" \
   '{"codex-pro-integration": {driverId: "codex-app-server-v1", enabled: true, hostIds: [$host, $linuxHost]}}')"
-export FREEDWORKS_ACCOUNT_PROFILES_JSON
-FREEDWORKS_TEST_CHECKPOINT_GRANT_KEY_FILE="$GRANT_PRIVATE_KEY"
-export FREEDWORKS_TEST_CHECKPOINT_GRANT_KEY_FILE
-FREEDWORKS_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE="$GRANT_PUBLIC_KEY"
-export FREEDWORKS_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE
-FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE="$RECEIPT_PRIVATE_KEY"
-export FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE
-FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE="$RECEIPT_PUBLIC_KEY"
-export FREEDWORKS_TEST_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE
+export AUBTOWN_ACCOUNT_PROFILES_JSON
+AUBTOWN_TEST_CHECKPOINT_GRANT_KEY_FILE="$GRANT_PRIVATE_KEY"
+export AUBTOWN_TEST_CHECKPOINT_GRANT_KEY_FILE
+AUBTOWN_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE="$GRANT_PUBLIC_KEY"
+export AUBTOWN_TEST_CHECKPOINT_GRANT_PUBLIC_KEY_FILE
+AUBTOWN_TEST_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE="$RECEIPT_PRIVATE_KEY"
+export AUBTOWN_TEST_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE
+AUBTOWN_TEST_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE="$RECEIPT_PUBLIC_KEY"
+export AUBTOWN_TEST_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE
 
 COMPOSE_ARGS=(
   -f "${ROOT_DIR}/deploy/compose.yaml"
@@ -301,7 +301,7 @@ jq -n \
   --arg now "$NOW" \
   --argjson issue "$ISSUE_NUMBER" \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
-  '{repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, hostId: $host, workerId: "integration-worker", branch: ("test/checkpoint-grant-" + ($issue | tostring)), worktree: ("/tmp/freedworks-integration-" + ($issue | tostring)), conflictDomains: $qualification[0].conflictDomains, claimedAt: $now}' \
+  '{repository: {owner: "freed-project", name: "freed", defaultBranch: "dev"}, issueNumber: $issue, claimId: ("integration-claim-" + ($issue | tostring)), custodyEpoch: 1, hostId: $host, workerId: "integration-worker", branch: ("test/checkpoint-grant-" + ($issue | tostring)), worktree: ("/tmp/aubtown-integration-" + ($issue | tostring)), conflictDomains: $qualification[0].conflictDomains, claimedAt: $now}' \
   > "${TMP_DIR}/grant-claim.json"
 
 COMMAND_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
@@ -418,7 +418,7 @@ jq -n \
   --arg now "$NOW" \
   --arg claimId "integration-claim-${ISSUE_NUMBER}" \
   --arg branch "test/checkpoint-grant-${ISSUE_NUMBER}" \
-  --arg worktree "/tmp/freedworks-integration-${ISSUE_NUMBER}" \
+  --arg worktree "/tmp/aubtown-integration-${ISSUE_NUMBER}" \
   '{schemaVersion: 1, hostId: $host, sequence: 5, issuedAt: $now, kind: "workspace-receipt", payload: {schemaVersion: 1, claimId: $claimId, custodyEpoch: 1, hostId: $host, worktree: $worktree, branch: $branch, baseHead: ("b" * 40), preparedAt: $now}}' \
   > "${TMP_DIR}/workspace-receipt-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/workspace-receipt-unsigned.json" \
@@ -572,9 +572,9 @@ UPLOAD_GRANT_HEADER="$(openssl base64 -A -in "${TMP_DIR}/upload-grant.json" | tr
 UPLOAD_PROOF_HEADER="$(openssl base64 -A -in "${TMP_DIR}/upload-proof.json" | tr '+/' '-_' | tr -d '=')"
 curl --fail --silent --show-error \
   -X PUT "${CHECKPOINT_EDGE}/v1/checkpoints/${CHECKPOINT_REFERENCE}" \
-  -H "authorization: FreedworksGrant ${UPLOAD_GRANT_HEADER}" \
-  -H "x-freedworks-host-proof: ${UPLOAD_PROOF_HEADER}" \
-  -H 'content-type: application/vnd.freedworks.checkpoint+json' \
+  -H "authorization: AubTownGrant ${UPLOAD_GRANT_HEADER}" \
+  -H "x-aubtown-host-proof: ${UPLOAD_PROOF_HEADER}" \
+  -H 'content-type: application/vnd.aubtown.checkpoint+json' \
   --data-binary "@${TMP_DIR}/checkpoint-payload.json" \
   > "${TMP_DIR}/checkpoint-upload-response.json"
 jq -e \
@@ -812,7 +812,7 @@ jq -n \
   --arg claimId "integration-claim-${ISSUE_NUMBER}" \
   --arg destinationHostId "$LINUX_HOST_ID" \
   --arg now "$NOW" \
-  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  --arg worktree "/tmp/aubtown-linux-${ISSUE_NUMBER}" \
   '{claimId: $claimId, priorEpoch: 1, nextEpoch: 2, destinationHostId: $destinationHostId, destinationWorkerId: "integration-linux-worker", destinationWorktree: $worktree, transferredAt: $now}' \
   > "${TMP_DIR}/claim-transfer.json"
 harness_file \
@@ -832,7 +832,7 @@ jq -n \
   --arg now "$NOW" \
   --arg reference "$CHECKPOINT_REFERENCE" \
   --arg branch "test/checkpoint-grant-${ISSUE_NUMBER}" \
-  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  --arg worktree "/tmp/aubtown-linux-${ISSUE_NUMBER}" \
   --argjson issue "$ISSUE_NUMBER" \
   --argjson contentLength "$CHECKPOINT_LENGTH" \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
@@ -885,7 +885,7 @@ curl --fail --silent --show-error \
 
 jq \
   --arg host "$LINUX_HOST_ID" \
-  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  --arg worktree "/tmp/aubtown-linux-${ISSUE_NUMBER}" \
   '.custodyEpoch = 2 | .hostId = $host | .workerId = "integration-linux-worker" | .worktree = $worktree' \
   "${TMP_DIR}/grant-claim.json" \
   > "${TMP_DIR}/linux-claim.json"
@@ -954,8 +954,8 @@ DOWNLOAD_GRANT_HEADER="$(openssl base64 -A -in "${TMP_DIR}/download-grant.json" 
 DOWNLOAD_PROOF_HEADER="$(openssl base64 -A -in "${TMP_DIR}/download-proof.json" | tr '+/' '-_' | tr -d '=')"
 curl --fail --silent --show-error \
   "${CHECKPOINT_EDGE}/v1/checkpoints/${CHECKPOINT_REFERENCE}" \
-  -H "authorization: FreedworksGrant ${DOWNLOAD_GRANT_HEADER}" \
-  -H "x-freedworks-host-proof: ${DOWNLOAD_PROOF_HEADER}" \
+  -H "authorization: AubTownGrant ${DOWNLOAD_GRANT_HEADER}" \
+  -H "x-aubtown-host-proof: ${DOWNLOAD_PROOF_HEADER}" \
   -o "${TMP_DIR}/downloaded-checkpoint.json"
 cmp "${TMP_DIR}/checkpoint-payload.json" "${TMP_DIR}/downloaded-checkpoint.json"
 
@@ -964,7 +964,7 @@ jq -n \
   --arg now "$NOW" \
   --arg claimId "integration-claim-${ISSUE_NUMBER}" \
   --arg reference "$CHECKPOINT_REFERENCE" \
-  --arg worktree "/tmp/freedworks-linux-${ISSUE_NUMBER}" \
+  --arg worktree "/tmp/aubtown-linux-${ISSUE_NUMBER}" \
   '{schemaVersion: 1, hostId: $host, sequence: 6, issuedAt: $now, kind: "restore-receipt", payload: {schemaVersion: 1, claimId: $claimId, custodyEpoch: 2, destinationHostId: $host, destinationWorktree: $worktree, checkpointReference: $reference, checkpointBaseHead: ("b" * 40), restoredAt: $now}}' \
   > "${TMP_DIR}/restore-receipt-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$LINUX_PRIVATE_KEY" "${TMP_DIR}/restore-receipt-unsigned.json" \
@@ -1003,8 +1003,8 @@ wait_for_checkpoint_edge
 
 curl --fail --silent --show-error \
   "${CHECKPOINT_EDGE}/v1/checkpoints/${CHECKPOINT_REFERENCE}" \
-  -H "authorization: FreedworksGrant ${DOWNLOAD_GRANT_HEADER}" \
-  -H "x-freedworks-host-proof: ${DOWNLOAD_PROOF_HEADER}" \
+  -H "authorization: AubTownGrant ${DOWNLOAD_GRANT_HEADER}" \
+  -H "x-aubtown-host-proof: ${DOWNLOAD_PROOF_HEADER}" \
   -o "${TMP_DIR}/downloaded-after-restart.json"
 cmp "${TMP_DIR}/checkpoint-payload.json" "${TMP_DIR}/downloaded-after-restart.json"
 

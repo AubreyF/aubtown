@@ -12,7 +12,7 @@ afterEach(async () => {
 
 describe("DurableSequenceStore", () => {
   it("serializes concurrent increments and survives process replacement", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-sequence-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-sequence-"));
     roots.push(root);
     const file = path.join(root, "state", "host.sequence");
     const first = new DurableSequenceStore(file);

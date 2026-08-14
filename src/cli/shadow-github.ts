@@ -16,9 +16,9 @@ function option(argv: readonly string[], name: string, fallback: string): string
 }
 
 async function main(): Promise<void> {
-  const token = process.env.FREEDWORKS_GITHUB_TOKEN;
+  const token = process.env.AUBTOWN_GITHUB_TOKEN;
   if (token === undefined || token.length === 0) {
-    throw new Error("FREEDWORKS_GITHUB_TOKEN is required for host-side read access.");
+    throw new Error("AUBTOWN_GITHUB_TOKEN is required for host-side read access.");
   }
   const argv = process.argv.slice(2);
   const repository: RepositoryRef = {

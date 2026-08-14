@@ -1,14 +1,14 @@
 [Unit]
-Description=Freedworks signed host ingress edge
-Requires=freedworks-restate.service
-After=network-online.target freedworks-restate.service
+Description=AubTown signed host ingress edge
+Requires=aubtown-restate.service
+After=network-online.target aubtown-restate.service
 
 [Service]
 Type=simple
-User=freedworks-edge
-Group=freedworks-edge
-WorkingDirectory=/opt/freedworks/current
-ExecStart=/usr/bin/env PORT=8090 FREEDWORKS_BIND_HOST=127.0.0.1 FREEDWORKS_RESTATE_INGRESS=http://127.0.0.1:8080 /opt/freedworks/node/bin/node /opt/freedworks/current/dist/edge-gateway.js
+User=aubtown-edge
+Group=aubtown-edge
+WorkingDirectory=/opt/aubtown/current
+ExecStart=/usr/bin/env PORT=8090 AUBTOWN_BIND_HOST=127.0.0.1 AUBTOWN_RESTATE_INGRESS=http://127.0.0.1:8080 /opt/aubtown/node/bin/node /opt/aubtown/current/dist/edge-gateway.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30

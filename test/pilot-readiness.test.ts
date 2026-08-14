@@ -52,7 +52,7 @@ import {
 const roots: string[] = [];
 const runner = new ProcessCommandRunner();
 const gitExecutable =
-  process.env.FREEDWORKS_TEST_GIT_EXECUTABLE ?? "/usr/bin/git";
+  process.env.AUBTOWN_TEST_GIT_EXECUTABLE ?? "/usr/bin/git";
 
 afterEach(async () => {
   await Promise.all(
@@ -105,7 +105,7 @@ class ReviewTransport implements JsonRpcTransport {
 
 describe("assembled Freed pilot readiness", () => {
   it("carries one exact candidate from worker completion to durable draft receipt", async () => {
-    const testRoot = await mkdtemp(path.join(os.tmpdir(), "freedworks-pilot-"));
+    const testRoot = await mkdtemp(path.join(os.tmpdir(), "aubtown-pilot-"));
     roots.push(testRoot);
     const worktree = path.join(testRoot, "worktree");
     const store = new LocalCheckpointStore(path.join(testRoot, "checkpoints"));
@@ -114,7 +114,7 @@ describe("assembled Freed pilot readiness", () => {
       args: ["init", "-b", "dev", worktree],
       cwd: testRoot,
     });
-    await git(worktree, ["config", "user.name", "Freedworks Pilot"]);
+    await git(worktree, ["config", "user.name", "AubTown Pilot"]);
     await git(worktree, ["config", "user.email", "pilot@example.invalid"]);
     await mkdir(path.join(worktree, "src"));
     await writeFile(path.join(worktree, "src/value.txt"), "before\n");

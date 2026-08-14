@@ -257,7 +257,7 @@ export class StdioJsonRpcTransport implements JsonRpcTransport {
         id,
         error: {
           code: -32_601,
-          message: `Freedworks does not permit server-initiated method ${method}.`,
+          message: `AubTown does not permit server-initiated method ${method}.`,
         },
       })}\n`,
       (error) => {
@@ -374,8 +374,8 @@ export class CodexAppServerClient {
       method: "initialize",
       params: {
         clientInfo: {
-          name: "freedworks",
-          title: "Freedworks",
+          name: "aubtown",
+          title: "AubTown",
           version: "0.1.0",
         },
         capabilities: {},
@@ -459,7 +459,7 @@ export class CodexAppServerClient {
           cwd: input.cwd,
           approvalPolicy: "never",
           sandbox: input.sandbox ?? "workspaceWrite",
-          serviceName: "freedworks",
+          serviceName: "aubtown",
         },
       }),
     );

@@ -1,6 +1,6 @@
 # Checkpoint custody
 
-Freedworks can move unpublished repository state without moving credentials or an existing worktree directory.
+AubTown can move unpublished repository state without moving credentials or an existing worktree directory.
 
 ## Capture
 

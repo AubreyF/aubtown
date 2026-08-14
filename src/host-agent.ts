@@ -45,42 +45,42 @@ function requiredAbsoluteEnvironment(name: string): string {
 }
 
 function validationPath(): string {
-  const value = requiredEnvironment("FREEDWORKS_VALIDATION_PATH");
+  const value = requiredEnvironment("AUBTOWN_VALIDATION_PATH");
   if (value.split(":").some((entry) => !entry.startsWith("/"))) {
     throw new Error(
-      "FREEDWORKS_VALIDATION_PATH must contain only absolute directories.",
+      "AUBTOWN_VALIDATION_PATH must contain only absolute directories.",
     );
   }
   return value;
 }
 
-const accountId = requiredEnvironment("FREEDWORKS_ACCOUNT_ID");
-const hostId = requiredEnvironment("FREEDWORKS_HOST_ID");
-const hostLaneValue = requiredEnvironment("FREEDWORKS_HOST_LANE");
+const accountId = requiredEnvironment("AUBTOWN_ACCOUNT_ID");
+const hostId = requiredEnvironment("AUBTOWN_HOST_ID");
+const hostLaneValue = requiredEnvironment("AUBTOWN_HOST_LANE");
 if (hostLaneValue !== "linux" && hostLaneValue !== "macos") {
-  throw new Error("FREEDWORKS_HOST_LANE must be linux or macos.");
+  throw new Error("AUBTOWN_HOST_LANE must be linux or macos.");
 }
 const hostLane = hostLaneValue as HostLane;
 const privateKey = await loadHostPrivateKey(
-  requiredEnvironment("FREEDWORKS_HOST_PRIVATE_KEY_FILE"),
+  requiredEnvironment("AUBTOWN_HOST_PRIVATE_KEY_FILE"),
 );
 const sequenceStore = new DurableSequenceStore(
-  requiredEnvironment("FREEDWORKS_HOST_SEQUENCE_FILE"),
+  requiredEnvironment("AUBTOWN_HOST_SEQUENCE_FILE"),
 );
-const gatewayUrl = process.env.FREEDWORKS_HOST_GATEWAY_URL ?? "http://127.0.0.1:8090";
-const intervalSeconds = Number(process.env.FREEDWORKS_QUOTA_SAMPLE_SECONDS ?? "60");
+const gatewayUrl = process.env.AUBTOWN_HOST_GATEWAY_URL ?? "http://127.0.0.1:8090";
+const intervalSeconds = Number(process.env.AUBTOWN_QUOTA_SAMPLE_SECONDS ?? "60");
 if (!Number.isInteger(intervalSeconds) || intervalSeconds < 15) {
-  throw new Error("FREEDWORKS_QUOTA_SAMPLE_SECONDS must be an integer of at least 15.");
+  throw new Error("AUBTOWN_QUOTA_SAMPLE_SECONDS must be an integer of at least 15.");
 }
-const model = requiredEnvironment("FREEDWORKS_CODEX_MODEL");
-const effortValue = process.env.FREEDWORKS_CODEX_EFFORT ?? "high";
+const model = requiredEnvironment("AUBTOWN_CODEX_MODEL");
+const effortValue = process.env.AUBTOWN_CODEX_EFFORT ?? "high";
 if (!["low", "medium", "high", "xhigh"].includes(effortValue)) {
-  throw new Error("FREEDWORKS_CODEX_EFFORT must be low, medium, high, or xhigh.");
+  throw new Error("AUBTOWN_CODEX_EFFORT must be low, medium, high, or xhigh.");
 }
 const effort = effortValue as "low" | "medium" | "high" | "xhigh";
 const codexCompatibility = await verifyCodexCompatibility({
-  executable: requiredEnvironment("FREEDWORKS_CODEX_EXECUTABLE"),
-  expectedVersion: requiredEnvironment("FREEDWORKS_CODEX_VERSION"),
+  executable: requiredEnvironment("AUBTOWN_CODEX_EXECUTABLE"),
+  expectedVersion: requiredEnvironment("AUBTOWN_CODEX_VERSION"),
 });
 
 const transport = new StdioJsonRpcTransport({ command: codexCompatibility.executable });
@@ -107,22 +107,22 @@ const governor = new HostGatewayClient(
 );
 const monitor = new QuotaMonitor(usage, worker, governor);
 const executionJournal = new HostExecutionJournal(
-  requiredEnvironment("FREEDWORKS_EXECUTION_JOURNAL_FILE"),
+  requiredEnvironment("AUBTOWN_EXECUTION_JOURNAL_FILE"),
 );
 const checkpointKeyReference = requiredEnvironment(
-  "FREEDWORKS_CHECKPOINT_KEY_REFERENCE",
+  "AUBTOWN_CHECKPOINT_KEY_REFERENCE",
 );
 const checkpointStore = new LocalCheckpointStore(
-  requiredEnvironment("FREEDWORKS_CHECKPOINT_LOCAL_STORE_ROOT"),
+  requiredEnvironment("AUBTOWN_CHECKPOINT_LOCAL_STORE_ROOT"),
 );
 const checkpointCipher = new XChaChaCheckpointCipher(
   new FileCheckpointKeyProvider(
-    requiredEnvironment("FREEDWORKS_CHECKPOINT_KEY_FILE"),
+    requiredEnvironment("AUBTOWN_CHECKPOINT_KEY_FILE"),
     checkpointKeyReference,
   ),
 );
 const commandRunner = new ProcessCommandRunner();
-const gitExecutable = requiredAbsoluteEnvironment("FREEDWORKS_GIT_EXECUTABLE");
+const gitExecutable = requiredAbsoluteEnvironment("AUBTOWN_GIT_EXECUTABLE");
 const custodyService = new GitCustodyCheckpointService(
   commandRunner,
   checkpointCipher,
@@ -130,7 +130,7 @@ const custodyService = new GitCustodyCheckpointService(
   gitExecutable,
 );
 const checkpointTransfer = new CheckpointTransferClient(
-  requiredEnvironment("FREEDWORKS_CHECKPOINT_EDGE_URL"),
+  requiredEnvironment("AUBTOWN_CHECKPOINT_EDGE_URL"),
   hostId,
   privateKey,
 );
@@ -143,8 +143,8 @@ const checkpointManager = new RemoteExecutionCheckpointManager(
 );
 const workspaceManager = new FreedWorkspaceManager(
   requiredAbsoluteEnvironment("FREED_REPOSITORY_ROOT"),
-  requiredAbsoluteEnvironment("FREEDWORKS_WORKTREE_ROOT"),
-  requiredAbsoluteEnvironment("FREEDWORKS_WORKTREE_HELPER"),
+  requiredAbsoluteEnvironment("AUBTOWN_WORKTREE_ROOT"),
+  requiredAbsoluteEnvironment("AUBTOWN_WORKTREE_HELPER"),
   commandRunner,
   gitExecutable,
 );
@@ -182,7 +182,7 @@ const adjudication = new HostAdjudicationSupervisor(
   ),
   new CodexIndependentReviewer(client, { model, effort }),
   new HostAdjudicationJournal(
-    requiredEnvironment("FREEDWORKS_ADJUDICATION_JOURNAL_FILE"),
+    requiredEnvironment("AUBTOWN_ADJUDICATION_JOURNAL_FILE"),
   ),
   governor,
   { PATH: validationPath(), CI: "true" },

@@ -125,10 +125,10 @@ export async function verifyCodexCompatibility(input: {
   readonly runner?: CommandRunner;
 }): Promise<CodexCompatibilityReceipt> {
   if (!isAbsolute(input.executable)) {
-    throw new Error("FREEDWORKS_CODEX_EXECUTABLE must be an absolute path.");
+    throw new Error("AUBTOWN_CODEX_EXECUTABLE must be an absolute path.");
   }
   if (input.expectedVersion.trim() !== input.expectedVersion || input.expectedVersion === "") {
-    throw new Error("FREEDWORKS_CODEX_VERSION must be an exact nonempty version string.");
+    throw new Error("AUBTOWN_CODEX_VERSION must be an exact nonempty version string.");
   }
   const executable = await realpath(input.executable);
   const stats = await lstat(executable);
@@ -155,7 +155,7 @@ export async function verifyCodexCompatibility(input: {
     );
   }
 
-  const schemaDirectory = await mkdtemp(join(tmpdir(), "freedworks-codex-schema-"));
+  const schemaDirectory = await mkdtemp(join(tmpdir(), "aubtown-codex-schema-"));
   try {
     await runner.run({
       executable,

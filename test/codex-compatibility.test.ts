@@ -139,7 +139,7 @@ describe("Codex compatibility", () => {
   });
 
   it("pins the executable, exact version, and generated protocol", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "freedworks-codex-test-"));
+    const directory = await mkdtemp(join(tmpdir(), "aubtown-codex-test-"));
     temporaryDirectories.push(directory);
     const executable = join(directory, "codex");
     await writeFile(executable, "test binary", "utf8");
@@ -157,7 +157,7 @@ describe("Codex compatibility", () => {
   });
 
   it("fails closed after an unreviewed executable version change", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "freedworks-codex-test-"));
+    const directory = await mkdtemp(join(tmpdir(), "aubtown-codex-test-"));
     temporaryDirectories.push(directory);
     const executable = join(directory, "codex");
     await writeFile(executable, "test binary", "utf8");

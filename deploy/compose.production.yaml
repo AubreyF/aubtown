@@ -1,9 +1,9 @@
 services:
   restate:
     environment:
-      - RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=/run/freedworks/restate-identity.pem
+      - RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=/run/aubtown/restate-identity.pem
     volumes:
-      - "${FREEDWORKS_RESTATE_IDENTITY_KEY_FILE:?set the absolute Restate identity key path}:/run/freedworks/restate-identity.pem:ro"
+      - "${AUBTOWN_RESTATE_IDENTITY_KEY_FILE:?set the absolute Restate identity key path}:/run/aubtown/restate-identity.pem:ro"
 
   control-secrets-init:
     build:
@@ -16,23 +16,23 @@ services:
       - install -o 1000 -g 1000 -m 0400 /source/checkpoint-grant-private.pem /destination/checkpoint-grant-private.pem
     restart: "no"
     volumes:
-      - "${FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE:?set the absolute checkpoint grant key path}:/source/checkpoint-grant-private.pem:ro"
+      - "${AUBTOWN_CHECKPOINT_GRANT_PRIVATE_KEY_FILE:?set the absolute checkpoint grant key path}:/source/checkpoint-grant-private.pem:ro"
       - control-secrets:/destination
 
   control-plane:
     environment:
-      - FREEDWORKS_ENABLE_INTEGRATION_HARNESS=false
-      - FREEDWORKS_CHECKPOINT_GRANT_PRIVATE_KEY_FILE=/run/freedworks-secrets/checkpoint-grant-private.pem
-      - FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE=/run/freedworks/checkpoint-receipt-public.pem
-      - FREEDWORKS_HOST_ENROLLMENTS_FILE=/run/freedworks/host-enrollments.json
-      - FREEDWORKS_ACCOUNT_PROFILES_FILE=/run/freedworks/account-profiles.json
-      - FREEDWORKS_RESTATE_IDENTITY_KEYS
-      - FREEDWORKS_HOST_ENROLLMENTS_JSON
+      - AUBTOWN_ENABLE_INTEGRATION_HARNESS=false
+      - AUBTOWN_CHECKPOINT_GRANT_PRIVATE_KEY_FILE=/run/aubtown-secrets/checkpoint-grant-private.pem
+      - AUBTOWN_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE=/run/aubtown/checkpoint-receipt-public.pem
+      - AUBTOWN_HOST_ENROLLMENTS_FILE=/run/aubtown/host-enrollments.json
+      - AUBTOWN_ACCOUNT_PROFILES_FILE=/run/aubtown/account-profiles.json
+      - AUBTOWN_RESTATE_IDENTITY_KEYS
+      - AUBTOWN_HOST_ENROLLMENTS_JSON
     volumes:
-      - "${FREEDWORKS_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/freedworks/host-enrollments.json:ro"
-      - "${FREEDWORKS_ACCOUNT_PROFILES_FILE:?set the absolute account profiles file path}:/run/freedworks/account-profiles.json:ro"
-      - "${FREEDWORKS_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE:?set the absolute checkpoint receipt public key path}:/run/freedworks/checkpoint-receipt-public.pem:ro"
-      - control-secrets:/run/freedworks-secrets:ro
+      - "${AUBTOWN_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/aubtown/host-enrollments.json:ro"
+      - "${AUBTOWN_ACCOUNT_PROFILES_FILE:?set the absolute account profiles file path}:/run/aubtown/account-profiles.json:ro"
+      - "${AUBTOWN_CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE:?set the absolute checkpoint receipt public key path}:/run/aubtown/checkpoint-receipt-public.pem:ro"
+      - control-secrets:/run/aubtown-secrets:ro
     depends_on:
       control-secrets-init:
         condition: service_completed_successfully
@@ -49,18 +49,18 @@ services:
       - install -o 1000 -g 1000 -m 0400 /source/checkpoint-receipt-private.pem /destination/checkpoint-receipt-private.pem
     restart: "no"
     volumes:
-      - "${FREEDWORKS_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE:?set the absolute checkpoint receipt private key path}:/source/checkpoint-receipt-private.pem:ro"
+      - "${AUBTOWN_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE:?set the absolute checkpoint receipt private key path}:/source/checkpoint-receipt-private.pem:ro"
       - checkpoint-edge-secrets:/destination
 
   checkpoint-edge:
     environment:
-      - FREEDWORKS_HOST_ENROLLMENTS_FILE=/run/freedworks/host-enrollments.json
-      - FREEDWORKS_CHECKPOINT_GRANT_PUBLIC_KEY_FILE=/run/freedworks/checkpoint-grant-public.pem
-      - FREEDWORKS_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE=/run/freedworks-secrets/checkpoint-receipt-private.pem
+      - AUBTOWN_HOST_ENROLLMENTS_FILE=/run/aubtown/host-enrollments.json
+      - AUBTOWN_CHECKPOINT_GRANT_PUBLIC_KEY_FILE=/run/aubtown/checkpoint-grant-public.pem
+      - AUBTOWN_CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE=/run/aubtown-secrets/checkpoint-receipt-private.pem
     volumes:
-      - "${FREEDWORKS_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/freedworks/host-enrollments.json:ro"
-      - "${FREEDWORKS_CHECKPOINT_GRANT_PUBLIC_KEY_FILE:?set the absolute checkpoint grant public key path}:/run/freedworks/checkpoint-grant-public.pem:ro"
-      - checkpoint-edge-secrets:/run/freedworks-secrets:ro
+      - "${AUBTOWN_HOST_ENROLLMENTS_FILE:?set the absolute host enrollment file path}:/run/aubtown/host-enrollments.json:ro"
+      - "${AUBTOWN_CHECKPOINT_GRANT_PUBLIC_KEY_FILE:?set the absolute checkpoint grant public key path}:/run/aubtown/checkpoint-grant-public.pem:ro"
+      - checkpoint-edge-secrets:/run/aubtown-secrets:ro
     depends_on:
       checkpoint-edge-secrets-init:
         condition: service_completed_successfully

@@ -77,7 +77,7 @@ export function claim(overrides: Partial<DispatchClaim> = {}): DispatchClaim {
     hostId: "linux-control-1",
     workerId: "worker-1",
     branch: "fix/deterministic-validation",
-    worktree: "/srv/freedworks/worktrees/freed/1234",
+    worktree: "/srv/aubtown/worktrees/freed/1234",
     conflictDomains: ["logical:tooling-validation", "path:scripts/lib"],
     claimedAt: "2026-08-13T08:00:00.000Z",
     ...overrides,

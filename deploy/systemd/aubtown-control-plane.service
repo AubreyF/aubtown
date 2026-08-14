@@ -1,0 +1,31 @@
+[Unit]
+Description=AubTown durable control plane
+Requires=aubtown-restate.service
+After=network-online.target aubtown-restate.service
+
+[Service]
+Type=simple
+User=aubtown-control
+Group=aubtown-control
+WorkingDirectory=/opt/aubtown/current
+EnvironmentFile=/etc/aubtown/control-plane.env
+ExecStart=/usr/bin/env PORT=9080 AUBTOWN_BIND_HOST=127.0.0.1 AUBTOWN_ENABLE_INTEGRATION_HARNESS=false /opt/aubtown/node/bin/node /opt/aubtown/current/dist/service.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

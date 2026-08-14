@@ -1,6 +1,6 @@
-# Freedworks
+# AubTown
 
-Freedworks is a working title for a governed software factory. It uses GitHub Issues as the only work queue, a repository-specific authority bridge for execution permission, durable orchestration, and replaceable worker drivers.
+AubTown is a governed software factory. It uses GitHub Issues as the only work queue, a repository-specific authority bridge for execution permission, durable orchestration, and replaceable worker drivers.
 
 Freed is the only enrolled repository in the initial pilot. The architecture retains a uniform repository contract so other repositories can be added later without becoming active now.
 
@@ -13,6 +13,8 @@ Freed is the only enrolled repository in the initial pilot. The architecture ret
 - The first writer runs alone.
 - The publication ceiling is a draft pull request.
 - Provider-visible work and sensitive operational lanes cannot execute unattended.
+
+GitHub is the complete visible factory console. The lifecycle label gives the queue state, and one App-authored status comment shows the assigned host, worker, claim epoch, branch, heartbeat, draft pull request, blocker, and next action. AubTown never edits the issue description to claim work. Restate stores only the small durable claim and workflow state needed to survive a crash without dispatching the issue twice.
 
 ## Local development
 
@@ -32,7 +34,7 @@ The shadow command reads issue JSON and prints deterministic qualification repor
 The host-side GitHub shadow reader is also read-only:
 
 ```sh
-FREEDWORKS_GITHUB_TOKEN='<installation token>' npm run shadow:github
+AUBTOWN_GITHUB_TOKEN='<installation token>' npm run shadow:github
 ```
 
 Use a short-lived Coordinator App installation token in deployment. The token stays in the host process environment and is never passed to a worker.

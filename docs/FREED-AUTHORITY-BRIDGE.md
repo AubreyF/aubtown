@@ -56,7 +56,7 @@ Every mutation takes the task ID, expected task revision, coordinator actor, can
 
 The task-manifest transaction and event append stay one recoverable operation under the existing task guard. New deterministic events are `task_execution_claim_acquired`, `task_execution_claim_heartbeat`, `task_execution_claim_transferred`, and `task_execution_claim_released`. Each event carries the task and manifest revisions, complete redacted claim identity, actor lease provenance, and operation ID. Tokens and credentials never enter the task, event, receipt, or Restate state.
 
-The initial `freed-factory-coordinator` policy should be `pr-only`, provider `forbidden`, no task creation, no task-state destinations, and one new `canManageExecutionClaims` capability. This is deliberately weaker than `freed-nightly-runner`. Draft publication remains the separate GitHub App boundary already implemented in Freedworks.
+The initial `freed-factory-coordinator` policy should be `pr-only`, provider `forbidden`, no task creation, no task-state destinations, and one new `canManageExecutionClaims` capability. This is deliberately weaker than `freed-nightly-runner`. Draft publication remains the separate GitHub App boundary already implemented in AubTown.
 
 The nightly runner must use the same claim primitive before it starts implementation. It should skip tasks claimed by the factory or another runner. The factory should skip a task claimed by the nightly runner. `nightly-writer` may continue serializing the legacy nightly loop, but it cannot be the factory's writer authority. The existing global behavior slot, provider checks, owner review, installed identity, outcome writer, and soak rules continue unchanged.
 
@@ -68,7 +68,7 @@ The macOS pilot may run the same coordinator locally first. Moving canonical aut
 
 ## Linux broker
 
-Implement the broker in Go in this private operations repository. Keep the accepted command, signed-intent, and receipt schemas in Freed so the product repository owns its authority contract. The Linux installation uses a root-owned executable and configuration under `/etc/freedworks`, a dedicated service user, a Unix socket for the local coordinator, and mTLS for remote Mac executors. This is a new coordinator-specific Linux trust path. It does not pretend the current macOS-only general-actor launcher already works on Linux.
+Implement the broker in Go in this private operations repository. Keep the accepted command, signed-intent, and receipt schemas in Freed so the product repository owns its authority contract. The Linux installation uses a root-owned executable and configuration under `/etc/aubtown`, a dedicated service user, a Unix socket for the local coordinator, and mTLS for remote Mac executors. This is a new coordinator-specific Linux trust path. It does not pretend the current macOS-only general-actor launcher already works on Linux.
 
 The broker command allowlist is limited to:
 
@@ -102,7 +102,7 @@ Approve this exact authority change:
 
 1. One checked-in `freed-factory-coordinator` actor, initially `pr-only`, provider-forbidden, unable to create or transition tasks, and authorized only for dedicated execution-claim mutations.
 2. One top-level persistent `executionClaim` per task, with no automatic authority expiry. Heartbeat staleness triggers checkpoint reconciliation, not takeover.
-3. The nightly runner and Freedworks both use the same task-claim primitive, while `nightly-writer` remains only the legacy runner's global loop lease.
+3. The nightly runner and AubTown both use the same task-claim primitive, while `nightly-writer` remains only the legacy runner's global loop lease.
 4. Linux eventually owns the single canonical authority root through a new coordinator-specific root-owned Go broker and signed Freed contract. The Mac remains an executor.
 5. The first pilot retains the draft-PR-only publication ceiling and does not relax provider, behavior-slot, owner-review, merge, release, install, or soak gates.
 

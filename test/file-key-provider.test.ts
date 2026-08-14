@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe("FileCheckpointKeyProvider", () => {
   it("reads only the configured physical mode-restricted 32-byte key", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-checkpoint-key-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-checkpoint-key-"));
     roots.push(root);
     const file = join(root, "checkpoint-key.bin");
     const key = Buffer.alloc(32, 7);

@@ -25,14 +25,14 @@ export function parseHostEnrollments(value: unknown): HostEnrollments {
 }
 
 export async function loadHostEnrollments(environment: NodeJS.ProcessEnv): Promise<HostEnrollments> {
-  const inline = environment.FREEDWORKS_HOST_ENROLLMENTS_JSON?.trim();
-  const file = environment.FREEDWORKS_HOST_ENROLLMENTS_FILE?.trim();
+  const inline = environment.AUBTOWN_HOST_ENROLLMENTS_JSON?.trim();
+  const file = environment.AUBTOWN_HOST_ENROLLMENTS_FILE?.trim();
   if (inline !== undefined && inline.length > 0 && file !== undefined && file.length > 0) {
     throw new Error("Configure host enrollments with JSON or a file, not both.");
   }
   if (file !== undefined && file.length > 0) {
     if (!file.startsWith("/")) {
-      throw new Error("FREEDWORKS_HOST_ENROLLMENTS_FILE must be absolute.");
+      throw new Error("AUBTOWN_HOST_ENROLLMENTS_FILE must be absolute.");
     }
     return parseHostEnrollments(JSON.parse(await readFile(file, "utf8")));
   }

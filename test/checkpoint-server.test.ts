@@ -44,7 +44,7 @@ function keys() {
 
 describe("checkpoint transfer edge", () => {
   it("moves encrypted unpublished work from a Mac identity to the next Linux custody epoch", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-checkpoint-edge-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-checkpoint-edge-"));
     roots.push(root);
     const grantKeys = keys();
     const receiptKeys = keys();
@@ -180,7 +180,7 @@ describe("checkpoint transfer edge", () => {
   });
 
   it("rejects a transfer proof from a different host identity", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-checkpoint-edge-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-checkpoint-edge-"));
     roots.push(root);
     const grantKeys = keys();
     const receiptKeys = keys();
@@ -244,8 +244,8 @@ describe("checkpoint transfer edge", () => {
       {
         method: "PUT",
         headers: {
-          authorization: `FreedworksGrant ${encodeCheckpointAuthorization(grant)}`,
-          "x-freedworks-host-proof": encodeCheckpointAuthorization(proof),
+          authorization: `AubTownGrant ${encodeCheckpointAuthorization(grant)}`,
+          "x-aubtown-host-proof": encodeCheckpointAuthorization(proof),
           "content-length": "1",
         },
         body: new Uint8Array([1]),

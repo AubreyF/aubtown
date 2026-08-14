@@ -50,8 +50,8 @@ export async function loadExecutionAccountProfiles(
   environment: NodeJS.ProcessEnv,
   enrollments: HostEnrollments,
 ): Promise<ExecutionAccountProfiles> {
-  const inline = environment.FREEDWORKS_ACCOUNT_PROFILES_JSON?.trim();
-  const file = environment.FREEDWORKS_ACCOUNT_PROFILES_FILE?.trim();
+  const inline = environment.AUBTOWN_ACCOUNT_PROFILES_JSON?.trim();
+  const file = environment.AUBTOWN_ACCOUNT_PROFILES_FILE?.trim();
   if (
     inline !== undefined &&
     inline.length > 0 &&
@@ -62,7 +62,7 @@ export async function loadExecutionAccountProfiles(
   }
   if (file !== undefined && file.length > 0) {
     if (!file.startsWith("/")) {
-      throw new Error("FREEDWORKS_ACCOUNT_PROFILES_FILE must be absolute.");
+      throw new Error("AUBTOWN_ACCOUNT_PROFILES_FILE must be absolute.");
     }
     const stats = await lstat(file);
     if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 1_024 * 1_024) {

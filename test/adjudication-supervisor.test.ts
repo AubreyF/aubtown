@@ -110,7 +110,7 @@ async function waitFor(
 
 describe("HostAdjudicationSupervisor", () => {
   it("runs exact validation then a fresh review without blocking the poll loop", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-adjudication-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-adjudication-"));
     roots.push(root);
     const journal = new HostAdjudicationJournal(join(root, "journal.json"));
     let polls = 0;
@@ -179,7 +179,7 @@ describe("HostAdjudicationSupervisor", () => {
   });
 
   it("fails closed when validation start outcome is ambiguous after restart", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-adjudication-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-adjudication-"));
     roots.push(root);
     const journal = new HostAdjudicationJournal(join(root, "journal.json"));
     await journal.accept(command, "validate", "2026-08-13T18:00:00.000Z");
@@ -205,7 +205,7 @@ describe("HostAdjudicationSupervisor", () => {
   });
 
   it("resumes one journaled reviewer handle instead of starting another", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-adjudication-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-adjudication-"));
     roots.push(root);
     const journal = new HostAdjudicationJournal(join(root, "journal.json"));
     await journal.accept(command, "review", "2026-08-13T18:00:00.000Z");
@@ -246,7 +246,7 @@ describe("HostAdjudicationSupervisor", () => {
   });
 
   it("retries only a persisted validation receipt after a report outage", async () => {
-    const root = await mkdtemp(join(tmpdir(), "freedworks-adjudication-"));
+    const root = await mkdtemp(join(tmpdir(), "aubtown-adjudication-"));
     roots.push(root);
     const journal = new HostAdjudicationJournal(join(root, "journal.json"));
     let validationRuns = 0;

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "name": "Freedworks Draft Publisher",
+  "name": "AubTown Draft Publisher",
   "repositorySelection": "selected",
   "permissions": {
     "metadata": "read",

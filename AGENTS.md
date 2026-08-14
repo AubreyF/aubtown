@@ -1,4 +1,4 @@
-# Freedworks agent instructions
+# AubTown agent instructions
 
 ## Authority
 

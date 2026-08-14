@@ -22,13 +22,13 @@ async function git(cwd: string, args: readonly string[]): Promise<string> {
 
 describe("GitCustodyCheckpointService", () => {
   it("moves tracked and approved untracked work into a clean next-epoch worktree", async () => {
-    const testRoot = await mkdtemp(path.join(os.tmpdir(), "freedworks-git-custody-"));
+    const testRoot = await mkdtemp(path.join(os.tmpdir(), "aubtown-git-custody-"));
     roots.push(testRoot);
     const source = path.join(testRoot, "source");
     const destination = path.join(testRoot, "destination");
     const storeRoot = path.join(testRoot, "store");
     await runner.run({ executable: "git", args: ["init", "-b", "dev", source], cwd: testRoot });
-    await git(source, ["config", "user.name", "Freedworks Test"]);
+    await git(source, ["config", "user.name", "AubTown Test"]);
     await git(source, ["config", "user.email", "test@example.invalid"]);
     await writeFile(path.join(source, "tracked.txt"), "before\n");
     await git(source, ["add", "tracked.txt"]);

@@ -21,6 +21,8 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Duplicate dispatch after crash | Restate keyed claim, startup reconciliation, deterministic claim ID |
 | Stale host publishes after transfer | Monotonic custody epoch checked before every write and publication |
 | Label grants accidental authority | Exact active authority task and task-scoped repository execution claim are also required |
+| Conflicting lifecycle labels trigger redispatch | Admission requires `factory:ready` to be the sole `factory:` label; projection replaces the known lifecycle label set atomically from one coordinator plan |
+| Issue description edit races with worker launch | Dispatch state never mutates the issue description; a durable per-issue claim is created before the visible running projection |
 | Nightly runner and factory race | Proposed task-scoped claim must make the existing runner skip claimed work before the first writer is enabled |
 | Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
@@ -68,7 +70,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | App token has unnecessary authority | One enrolled repository and operation-specific installation permissions |
 | Malicious issue prompt changes policy | Issue text is data, fixed system policy remains outside worker input |
 | Retry burns subscription quota | Retry budget distinguishes transient failure from authority and human blocks |
-| Second queue appears | No ticket database or Markdown work queue in Freedworks |
+| Second queue appears | No ticket database or Markdown work queue in AubTown |
 | Restate storage is lost | Persistent volume, backups, claim reconciliation against external witnesses |
 | Another process invokes an internal service directly | Every durable internal service is ingress-private, production omits the local integration harness, and Restate request identity authenticates runtime calls |
 | Remote executor reaches scheduler ingress | Loopback-only Restate ports plus a narrow host edge with an exact route allowlist |

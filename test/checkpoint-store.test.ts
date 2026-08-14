@@ -42,7 +42,7 @@ function manifest() {
 
 describe("encrypted checkpoint storage", () => {
   it("round-trips an authenticated archive and stores no plaintext", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-checkpoint-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-checkpoint-"));
     temporaryRoots.push(root);
     const archive = new TextEncoder().encode("unpublished source work");
     const cipher = new XChaChaCheckpointCipher(
@@ -83,7 +83,7 @@ describe("encrypted checkpoint storage", () => {
   });
 
   it("retires checkpoints without deleting retained evidence", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "freedworks-checkpoint-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-checkpoint-"));
     temporaryRoots.push(root);
     const cipher = new XChaChaCheckpointCipher(
       keyProvider(randomBytes(32)),

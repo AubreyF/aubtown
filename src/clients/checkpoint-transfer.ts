@@ -54,9 +54,9 @@ export class CheckpointTransferClient {
     const response = await this.fetchImpl(`${this.edgeUrl.replace(/\/$/u, "")}${path}`, {
       method: "PUT",
       headers: {
-        authorization: `FreedworksGrant ${encodeCheckpointAuthorization(grant)}`,
-        "x-freedworks-host-proof": encodeCheckpointAuthorization(proof),
-        "content-type": "application/vnd.freedworks.checkpoint+json",
+        authorization: `AubTownGrant ${encodeCheckpointAuthorization(grant)}`,
+        "x-aubtown-host-proof": encodeCheckpointAuthorization(proof),
+        "content-type": "application/vnd.aubtown.checkpoint+json",
         "content-length": bytes.length.toLocaleString("en-US", { useGrouping: false }),
       },
       body: bytes,
@@ -101,8 +101,8 @@ export class CheckpointTransferClient {
     );
     const response = await this.fetchImpl(`${this.edgeUrl.replace(/\/$/u, "")}${path}`, {
       headers: {
-        authorization: `FreedworksGrant ${encodeCheckpointAuthorization(grant)}`,
-        "x-freedworks-host-proof": encodeCheckpointAuthorization(proof),
+        authorization: `AubTownGrant ${encodeCheckpointAuthorization(grant)}`,
+        "x-aubtown-host-proof": encodeCheckpointAuthorization(proof),
       },
     });
     if (!response.ok) {

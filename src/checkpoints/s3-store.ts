@@ -33,7 +33,7 @@ export class S3CheckpointStore implements CheckpointStore {
     if (!BUCKET_PATTERN.test(options.bucket)) {
       throw new Error("Checkpoint bucket name is invalid.");
     }
-    const prefix = (options.prefix ?? "freedworks/checkpoints").replace(/\/+$/u, "");
+    const prefix = (options.prefix ?? "aubtown/checkpoints").replace(/\/+$/u, "");
     if (
       !PREFIX_PATTERN.test(prefix) ||
       prefix.startsWith("/") ||
@@ -55,7 +55,7 @@ export class S3CheckpointStore implements CheckpointStore {
           Key: this.#activeKey(reference),
           Body: bytes,
           ContentLength: bytes.length,
-          ContentType: "application/vnd.freedworks.checkpoint+json",
+          ContentType: "application/vnd.aubtown.checkpoint+json",
           ChecksumSHA256: createHash("sha256").update(bytes).digest("base64"),
           IfNoneMatch: "*",
           Metadata: {

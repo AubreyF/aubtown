@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>aubtown.host-agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/aubtown/node/bin/node</string>
+    <string>/opt/aubtown/current/dist/host-agent.js</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/opt/aubtown/current</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CODEX_HOME</key>
+    <string>/Users/aubtown/Library/Application Support/AubTown/codex</string>
+    <key>AUBTOWN_ACCOUNT_ID</key>
+    <string>replace-account-id</string>
+    <key>AUBTOWN_CODEX_EFFORT</key>
+    <string>high</string>
+    <key>AUBTOWN_CODEX_EXECUTABLE</key>
+    <string>replace-with-absolute-codex-executable</string>
+    <key>AUBTOWN_CODEX_MODEL</key>
+    <string>replace-with-advertised-callable-model</string>
+    <key>AUBTOWN_CODEX_VERSION</key>
+    <string>replace-with-exact-codex-version-output</string>
+    <key>AUBTOWN_HOST_GATEWAY_URL</key>
+    <string>https://replace-private-linux-host-name</string>
+    <key>AUBTOWN_GIT_EXECUTABLE</key>
+    <string>/usr/bin/git</string>
+    <key>AUBTOWN_EXECUTION_JOURNAL_FILE</key>
+    <string>/Users/aubtown/Library/Application Support/AubTown/state/execution.json</string>
+    <key>AUBTOWN_ADJUDICATION_JOURNAL_FILE</key>
+    <string>/Users/aubtown/Library/Application Support/AubTown/state/adjudication.json</string>
+    <key>AUBTOWN_VALIDATION_PATH</key>
+    <string>/opt/aubtown/node/bin:/usr/bin:/bin</string>
+    <key>AUBTOWN_CHECKPOINT_EDGE_URL</key>
+    <string>https://replace-private-linux-checkpoint-edge</string>
+    <key>AUBTOWN_CHECKPOINT_KEY_FILE</key>
+    <string>/Users/aubtown/Library/Application Support/AubTown/identity/checkpoint-key.bin</string>
+    <key>AUBTOWN_CHECKPOINT_KEY_REFERENCE</key>
+    <string>pilot:checkpoint-v1</string>
+    <key>AUBTOWN_CHECKPOINT_LOCAL_STORE_ROOT</key>
+    <string>/Users/aubtown/Library/Application Support/AubTown/checkpoints</string>
+    <key>AUBTOWN_HOST_ID</key>
+    <string>macos-executor-1</string>
+    <key>AUBTOWN_HOST_LANE</key>
+    <string>macos</string>
+    <key>AUBTOWN_HOST_PRIVATE_KEY_FILE</key>
+    <string>/Users/aubtown/Library/Application Support/AubTown/identity/host-private.pem</string>
+    <key>AUBTOWN_HOST_SEQUENCE_FILE</key>
+    <string>/Users/aubtown/Library/Application Support/AubTown/state/host-envelope.sequence</string>
+    <key>AUBTOWN_QUOTA_SAMPLE_SECONDS</key>
+    <string>60</string>
+    <key>FREED_REPOSITORY_ROOT</key>
+    <string>/Users/aubtown/Repositories/freed</string>
+    <key>AUBTOWN_WORKTREE_HELPER</key>
+    <string>/Users/aubtown/Repositories/freed/scripts/worktree-add.sh</string>
+    <key>AUBTOWN_WORKTREE_ROOT</key>
+    <string>/Users/aubtown/Worktrees/freed</string>
+  </dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/aubtown/Library/Logs/AubTown/host-agent.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/aubtown/Library/Logs/AubTown/host-agent-error.log</string>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+</dict>
+</plist>

@@ -164,8 +164,14 @@ export function planDraftPublication(input: {
         }),
     projection: buildStatusProjection({
       state: "human-review",
+      stage: "handoff",
       summary: `Draft pull request prepared at exact head ${input.head}.`,
-      claimId: input.claim.claimId,
+      claim: input.claim,
+      draftPullRequest:
+        existing === undefined
+          ? "pending creation"
+          : `#${existing.number.toLocaleString("en-US", { useGrouping: false })}`,
+      nextAction: "Owner reviews the draft pull request.",
       updatedAt: input.now,
     }),
   };

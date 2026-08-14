@@ -1,5 +1,5 @@
 {
-  "name": "@freedworks/control-plane",
+  "name": "@aubtown/control-plane",
   "version": "0.1.0",
   "private": true,
   "description": "A governed, durable software factory with GitHub Issues as its canonical queue.",

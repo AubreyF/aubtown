@@ -51,7 +51,7 @@ const validation: ExactValidationReceipt = {
   passed: true,
   commands: [
     {
-      argv: ["/opt/freedworks/node/bin/node", "test.js"],
+      argv: ["/opt/aubtown/node/bin/node", "test.js"],
       cwd: workProduct.worktree,
       exitCode: 0,
       outputDigest: "f".repeat(64),
@@ -256,7 +256,7 @@ describe("GitHttpsBranchPublisher", () => {
     });
     const push = calls.find((call) => call.args[0] === "push");
     expect(push?.args.join(" ")).not.toContain("installation-secret");
-    expect(push?.env?.FREEDWORKS_GITHUB_TOKEN).toBe("installation-secret");
+    expect(push?.env?.AUBTOWN_GITHUB_TOKEN).toBe("installation-secret");
     expect(push?.args).toContain(
       `--force-with-lease=refs/heads/${workProduct.branch}:`,
     );
