@@ -25,6 +25,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
 | One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
 | Codex update changes the worker or quota protocol | Absolute executable, exact version, generated-schema compatibility check, and advertised model and effort gate before host admission |
+| Another harness consumes an admitted account and claim | Authority admission binds the route-selected driver, the executor command carries it immutably, and the host rejects new or persisted work for another local driver |
 | Poll retry or host restart starts a second turn | One Restate command per host plus a mode-0600 local execution journal and app-server thread resume |
 | Terminal result is accepted before work is recoverable | Host journal requires encrypted capture, edge-signed storage receipt, and catalog admission before the terminal executor receipt |
 | Terminal result describes work other than the stored checkpoint | Receipt carries the content address; authenticated manifest must match current host, claim, epoch, exact command ID, and terminal stage |
@@ -57,7 +58,7 @@ The coordinator, worker, GitHub App, Codex profile, repository authority system,
 | Checkpoint restore overwrites destination work | Clean exact-base requirement and exclusive untracked-file creation |
 | Provider-visible change runs unattended | Provider lane cap is zero and qualification is blocking |
 | Repository adapter broadens authority | Adapter conformance tests and supported command allowlist |
-| Dispatch input substitutes a host, account, branch, base, or task revision after authority | Short-lived admission digest binds the complete dispatch, then the workflow rechecks the canonical route before any Restate claim mutation |
+| Dispatch input substitutes a host, account, driver, branch, base, or task revision after authority | Short-lived admission digest binds the complete dispatch, then the workflow rechecks the canonical route before any Restate claim mutation |
 | Tracker token reaches worker | Host-side GitHub App broker only |
 | App token has unnecessary authority | One enrolled repository and operation-specific installation permissions |
 | Malicious issue prompt changes policy | Issue text is data, fixed system policy remains outside worker input |

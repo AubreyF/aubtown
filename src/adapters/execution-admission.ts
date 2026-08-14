@@ -34,6 +34,7 @@ export interface ExecutionAdmissionBinding {
   readonly authorityTask: AuthorityTask;
   readonly claim: DispatchClaim;
   readonly accountId: string;
+  readonly driverId: string;
   readonly baseHead: string;
   readonly target: "shared" | "desktop" | "pwa" | "website";
 }

@@ -78,8 +78,9 @@ describe("Freed adapter", () => {
         binding: {
           qualification: report(),
           authorityTask: authorityTask(),
-          claim: claim(),
-          accountId: "codex-pro-1",
+        claim: claim(),
+        accountId: "codex-pro-1",
+        driverId: "codex-app-server-v1",
           baseHead: "b".repeat(40),
           target: "shared",
         },

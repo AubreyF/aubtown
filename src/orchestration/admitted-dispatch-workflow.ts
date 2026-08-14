@@ -29,6 +29,7 @@ export interface AdmittedDispatchInput {
   readonly admission: ExecutionAdmission;
   readonly claim: DispatchClaim;
   readonly accountId: string;
+  readonly driverId: string;
   readonly baseHead: string;
   readonly target: "shared" | "desktop" | "pwa" | "website";
   readonly commandId: string;
@@ -104,6 +105,7 @@ export const admittedDispatchWorkflow = restate.workflow({
             authorityTask: input.authorityTask,
             claim: input.claim,
             accountId: input.accountId,
+            driverId: input.driverId,
             baseHead,
             target,
           },
@@ -135,7 +137,8 @@ export const admittedDispatchWorkflow = restate.workflow({
       }
       if (
         route.route.hostId !== input.claim.hostId ||
-        route.route.accountId !== input.accountId
+        route.route.accountId !== input.accountId ||
+        route.route.driverId !== input.driverId
       ) {
         const result: AdmittedDispatchResult = {
           stage: "blocked",
@@ -194,6 +197,7 @@ export const admittedDispatchWorkflow = restate.workflow({
           qualification: input.qualification,
           authorityTaskId: input.authorityTask.id,
           accountId: input.accountId,
+          driverId: input.driverId,
           baseHead,
           issuedAt: input.now,
         });

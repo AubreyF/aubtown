@@ -138,6 +138,7 @@ describe("assembled Freed pilot readiness", () => {
       qualification,
       authorityTaskId: "github-issue-1234",
       accountId: "codex-pro-1",
+      driverId: "fake-codex",
       baseHead,
       issuedAt: "2026-08-13T08:00:00.000Z",
     });

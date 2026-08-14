@@ -48,6 +48,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Fence transferred execution until the destination downloads, restores, verifies, and signs the exact prior-epoch checkpoint.
 - [x] Fence first-epoch execution until the selected host prepares and signs the exact clean initial worktree.
 - [x] Route Linux and macOS lanes from durable heartbeats, enrolled account profiles, and rolling-week quota headroom.
+- [x] Bind the route-selected worker driver through authority admission, executor command, new execution, and restart recovery.
 - [x] Atomically convert a verified, claim-bound authority admission into scheduler, claim, workspace, and executor records.
 - [x] Bind validation and independent-review receipts to the complete authenticated work-product identity.
 - [x] Execute reviewed no-shell validation recipes and prove complete Git state is unchanged after every command.

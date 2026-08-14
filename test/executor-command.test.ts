@@ -15,6 +15,7 @@ function command() {
     qualification: report(),
     authorityTaskId: "github-issue-1234",
     accountId: "codex-pro-1",
+    driverId: "codex-app-server-v1",
     baseHead: "b".repeat(40),
     issuedAt: "2026-08-13T18:00:00.000Z",
   });
@@ -60,6 +61,7 @@ describe("executor start commands", () => {
       currentClaim: claim(),
       requestingHostId: "linux-control-1",
       accountId: "codex-pro-1",
+      driverId: "codex-app-server-v1",
       hostLane: "linux" as const,
       now: "2026-08-13T18:00:30.000Z",
     };
@@ -80,6 +82,9 @@ describe("executor start commands", () => {
       assertCommandMatchesCurrentClaim({ ...input, accountId: "codex-pro-2" }),
     ).toThrow("another execution account");
     expect(() =>
+      assertCommandMatchesCurrentClaim({ ...input, driverId: "grok-api-v1" }),
+    ).toThrow("another worker driver");
+    expect(() =>
       assertCommandMatchesCurrentClaim({
         ...input,
         now: "2026-08-13T18:05:00.000Z",
@@ -96,6 +101,7 @@ describe("executor start commands", () => {
       qualification,
       authorityTaskId: "github-issue-1234",
       accountId: "codex-pro-1",
+      driverId: "codex-app-server-v1",
       baseHead: "b".repeat(40),
       issuedAt: "2026-08-13T18:00:00.000Z",
     });
@@ -105,6 +111,7 @@ describe("executor start commands", () => {
         currentClaim: macClaim,
         requestingHostId: "linux-control-1",
         accountId: "codex-pro-1",
+        driverId: "codex-app-server-v1",
         hostLane: "linux",
         now: "2026-08-13T18:00:30.000Z",
       }),

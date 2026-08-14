@@ -21,6 +21,7 @@ function command(commandId = "50e13459-412e-41f7-809f-0d91dc660d52") {
     qualification: report(),
     authorityTaskId: "github-issue-1234",
     accountId: "codex-pro-1",
+    driverId: "codex-app-server-v1",
     baseHead: "b".repeat(40),
     issuedAt: "2026-08-13T18:00:00.000Z",
   });

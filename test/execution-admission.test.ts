@@ -11,6 +11,7 @@ const binding: ExecutionAdmissionBinding = {
   authorityTask: authorityTask(),
   claim: claim(),
   accountId: "codex-pro-1",
+  driverId: "codex-app-server-v1",
   baseHead: "a".repeat(40),
   target: "shared",
 };
@@ -41,6 +42,13 @@ describe("execution authority admission", () => {
       assertExecutionAdmission({
         admission: admission(),
         binding: { ...binding, accountId: "codex-pro-2" },
+        now: "2026-08-13T08:00:00.000Z",
+      }),
+    ).toThrow("does not bind the dispatch");
+    expect(() =>
+      assertExecutionAdmission({
+        admission: admission(),
+        binding: { ...binding, driverId: "grok-api-v1" },
         now: "2026-08-13T08:00:00.000Z",
       }),
     ).toThrow("does not bind the dispatch");

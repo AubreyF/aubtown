@@ -57,6 +57,7 @@ export class HostExecutionSupervisor {
     if (record === null) {
       return;
     }
+    this.#assertLocalCommand(record.command);
     if (record.stage === "accepted") {
       throw new Error(
         "Executor command start outcome is ambiguous and requires reconciliation.",
@@ -103,9 +104,7 @@ export class HostExecutionSupervisor {
   }
 
   async accept(command: ExecutorStartCommand): Promise<void> {
-    if (command.accountId !== this.accountId) {
-      throw new Error("Executor command targets another local account.");
-    }
+    this.#assertLocalCommand(command);
     const acceptance = await this.journal.accept(command, this.now().toISOString());
     if (!acceptance.acceptedNow) {
       if (acceptance.record.stage === "accepted") {
@@ -381,5 +380,14 @@ export class HostExecutionSupervisor {
       throw new Error("Host execution record has no worker turn handle.");
     }
     return record.handle;
+  }
+
+  #assertLocalCommand(command: ExecutorStartCommand): void {
+    if (command.accountId !== this.accountId) {
+      throw new Error("Executor command targets another local account.");
+    }
+    if (command.driverId !== this.worker.id) {
+      throw new Error("Executor command targets another local worker driver.");
+    }
   }
 }

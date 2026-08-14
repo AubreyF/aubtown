@@ -92,6 +92,7 @@ export const executorStartCommandSchema = z.object({
   qualification: qualificationSchema,
   authorityTaskId: z.string().min(1),
   accountId: z.string().min(1),
+  driverId: z.string().min(1),
   prompt: z.string().min(1).max(256 * 1_024),
   repositoryRoot: z.string().startsWith("/"),
   baseHead: z.string().regex(/^[0-9a-f]{40}$/u),
@@ -151,6 +152,7 @@ export function createExecutorStartCommand(input: {
   readonly qualification: QualificationReport;
   readonly authorityTaskId: string;
   readonly accountId: string;
+  readonly driverId: string;
   readonly baseHead: string;
   readonly issuedAt: string;
 }): ExecutorStartCommand {
@@ -166,6 +168,7 @@ export function createExecutorStartCommand(input: {
     qualification: input.qualification,
     authorityTaskId: input.authorityTaskId,
     accountId: input.accountId,
+    driverId: input.driverId,
     prompt: buildWorkerPrompt({
       qualification: input.qualification,
       claim: input.claim,
@@ -227,6 +230,7 @@ export function assertCommandMatchesCurrentClaim(input: {
   readonly currentClaim: DispatchClaim;
   readonly requestingHostId: string;
   readonly accountId: string;
+  readonly driverId: string;
   readonly hostLane: "linux" | "macos";
   readonly now: string;
   readonly enforceStartWindow?: boolean;
@@ -252,6 +256,9 @@ export function assertCommandMatchesCurrentClaim(input: {
   }
   if (command.accountId !== input.accountId) {
     throw new Error("Executor start command targets another execution account.");
+  }
+  if (command.driverId !== input.driverId) {
+    throw new Error("Executor start command targets another worker driver.");
   }
   if (command.qualification.hostLane === "macos" && input.hostLane !== "macos") {
     throw new Error("Executor host cannot satisfy the command's macOS lane.");

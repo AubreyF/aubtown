@@ -311,7 +311,7 @@ jq -n \
   --arg now "$NOW" \
   --slurpfile claim "${TMP_DIR}/grant-claim.json" \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
-  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", baseHead: ("b" * 40), issuedAt: $now}' \
+  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", driverId: "codex-app-server-v1", baseHead: ("b" * 40), issuedAt: $now}' \
   > "${TMP_DIR}/executor-command-input.json"
 EXPIRES_AT="$(node -e 'process.stdout.write(new Date(Date.parse(process.argv[1]) + 300000).toISOString())' "$NOW")"
 jq -n \
@@ -320,7 +320,7 @@ jq -n \
   --slurpfile claim "${TMP_DIR}/grant-claim.json" \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
   --slurpfile qualifiedInput "${TMP_DIR}/executor-qualification-input.json" \
-  '{binding: {qualification: $qualification[0], authorityTask: $qualifiedInput[0].authorityTask, claim: $claim[0], accountId: "codex-pro-integration", baseHead: ("b" * 40), target: "shared"}, admission: {schemaVersion: 1, bridgeId: "integration-authority-v1", authorityClaimId: ("integration-authority-" + ($claim[0].issueNumber | tostring)), taskId: $qualifiedInput[0].authorityTask.id, taskRevision: $qualifiedInput[0].authorityTask.revision, authorizedAt: $now, expiresAt: $expiresAt}}' \
+  '{binding: {qualification: $qualification[0], authorityTask: $qualifiedInput[0].authorityTask, claim: $claim[0], accountId: "codex-pro-integration", driverId: "codex-app-server-v1", baseHead: ("b" * 40), target: "shared"}, admission: {schemaVersion: 1, bridgeId: "integration-authority-v1", authorityClaimId: ("integration-authority-" + ($claim[0].issueNumber | tostring)), taskId: $qualifiedInput[0].authorityTask.id, taskRevision: $qualifiedInput[0].authorityTask.revision, authorizedAt: $now, expiresAt: $expiresAt}}' \
   > "${TMP_DIR}/execution-admission-input.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" \
   "${ROOT_DIR}/src/cli/build-execution-admission.ts" \
@@ -333,7 +333,7 @@ jq -n \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
   --slurpfile qualifiedInput "${TMP_DIR}/executor-qualification-input.json" \
   --slurpfile admission "${TMP_DIR}/execution-admission.json" \
-  '{qualification: $qualification[0], authorityTask: $qualifiedInput[0].authorityTask, admission: $admission[0], claim: $claim[0], accountId: "codex-pro-integration", baseHead: ("b" * 40), target: "shared", commandId: $commandId, concurrency: "pilot", now: $now}' \
+  '{qualification: $qualification[0], authorityTask: $qualifiedInput[0].authorityTask, admission: $admission[0], claim: $claim[0], accountId: "codex-pro-integration", driverId: "codex-app-server-v1", baseHead: ("b" * 40), target: "shared", commandId: $commandId, concurrency: "pilot", now: $now}' \
   > "${TMP_DIR}/admitted-dispatch-input.json"
 harness_file \
   runAdmittedDispatch \
@@ -781,7 +781,7 @@ jq -n \
   --arg now "$NOW" \
   --slurpfile claim "${TMP_DIR}/linux-claim.json" \
   --slurpfile qualification "${TMP_DIR}/executor-qualification.json" \
-  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", baseHead: ("b" * 40), issuedAt: $now}' \
+  '{commandId: $commandId, claim: $claim[0], qualification: $qualification[0], authorityTaskId: $authorityTaskId, accountId: "codex-pro-integration", driverId: "codex-app-server-v1", baseHead: ("b" * 40), issuedAt: $now}' \
   > "${TMP_DIR}/linux-executor-command-input.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" \
   "${ROOT_DIR}/src/cli/build-executor-command.ts" \

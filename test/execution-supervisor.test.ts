@@ -32,6 +32,7 @@ function command() {
     qualification: report(),
     authorityTaskId: "github-issue-1234",
     accountId: "codex-pro-1",
+    driverId: "fake",
     baseHead: "b".repeat(40),
     issuedAt: "2026-08-13T18:00:00.000Z",
   });
@@ -90,6 +91,85 @@ function checkpointManager(): ExecutionCheckpointManager {
 }
 
 describe("HostExecutionSupervisor", () => {
+  it("rejects a command bound to another local worker driver", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    let starts = 0;
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      {
+        id: "another-driver",
+        capabilities: {
+          hostLanes: ["linux"],
+          canInterrupt: true,
+          canReadSubscriptionUsage: true,
+          publicationCeiling: "none",
+        },
+        start: async () => {
+          starts += 1;
+          return handle;
+        },
+        recover: async () => "running",
+        wait: async () => "completed",
+        interrupt: async () => {},
+      },
+      journal,
+      {
+        reportExecutor: async () => {
+          throw new Error("should not report");
+        },
+        reconcileExecutor: async () => {
+          throw new Error("should not reconcile");
+        },
+      },
+      { track: () => {}, untrack: () => {} },
+      () => {},
+    );
+    await expect(supervisor.accept(command())).rejects.toThrow(
+      "another local worker driver",
+    );
+    expect(starts).toBe(0);
+    await expect(journal.read()).resolves.toBeNull();
+  });
+
+  it("quarantines a persisted command after the configured driver changes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
+    roots.push(root);
+    const journal = new HostExecutionJournal(join(root, "execution.json"));
+    await journal.accept(command(), "2026-08-13T18:00:00.000Z");
+    const supervisor = new HostExecutionSupervisor(
+      "codex-pro-1",
+      {
+        id: "another-driver",
+        capabilities: {
+          hostLanes: ["linux"],
+          canInterrupt: true,
+          canReadSubscriptionUsage: true,
+          publicationCeiling: "none",
+        },
+        start: async () => handle,
+        recover: async () => "running",
+        wait: async () => "completed",
+        interrupt: async () => {},
+      },
+      journal,
+      {
+        reportExecutor: async () => {
+          throw new Error("should not report");
+        },
+        reconcileExecutor: async () => {
+          throw new Error("should not reconcile");
+        },
+      },
+      { track: () => {}, untrack: () => {} },
+      () => {},
+    );
+    await expect(supervisor.recover()).rejects.toThrow(
+      "another local worker driver",
+    );
+  });
+
   it("persists a host receipt before checkpointing the finalized candidate", async () => {
     const root = await mkdtemp(join(tmpdir(), "freedworks-supervisor-"));
     roots.push(root);

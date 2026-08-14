@@ -42,6 +42,7 @@ async function fixture() {
     qualification: report({ ownedPaths: ["owned.txt"] }),
     authorityTaskId: "github-issue-1234",
     accountId: "codex-pro-1",
+    driverId: "codex-app-server-v1",
     baseHead,
     issuedAt: "2026-08-13T18:00:00.000Z",
   });

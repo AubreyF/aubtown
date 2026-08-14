@@ -685,6 +685,7 @@ export function createHostGateway(
                         currentClaim,
                         requestingHostId: envelope.hostId,
                         accountId,
+                        driverId: command.driverId,
                         hostLane: enrollment.lane,
                         now: acceptedAt,
                       });
@@ -772,6 +773,7 @@ export function createHostGateway(
                   currentClaim,
                   requestingHostId: envelope.hostId,
                   accountId: requested.accountId,
+                  driverId: command.driverId,
                   hostLane: enrollment.lane,
                   now: acceptedAt,
                   enforceStartWindow: false,
@@ -872,6 +874,7 @@ export function createHostGateway(
                 currentClaim,
                 requestingHostId: envelope.hostId,
                 accountId: reported.accountId,
+                driverId: command.driverId,
                 hostLane: enrollment.lane,
                 now: acceptedAt,
                 enforceStartWindow: false,
