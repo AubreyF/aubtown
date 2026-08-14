@@ -21,7 +21,7 @@ The normal path is:
 
 GitHub is the shared coordination ledger and complete operator-visible queue. Freed's active task manifest is the execution authority. Neither Symphony's memory nor AubTown's local files can grant execution.
 
-AubTown keeps small host-local journals for idempotency, quota observations, candidate finalization, validation, review, publication, and checkpoint transfer. These files answer whether a host already performed an operation after a crash. They are not a queue and cannot create work.
+AubTown keeps small host-local journals for idempotency, quota observations, candidate finalization, validation, review, publication, and checkpoint transfer. These files answer whether a host already performed an operation after a crash. They are not a queue and cannot create work. The Symphony boundary writes one append-only receipt for each exact Freed claim before it admits launch. Exclusive publication lets only one concurrent process admit that claim. A later reconciled claim receives a different receipt without deleting history.
 
 One issue has one current claim, custody epoch, branch, worktree, and worker owner. A claim is released or transferred by an exact supported transaction. Heartbeat age is evidence for reconciliation, not an automatic authority expiry.
 
@@ -37,11 +37,13 @@ The reviewed patch now supplies:
 - capability-aware SSH host routing
 - a fail-closed AubTown admission boundary before worker launch
 
+That boundary accepts one protected host-side envelope. The envelope binds the eligible issue, selected host, current rolling-week usage, daily baseline, exact Freed task and claim, custody epoch, account, driver, base head, and authority admission. AubTown recomputes quota at launch time and records the exact claim before returning an admission receipt. Missing, stale, mismatched, repeated, or malformed state denies launch.
+
 The remaining integration work is:
 
 - connect the admission command to Freed's task-scoped claim operations
 - stage and attest deterministic Freed worktrees through `scripts/worktree-add.sh`
-- durable startup reconciliation around upstream's memory-only blocked and retry maps
+- full startup reconciliation around upstream's memory-only blocked and retry maps so a blocked exact claim can be released and replaced automatically when no worker launched
 
 These remain an auditable patch series against the pin. AubTown will not maintain a TypeScript replacement for Symphony during v1.
 
@@ -81,7 +83,7 @@ Future subscriptions and APIs use separate account records, credentials, quotas,
 
 ## Crash recovery and custody
 
-At startup, AubTown reconciles open issues, lifecycle comments, Freed tasks and claims, Symphony workspaces, local journals, branches, draft pull requests, host heartbeats, and checkpoint receipts. A mismatch blocks the issue. It never guesses that an absent in-memory retry means work is unclaimed.
+At startup, AubTown reconciles open issues, lifecycle comments, Freed tasks and claims, Symphony workspaces, local journals, branches, draft pull requests, host heartbeats, and checkpoint receipts. A mismatch blocks the issue. It never guesses that an absent in-memory retry means work is unclaimed. An append-only prelaunch receipt blocks the same exact claim after restart. Reconciliation may release an unlaunched claim and acquire a new claim, which creates a new receipt without erasing the crash record.
 
 Every unpublished terminal candidate can be captured as an encrypted, content-addressed Git state archive. At 24 hours offline, portable work may move to a compatible host after the old command is fenced, the custody epoch advances, and the destination verifies the exact restored state. Linux cannot satisfy a macOS-only validation requirement.
 

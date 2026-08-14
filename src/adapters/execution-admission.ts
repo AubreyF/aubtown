@@ -5,6 +5,11 @@ import type {
   DispatchClaim,
   QualificationReport,
 } from "../domain/types.js";
+import {
+  authorityTaskSchema,
+  dispatchClaimSchema,
+  qualificationReportSchema,
+} from "../domain/schemas.js";
 import { canonicalJson } from "../security/canonical-json.js";
 
 export interface ExecutionAdmission {
@@ -18,7 +23,7 @@ export interface ExecutionAdmission {
   readonly expiresAt: string;
 }
 
-const admissionSchema: z.ZodType<ExecutionAdmission> = z.object({
+export const executionAdmissionSchema: z.ZodType<ExecutionAdmission> = z.object({
   schemaVersion: z.literal(1),
   bridgeId: z.string().min(1),
   authorityClaimId: z.string().min(1),
@@ -39,6 +44,17 @@ export interface ExecutionAdmissionBinding {
   readonly target: "shared" | "desktop" | "pwa" | "website";
 }
 
+export const executionAdmissionBindingSchema: z.ZodType<ExecutionAdmissionBinding> =
+  z.object({
+    qualification: qualificationReportSchema,
+    authorityTask: authorityTaskSchema,
+    claim: dispatchClaimSchema,
+    accountId: z.string().min(1),
+    driverId: z.string().min(1),
+    baseHead: z.string().regex(/^[0-9a-f]{40}$/u),
+    target: z.enum(["shared", "desktop", "pwa", "website"]),
+  });
+
 export function createExecutionAdmissionDigest(
   binding: ExecutionAdmissionBinding,
 ): string {
@@ -50,7 +66,7 @@ export function assertExecutionAdmission(input: {
   readonly binding: ExecutionAdmissionBinding;
   readonly now: string;
 }): ExecutionAdmission {
-  const admission = admissionSchema.parse(input.admission);
+  const admission = executionAdmissionSchema.parse(input.admission);
   const now = Date.parse(input.now);
   const authorizedAt = Date.parse(admission.authorizedAt);
   const expiresAt = Date.parse(admission.expiresAt);

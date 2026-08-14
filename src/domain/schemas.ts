@@ -54,3 +54,73 @@ export const shadowInputSchema = z.object({
   repository: repositoryRefSchema,
   issues: z.array(shadowIssueSchema),
 });
+
+export const qualificationCheckSchema = z.object({
+  id: z.string().min(1),
+  passed: z.boolean(),
+  blocking: z.boolean(),
+  explanation: z.string().min(1),
+});
+
+export const qualificationReportSchema = z.object({
+  repository: repositoryRefSchema,
+  issue: issueRecordSchema,
+  evidence: issueEvidenceSchema,
+  checks: z.array(qualificationCheckSchema),
+  eligible: z.boolean(),
+  priorityScore: z.number().finite(),
+  conflictDomains: z.array(z.string().min(1)),
+  hostLane: z.enum(["linux", "macos"]),
+  workLane: z.enum([
+    "runtime-neutral",
+    "behavioral",
+    "provider-visible",
+    "integration",
+    "release",
+    "macos",
+    "sensitive",
+  ]),
+});
+
+export const authorityTaskSchema = z.object({
+  id: z.string().min(1),
+  revision: z.number().int().positive(),
+  state: z.string().min(1),
+  githubIssue: z.object({
+    number: z.number().int().positive(),
+    url: z.url(),
+  }),
+  executionAuthority: z.string().min(1),
+  providerAuthority: z.string().min(1),
+  behavioral: z.boolean(),
+  estimatedMinutes: z.number().int().positive(),
+});
+
+export const dispatchClaimSchema = z.object({
+  repository: repositoryRefSchema,
+  issueNumber: z.number().int().positive(),
+  claimId: z.string().min(1),
+  custodyEpoch: z.number().int().positive(),
+  hostId: z.string().min(1),
+  workerId: z.string().min(1),
+  branch: z.string().min(1),
+  worktree: z.string().min(1),
+  conflictDomains: z.array(z.string().min(1)),
+  claimedAt: z.iso.datetime(),
+});
+
+export const accountUsageSnapshotSchema = z.object({
+  accountId: z.string().min(1),
+  observedAt: z.iso.datetime(),
+  primary: z.object({
+    usedPercent: z.number().min(0).max(100),
+    windowDurationMinutes: z.number().int().positive(),
+    resetsAt: z.iso.datetime(),
+  }),
+  dailyBaseline: z.object({
+    observedAt: z.iso.datetime(),
+    usedPercent: z.number().min(0).max(100),
+    resetsAt: z.iso.datetime(),
+  }),
+  activeTurnIds: z.array(z.string()),
+});

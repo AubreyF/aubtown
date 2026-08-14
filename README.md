@@ -30,9 +30,10 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - GitHub status projection and optional standby-coordinator comment election
 - A pinned Symphony production and upstream-tracking contract
 - Fail-closed Symphony prelaunch admission and capability-aware host routing
+- Append-only exact-claim prelaunch receipts that survive coordinator restart
 - A Freed workflow that accepts only helper-prepared, policy-safe worktrees
 
-The checked-in Symphony prelaunch executable currently denies every launch. The real writer remains disabled until the Freed task-claim commands replace that denial and restart and quota proofs pass. Passing unit tests does not authorize a live issue or GitHub write.
+The checked-in Symphony prelaunch executable admits only a protected host-side envelope that binds a current Freed task and claim, safe fresh quota, the selected host, and the exact dispatch. It atomically records that claim before returning success, so a restart or concurrent process cannot admit it twice. The real writer remains disabled because no production component creates those envelopes until the Freed task-claim commands exist. Passing tests does not authorize a live issue or GitHub write.
 
 ## Development
 

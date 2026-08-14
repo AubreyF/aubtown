@@ -57,7 +57,9 @@ describe("native Linux deployment", () => {
   it("keeps mutable state outside the immutable release tree", async () => {
     const unit = await fixture("deploy/systemd/aubtown-symphony.service");
     expect(unit).toContain("WorkingDirectory=/var/lib/aubtown/symphony");
-    expect(unit).toContain("StateDirectory=aubtown/symphony aubtown/workspaces");
+    expect(unit).toContain(
+      "StateDirectory=aubtown/symphony aubtown/workspaces aubtown/admission",
+    );
     expect(unit).toContain("ReadOnlyPaths=/etc/aubtown");
     expect(unit).toContain("UMask=0077");
     expect(unit).not.toContain("ReadWritePaths=/opt/aubtown");
@@ -72,6 +74,12 @@ describe("native Linux deployment", () => {
     );
     expect(environment).toContain(
       "GITHUB_TOKEN_FILE=/var/lib/aubtown/symphony/secrets/github.token",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_PRELAUNCH_ENVELOPE_ROOT=/var/lib/aubtown/admission/envelopes",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_PRELAUNCH_RECEIPT_ROOT=/var/lib/aubtown/admission/receipts",
     );
     expect(environment).not.toMatch(/BEGIN (?:RSA |EC )?PRIVATE KEY/u);
   });

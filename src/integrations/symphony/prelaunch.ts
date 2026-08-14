@@ -87,3 +87,19 @@ export function denySymphonyPrelaunch(
     reason,
   };
 }
+
+export function admitSymphonyPrelaunch(
+  request: SymphonyPrelaunchRequest,
+  receiptId: string,
+): SymphonyPrelaunchResponse {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(receiptId)) {
+    throw new Error("Symphony prelaunch receipt ID is invalid.");
+  }
+  return {
+    schemaVersion: 1,
+    decision: "admit",
+    issueId: request.issueId,
+    workerHost: request.workerHost,
+    receiptId,
+  };
+}

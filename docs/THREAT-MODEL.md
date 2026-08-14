@@ -21,7 +21,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Threat | Control |
 | --- | --- |
 | Two issues are dispatched as the same work | Exact repository and issue identity bind the Freed task, claim, workspace, branch, prompt, receipts, and status projection |
-| Coordinator restart dispatches an issue twice | Startup reconciles GitHub lifecycle state, current Freed claim, worktree, branch, journal, process custody, and draft PR before launch |
+| Coordinator restart dispatches an issue twice | Exclusive append-only prelaunch receipt blocks the same exact claim; startup reconciliation checks GitHub, Freed, worktree, branch, process custody, and draft PR before issuing a replacement claim |
 | Linux and Mac both own one issue | One task-scoped claim and custody epoch, plus a final authoritative reread before worker launch |
 | A stale host resumes after transfer | Claim epoch advances only after checkpoint-backed transfer; old-epoch journal and publication requests are rejected |
 | A host lies about being compatible | Enrolled immutable host capabilities and issue-qualified lane are checked by the scheduler patch and authority receipt |
@@ -34,7 +34,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Malicious issue text executes shell | Qualification data is parsed as data; validation uses reviewed no-shell argv; fixed policy remains outside issue prose |
 | Worker publishes unrelated content | Publication binds repository, branch, admitted base, exact reviewed head, prior remote head, draft number, and checkpoint identity |
 | Worker merges, releases, or deploys | Separate credentials and explicit draft-only publication ceiling |
-| Subscription spends the week in a day | Fresh usage telemetry, 10 percent reserve, daily hard ceiling, rolling-week trajectory, retry suppression, and targeted interruption |
+| Subscription spends the week in a day | Prelaunch recomputes the 10,080 minute rolling-week window and Los Angeles daily delta, preserves the 10 percent reserve, blocks new work at the daily ceiling, and interrupts targeted active turns at the hard limit |
 | Usage telemetry disappears | New dispatch fails closed when observation age exceeds policy |
 | Retry loop consumes quota on a human blocker | Authority, approval, rate-limit, and human-input blockers do not receive automatic subscription retries |
 | Candidate is lost before acknowledgement | Encrypted content-addressed checkpoint completes before terminal handoff is acknowledged |
@@ -69,4 +69,4 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 
 ## Current gate
 
-The repository contains tested domain components and a reviewed Symphony patch, not an authorized live factory. Cloud provisioning, GitHub App installation, the Freed claim extension, native service installation, restart proof, and the real Freed pilot remain pending. The checked-in prelaunch executable denies every launch until the Freed bridge replaces that denial with a current task-scoped claim receipt.
+The repository contains tested domain components and a reviewed Symphony patch, not an authorized live factory. The checked-in prelaunch executable now admits only a protected envelope carrying a valid current Freed claim, safe fresh quota, compatible host binding, and exact authority admission. It records the claim before returning success and blocks that claim after restart. No production component creates those envelopes yet. Cloud provisioning, GitHub App installation, the Freed claim extension, native service installation, full startup reconciliation, and the real Freed pilot remain pending.

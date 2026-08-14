@@ -1,6 +1,6 @@
 # Delivery phases
 
-Status: Phase 1 is complete. Phase 2 is in progress around pinned Symphony, native services, and the approved task-scoped Freed authority extension.
+Status: Phase 2 is complete. Phase 3 is in progress around the approved task-scoped Freed authority extension and one real runtime-neutral pilot issue.
 
 ## Phase 0: architecture and threat model
 
@@ -32,9 +32,9 @@ Status: Phase 1 is complete. Phase 2 is in progress around pinned Symphony, nati
 - [x] Add the reviewed Symphony prelaunch admission boundary.
 - [x] Add the Freed-specific `WORKFLOW.md`, helper-only workspace preparation, and fail-closed workspace guards.
 - [x] Run the complete upstream Symphony suite against the pinned commit and patch, with 298 passing and 6 explicit skips.
-- [ ] Prove a fake issue cannot dispatch twice across coordinator restart.
-- [ ] Prove daily and rolling-week quota stops through the Symphony admission boundary.
-- [ ] Prove Linux continues generic work while the Mac is offline.
+- [x] Prove a fake issue cannot dispatch twice across coordinator restart.
+- [x] Prove daily and rolling-week quota stops through the Symphony admission boundary.
+- [x] Prove Linux continues generic work while the Mac is offline.
 
 ## Phase 3: one Freed issue
 
