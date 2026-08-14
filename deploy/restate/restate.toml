@@ -1,0 +1,18 @@
+cluster-name = "freedworks-pilot"
+node-name = "freedworks-restate-1"
+base-dir = "/var/lib/freedworks/restate"
+auto-provision = true
+listen-mode = "tcp"
+bind-address = "127.0.0.1:5122"
+advertised-address = "http://127.0.0.1:5122/"
+log-format = "json"
+log-disable-ansi-codes = true
+
+[admin]
+bind-address = "127.0.0.1:9070"
+advertised-address = "http://127.0.0.1:9070/"
+disable-web-ui = true
+
+[ingress]
+bind-address = "127.0.0.1:8080"
+advertised-address = "http://127.0.0.1:8080/"

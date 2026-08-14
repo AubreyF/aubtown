@@ -9,6 +9,7 @@ import {
   loadPublicKeyPem,
 } from "./security/host-enrollment.js";
 import { CheckpointStorageReceiptIssuer } from "./checkpoints/receipt.js";
+import { parseBindHost, parseServicePort } from "./config/network.js";
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -47,10 +48,8 @@ function checkpointStore(): CheckpointStore {
   );
 }
 
-const port = Number(process.env.PORT ?? "8091");
-if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-  throw new Error("PORT must be an integer from 1 through 65,535.");
-}
+const port = parseServicePort(process.env.PORT, 8_091);
+const bindHost = parseBindHost(process.env.FREEDWORKS_BIND_HOST);
 const server = createCheckpointServer({
   store: checkpointStore(),
   hostEnrollments: await loadHostEnrollments(process.env),
@@ -65,8 +64,10 @@ const server = createCheckpointServer({
     ),
   ),
 });
-server.listen(port, "0.0.0.0", () => {
-  process.stdout.write(`Freedworks checkpoint edge listening on ${port.toLocaleString()}.\n`);
+server.listen(port, bindHost, () => {
+  process.stdout.write(
+    `Freedworks checkpoint edge listening on ${bindHost}:${port.toLocaleString()}.\n`,
+  );
 });
 
 function stop(): void {

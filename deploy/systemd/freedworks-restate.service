@@ -1,0 +1,35 @@
+[Unit]
+Description=Freedworks Restate durable runtime
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=freedworks-restate
+Group=freedworks-restate
+WorkingDirectory=/var/lib/freedworks/restate
+Environment=RESTATE_CONFIG=/etc/freedworks/restate.toml
+Environment=RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=/etc/freedworks/keys/restate-identity-private.pem
+ExecStart=/opt/freedworks/restate/1.7.3/restate-server --production --no-logo
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+StateDirectory=freedworks/restate
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

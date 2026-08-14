@@ -62,6 +62,7 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Push an exact reviewed head and create or update one draft through a repository-scoped host credential without exposing it to the worker.
 - [x] Reconcile publication crash retries and persist one immutable checkpoint-keyed publication receipt.
 - [x] Prove the assembled fake-external pilot path from worker execution through finalization, checkpointing, exact validation, fresh review, handoff, publication planning, and durable draft receipt.
+- [x] Replace Docker-dependent production startup with checksum-pinned native Restate and split loopback-only systemd services for Linux.
 
 ## Phase 3: one Freed issue
 

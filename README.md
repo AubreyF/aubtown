@@ -22,7 +22,7 @@ npm install
 npm run check
 npm run shadow -- --issues test/fixtures/freed-issues.json
 npm run test:pilot-readiness
-npm run test:host-ingress
+npm run test:native-deployment
 ```
 
 The shadow command reads issue JSON and prints deterministic qualification reports. It does not contact GitHub or mutate Freed.
@@ -37,7 +37,9 @@ FREEDWORKS_GITHUB_TOKEN='<installation token>' npm run shadow:github
 
 Use a short-lived Coordinator App installation token in deployment. The token stays in the host process environment and is never passed to a worker.
 
-`test:host-ingress` rebuilds the local Docker stack, enrolls a disposable Ed25519 Mac identity, and restarts Restate. It proves that the narrow host edge accepts the enrolled identity, rejects tampering and replay, and exposes no general Restate route. It leaves only the disposable public key in the running service configuration. The private key is destroyed with the test directory.
+`test:native-deployment` verifies the pinned Restate configuration, split systemd users, loopback-only listeners, and absence of Docker from the production service graph. It does not start a daemon.
+
+`test:host-ingress` is an optional Docker integration test for CI or a disposable Linux test host. It rebuilds the Compose stack, enrolls a disposable Ed25519 host identity, and restarts Restate. Docker is not required for normal development, the Linux production runtime, or a macOS executor.
 
 ## Repository map
 

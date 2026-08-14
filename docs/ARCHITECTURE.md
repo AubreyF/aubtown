@@ -2,7 +2,7 @@
 
 ## Governing rule
 
-GitHub Issues are the only backlog. Restate owns durable scheduling state. A repository authority adapter decides whether work may execute. Neither Restate state nor a GitHub label can replace repository authority.
+GitHub Issues are the only backlog and the complete operator-visible work view. Lifecycle labels, assignment, and one machine-managed comment show every factory state. Restate owns only crash-safe claims and workflow progress underneath that view. A repository authority adapter decides whether work may execute. Neither Restate state nor a GitHub label can replace repository authority.
 
 For Freed, dispatch requires all of these conditions:
 
@@ -40,19 +40,20 @@ This separation permits a later Grok or other API driver without changing issue 
 
 ## Durable orchestration
 
-Restate is the initial durable runtime. The `ClaimRegistry` virtual object serializes mutations for one repository and issue key. A custody transfer must advance exactly one epoch. The `QualificationWorkflow` stores its report and terminal qualification stage.
+Restate is the initial durable runtime. The `ClaimRegistry` virtual object serializes mutations for one repository and issue key. Its record contains no issue prose or backlog semantics. It holds only the claim identity, epoch, worker, host, timestamps, and current execution state needed to prevent duplicate work after a crash. A custody transfer must advance exactly one epoch. The `QualificationWorkflow` stores its report and terminal qualification stage.
 
 Restate state is operational state, not a second backlog. A startup reconciler compares durable claims against GitHub, Freed tasks, leases, branches, worktrees, and pull requests before dispatch or retry.
 
 The ingress-private `AdmittedDispatchWorkflow` is the transaction boundary after repository authority. It accepts only a short-lived admission bound to the exact task revision, qualification, claim, selected account, base commit, and workspace target. It rechecks the current durable route, acquires the repository conflict slot and issue claim, creates the host workspace requirement, and enqueues one claim-bound command. It compensates those Restate records if enqueue fails. The binding digest prevents accidental substitution but is not an authority signature. Only a repository bridge that has already verified and acquired the repository-owned authority receipt may call this workflow. No such production caller is installed before the Freed authority extension is approved.
 
-The production deployment pins Restate 1.7.3 and TypeScript SDK 1.16.5. The server data directory lives on durable storage. Upgrades are reviewed and pinned.
+The production deployment pins the native Restate 1.7.3 Linux binary and TypeScript SDK 1.16.5. The server data directory lives on durable storage. Release archives are selected by CPU architecture and verified against checked-in upstream SHA-256 checksums. Upgrades are reviewed and pinned. Docker Compose remains an optional disposable integration harness and is not part of the Linux production service graph.
 
 References:
 
 - [Restate 1.7.3 release](https://github.com/restatedev/restate/releases/tag/v1.7.3)
 - [Restate TypeScript services](https://docs.restate.dev/develop/ts/services)
-- [Restate single-node Docker deployment](https://docs.restate.dev/server/deploy/docker)
+- [Restate server configuration](https://docs.restate.dev/server/configuration)
+- [Restate networking](https://docs.restate.dev/server/networking)
 
 ## Hosts
 

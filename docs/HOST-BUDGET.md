@@ -18,7 +18,7 @@ Shared CPU is acceptable for Phase 1 and the single-worker pilot because the wor
 
 The first performance upgrade is a Hetzner CPX42 at $81.99 per month in the European regions. If consistent dedicated CPU is required, use CCX23 at $101.49 per month. DigitalOcean remains the simpler US fallback at $96 per month for 8 shared vCPUs and 16 GiB RAM, before backups.
 
-The architecture does not depend on Hetzner. Standard Linux, Docker, persistent block storage, private networking, and an object-storage API are the deployment contract.
+The architecture does not depend on Hetzner. Standard Linux, systemd, a checksum-pinned native Restate binary, persistent block storage, private networking, and an object-storage API are the deployment contract.
 
 ## Why not start larger
 
@@ -30,4 +30,4 @@ Restate and the coordinator are light. The expensive work is repository installa
 - [Hetzner cloud plans](https://www.hetzner.com/cloud/)
 - [Hetzner shared-resource policy](https://docs.hetzner.com/cloud/servers/faq/)
 - [DigitalOcean Droplet and backup pricing](https://www.digitalocean.com/pricing/droplets)
-- [Restate single-node Docker durability requirements](https://docs.restate.dev/server/deploy/docker)
+- [Restate server configuration](https://docs.restate.dev/server/configuration)

@@ -1,4 +1,5 @@
 import * as restate from "@restatedev/restate-sdk";
+import { createServer } from "node:http2";
 import { integrationHarnessEnabled } from "./config/integration-harness.js";
 import { controlPlaneServices } from "./orchestration/control-plane-services.js";
 import { createHostGateway } from "./orchestration/host-gateway.js";
@@ -10,6 +11,7 @@ import {
 import { CheckpointGrantIssuer } from "./checkpoints/grant.js";
 import { loadExecutionAccountProfiles } from "./config/account-profiles.js";
 import { createRoutePlanner } from "./orchestration/route-planner.js";
+import { parseBindHost, parseServicePort } from "./config/network.js";
 
 const identityKeys = (process.env.FREEDWORKS_RESTATE_IDENTITY_KEYS ?? "")
   .split(",")
@@ -46,13 +48,39 @@ const enableIntegrationHarness = integrationHarnessEnabled(
 );
 const routePlanner = createRoutePlanner(hostEnrollments, accountProfiles);
 
-const port = await restate.serve({
-  services: controlPlaneServices(
-    hostGateway,
-    enableIntegrationHarness,
-    routePlanner,
-  ),
-  ...(identityKeys.length === 0 ? {} : { identityKeys }),
+const port = parseServicePort(process.env.PORT, 9_080);
+const bindHost = parseBindHost(process.env.FREEDWORKS_BIND_HOST);
+const server = createServer(
+  restate.createEndpointHandler({
+    services: controlPlaneServices(
+      hostGateway,
+      enableIntegrationHarness,
+      routePlanner,
+    ),
+    ...(identityKeys.length === 0 ? {} : { identityKeys }),
+  }),
+);
+
+await new Promise<void>((resolve, reject) => {
+  server.once("error", reject);
+  server.listen(port, bindHost, () => {
+    server.off("error", reject);
+    resolve();
+  });
 });
 
-process.stdout.write(`Freedworks Restate endpoint listening on ${port.toLocaleString()}.\n`);
+process.stdout.write(
+  `Freedworks Restate endpoint listening on ${bindHost}:${port.toLocaleString()}.\n`,
+);
+
+function stop(): void {
+  server.close((error) => {
+    if (error !== undefined) {
+      process.stderr.write(`${error.message}\n`);
+      process.exitCode = 1;
+    }
+  });
+}
+
+process.once("SIGINT", stop);
+process.once("SIGTERM", stop);

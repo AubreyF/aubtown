@@ -15,6 +15,7 @@ services:
       dockerfile: deploy/Dockerfile
     environment:
       - PORT=9080
+      - FREEDWORKS_BIND_HOST=0.0.0.0
       - FREEDWORKS_HOST_ENROLLMENTS_JSON
       - FREEDWORKS_ACCOUNT_PROFILES_JSON
       - FREEDWORKS_ENABLE_INTEGRATION_HARNESS=true
@@ -29,6 +30,7 @@ services:
     command: ["node", "dist/edge-gateway.js"]
     environment:
       - PORT=8090
+      - FREEDWORKS_BIND_HOST=0.0.0.0
       - FREEDWORKS_RESTATE_INGRESS=http://restate:8080
     restart: unless-stopped
     depends_on:
@@ -55,6 +57,7 @@ services:
     command: ["node", "dist/checkpoint-edge.js"]
     environment:
       - PORT=8091
+      - FREEDWORKS_BIND_HOST=0.0.0.0
       - FREEDWORKS_CHECKPOINT_STORE_ROOT=/checkpoint-data
     restart: unless-stopped
     depends_on:

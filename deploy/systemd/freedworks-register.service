@@ -1,18 +1,20 @@
 [Unit]
-Description=Freedworks durable control plane
-Requires=freedworks-restate.service
-After=network-online.target freedworks-restate.service
+Description=Register the Freedworks endpoint with Restate
+Requires=freedworks-restate.service freedworks-control-plane.service
+After=freedworks-restate.service freedworks-control-plane.service
+PartOf=freedworks-control-plane.service
+StartLimitIntervalSec=0
 
 [Service]
-Type=simple
+Type=oneshot
 User=freedworks-control
 Group=freedworks-control
-WorkingDirectory=/opt/freedworks/current
-EnvironmentFile=/etc/freedworks/control-plane.env
-ExecStart=/usr/bin/env PORT=9080 FREEDWORKS_BIND_HOST=127.0.0.1 FREEDWORKS_ENABLE_INTEGRATION_HARNESS=false /opt/freedworks/node/bin/node /opt/freedworks/current/dist/service.js
+Environment=CI=true
+ExecStart=/opt/freedworks/restate/1.7.3/restate deployments register --force --yes http://127.0.0.1:9080
+RemainAfterExit=true
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=30
+TimeoutStartSec=30
 UMask=0077
 NoNewPrivileges=true
 PrivateDevices=true
