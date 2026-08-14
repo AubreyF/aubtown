@@ -207,18 +207,21 @@ export async function runFreedBrokerConformance(input: {
   };
   const expectRejected = async (
     id: string,
-    expectedCode: string,
+    expectedCode: string | readonly string[],
     operation: () => Promise<unknown>,
   ): Promise<FreedBrokerConformanceReport | undefined> => {
+    const expectedCodes = Array.isArray(expectedCode)
+      ? expectedCode
+      : [expectedCode];
     try {
       await operation();
       return fail(id, "broker accepted a conflicting operation");
     } catch (error) {
       const code = brokerErrorCode(error);
-      if (code !== expectedCode) {
+      if (code === undefined || !expectedCodes.includes(code)) {
         return fail(
           id,
-          `broker returned ${code ?? "an unstructured failure"}, expected ${expectedCode}`,
+          `broker returned ${code ?? "an unstructured failure"}, expected ${expectedCodes.join(" or ")}`,
         );
       }
       pass(id, `broker rejected the conflicting operation with ${code}`);
@@ -399,6 +402,18 @@ export async function runFreedBrokerConformance(input: {
         ...heartbeat,
         operationId: operationIds.staleHeartbeat,
         heartbeatAt: transferredAt,
+      }),
+  );
+  if (rejected !== undefined) return rejected;
+
+  rejected = await expectRejected(
+    "historical-operation-reuse-fenced",
+    ["control_event_conflict", "operation_replay_conflict"],
+    () =>
+      client.heartbeat({
+        ...heartbeat,
+        custodyEpoch: transfer.nextEpoch,
+        heartbeatAt: at(1_500),
       }),
   );
   if (rejected !== undefined) return rejected;
