@@ -20,6 +20,12 @@ import {
 } from "../execution-admission.js";
 import { canonicalJson } from "../../security/canonical-json.js";
 import { assertRuntimeNeutralPilotBinding } from "../../policy/pilot-binding.js";
+import {
+  FreedClaimBrokerClient,
+  admissionFromAcquire,
+  type FreedClaimAcquireRequest,
+  type FreedClaimReleaseRequest,
+} from "./claim-broker.js";
 
 const freedTaskSchema = z.object({
   taskId: z.string(),
@@ -44,21 +50,6 @@ const taskListOutputSchema = z.object({
   }).passthrough(),
 });
 
-const acquireOutputSchema = z.object({
-  action: z.literal("task.claim-acquire"),
-  result: z.object({
-    schemaVersion: z.literal(1),
-    operationId: z.uuid(),
-    taskId: z.string().min(1),
-    taskRevision: z.number().int().positive(),
-    authorityClaimId: z.string().min(1),
-    custodyEpoch: z.number().int().positive(),
-    bindingDigest: z.string().regex(/^[0-9a-f]{64}$/u),
-    conflictDomainDigest: z.string().regex(/^[0-9a-f]{64}$/u),
-    admission: executionAdmissionSchema,
-  }).strict(),
-}).strict();
-
 const releaseReasonSchema = z.enum([
   "prelaunch-denied",
   "worker-completed",
@@ -66,20 +57,6 @@ const releaseReasonSchema = z.enum([
   "worker-interrupted",
   "reconciled-unlaunched",
 ]);
-const releaseOutputSchema = z.object({
-  action: z.literal("task.claim-release"),
-  result: z.object({
-    schemaVersion: z.literal(1),
-    operationId: z.uuid(),
-    taskId: z.string().min(1),
-    taskRevision: z.number().int().positive(),
-    authorityClaimId: z.string().min(1),
-    bindingDigest: z.string().regex(/^[0-9a-f]{64}$/u),
-    reason: releaseReasonSchema,
-    releasedAt: z.iso.datetime(),
-  }).strict(),
-}).strict();
-
 function toAuthorityTask(task: z.infer<typeof freedTaskSchema>): AuthorityTask {
   return {
     id: task.taskId,
@@ -100,10 +77,6 @@ export interface FreedAuthorityBridgeOptions {
   readonly claimBrokerExecutable?: string;
   readonly claimBrokerArgs?: readonly string[];
   readonly claimCommandTimeoutMs?: number;
-}
-
-function canonicalJsonText(value: unknown): string {
-  return Buffer.from(canonicalJson(value)).toString("utf8");
 }
 
 function conflictDomainDigest(binding: ExecutionAdmissionBinding): string {
@@ -166,7 +139,7 @@ export class FreedAuthorityBridge implements AuthorityBridge {
     const operationId = randomUUID();
     const bindingDigest = createExecutionAdmissionDigest(binding);
     const domainsDigest = conflictDomainDigest(binding);
-    const request = {
+    const request: FreedClaimAcquireRequest = {
       schemaVersion: 1,
       operationId,
       taskId: binding.authorityTask.id,
@@ -191,28 +164,23 @@ export class FreedAuthorityBridge implements AuthorityBridge {
       },
       requestedAt: input.now,
     };
-    const output = await this.#runClaimCommand(
-      broker,
-      "claim-acquire",
-      request,
-    );
-    const parsed = acquireOutputSchema.parse(JSON.parse(output.stdout));
+    const result = await this.#brokerClient(broker).acquire(request);
     if (
-      parsed.result.operationId !== operationId ||
-      parsed.result.taskId !== binding.authorityTask.id ||
-      parsed.result.taskRevision !== binding.authorityTask.revision ||
-      parsed.result.authorityClaimId !== binding.claim.claimId ||
-      parsed.result.custodyEpoch !== binding.claim.custodyEpoch ||
-      parsed.result.bindingDigest !== bindingDigest ||
-      parsed.result.conflictDomainDigest !== domainsDigest
+      result.operationId !== operationId ||
+      result.taskId !== binding.authorityTask.id ||
+      result.taskRevision !== binding.authorityTask.revision ||
+      result.authorityClaimId !== binding.claim.claimId ||
+      result.custodyEpoch !== binding.claim.custodyEpoch ||
+      result.bindingDigest !== bindingDigest ||
+      result.conflictDomainDigest !== domainsDigest
     ) {
       throw new Error("Freed claim-acquire response does not match the exact dispatch.");
     }
-    if (parsed.result.admission.bridgeId !== this.id) {
+    if (result.admission.bridgeId !== this.id) {
       throw new Error("Freed claim-acquire response names another authority bridge.");
     }
     return assertExecutionAdmission({
-      admission: parsed.result.admission,
+      admission: admissionFromAcquire(result),
       binding,
       now: input.now,
     });
@@ -228,7 +196,7 @@ export class FreedAuthorityBridge implements AuthorityBridge {
     const releasedAt = z.iso.datetime().parse(input.now);
     const broker = this.#brokerExecutable();
     const operationId = randomUUID();
-    const request = {
+    const request: FreedClaimReleaseRequest = {
       schemaVersion: 1,
       operationId,
       taskId: admission.taskId,
@@ -238,20 +206,15 @@ export class FreedAuthorityBridge implements AuthorityBridge {
       reason,
       releasedAt,
     };
-    const output = await this.#runClaimCommand(
-      broker,
-      "claim-release",
-      request,
-    );
-    const parsed = releaseOutputSchema.parse(JSON.parse(output.stdout));
+    const result = await this.#brokerClient(broker).release(request);
     if (
-      parsed.result.operationId !== operationId ||
-      parsed.result.taskId !== admission.taskId ||
-      parsed.result.taskRevision !== admission.taskRevision ||
-      parsed.result.authorityClaimId !== admission.authorityClaimId ||
-      parsed.result.bindingDigest !== admission.bindingDigest ||
-      parsed.result.reason !== reason ||
-      parsed.result.releasedAt !== releasedAt
+      result.operationId !== operationId ||
+      result.taskId !== admission.taskId ||
+      result.taskRevision !== admission.taskRevision ||
+      result.authorityClaimId !== admission.authorityClaimId ||
+      result.bindingDigest !== admission.bindingDigest ||
+      result.reason !== reason ||
+      result.releasedAt !== releasedAt
     ) {
       throw new Error("Freed claim-release response does not match the exact admission.");
     }
@@ -270,29 +233,14 @@ export class FreedAuthorityBridge implements AuthorityBridge {
     return executable;
   }
 
-  async #runClaimCommand(
-    executable: string,
-    operation: "claim-acquire" | "claim-release",
-    request: unknown,
-  ) {
-    const command = {
+  #brokerClient(executable: string): FreedClaimBrokerClient {
+    return new FreedClaimBrokerClient(this.runner, {
       executable,
-      args: [
-        ...(this.options.claimBrokerArgs ?? []),
-        "task",
-        operation,
-        "--request-json",
-        canonicalJsonText(request),
-      ],
+      ...(this.options.claimBrokerArgs === undefined
+        ? {}
+        : { args: this.options.claimBrokerArgs }),
       cwd: this.options.repositoryRoot,
-      env: {},
       timeoutMs: this.options.claimCommandTimeoutMs ?? 30_000,
-      maxBufferBytes: 1024 * 1024,
-    } as const;
-    try {
-      return await this.runner.run(command);
-    } catch {
-      return await this.runner.run(command);
-    }
+    });
   }
 }

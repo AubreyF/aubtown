@@ -47,6 +47,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Implement the native read-only GitHub, Freed task, host, quota, ref, pull-request, and worktree planning snapshot.
 - [x] Derive one deterministic fail-closed dispatch intention with host-specific workspace custody.
 - [x] Add a protected native pilot-readiness audit that proves runtime, pin, authority-broker, planning, and dispatch gates.
+- [x] Add a disposable broker conformance gate for replay, restart, transfer fencing, and release semantics.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
 - [x] Add hard-boundary active-turn interruption to the Symphony runner.

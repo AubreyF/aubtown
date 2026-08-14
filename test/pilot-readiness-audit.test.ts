@@ -1,4 +1,5 @@
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -39,6 +40,11 @@ async function fixture(): Promise<{
   const symphonyExecutable = path.join(root, "symphony", commit, "symphony");
   const workflowFile = path.join(root, "WORKFLOW.md");
   const claimBrokerExecutable = path.join(root, "bin", "factory-coordinator");
+  const brokerConformanceReportFile = path.join(
+    root,
+    "state",
+    "broker-conformance.json",
+  );
   const planningSnapshotFile = path.join(root, "state", "planning.json");
   const dispatchIntentionFile = path.join(root, "state", "dispatch.json");
   const lockFile = path.join(releaseRoot, "upstream", "symphony.lock.json");
@@ -73,6 +79,35 @@ async function fixture(): Promise<{
   );
   await protectedFile(symphonyExecutable, "#!/bin/sh\nexit 0\n", 0o700);
   await protectedFile(claimBrokerExecutable, "#!/bin/sh\nexit 0\n", 0o700);
+  await protectedFile(
+    brokerConformanceReportFile,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      profile: "conformance-freed-pilot",
+      brokerExecutable: claimBrokerExecutable,
+      brokerSha256: createHash("sha256")
+        .update("#!/bin/sh\nexit 0\n")
+        .digest("hex"),
+      checkedAt: "2026-08-13T20:00:15.000Z",
+      passed: true,
+      checks: [
+        "broker-integrity",
+        "acquire",
+        "acquire-replay",
+        "changed-operation-replay",
+        "show-after-acquire",
+        "duplicate-acquire",
+        "heartbeat-replay",
+        "changed-heartbeat-replay",
+        "transfer-replay",
+        "stale-epoch-fenced",
+        "show-after-transfer",
+        "release-replay",
+        "show-after-release",
+      ].map((id) => ({ id, passed: true, detail: "verified" })),
+      blockers: [],
+    })}\n`,
+  );
   await protectedFile(path.join(releaseRoot, "dist/cli/symphony-prelaunch.js"), "export {};\n");
   await protectedFile(
     path.join(releaseRoot, "dist/cli/symphony-active-run-guard.js"),
@@ -191,6 +226,7 @@ async function fixture(): Promise<{
       symphonyExecutable,
       workflowFile,
       claimBrokerExecutable,
+      brokerConformanceReportFile,
       planningSnapshotFile,
       dispatchIntentionFile,
       hostEnrollmentsFile,
@@ -253,5 +289,23 @@ describe("pilot readiness audit", () => {
     });
     expect(report.ready).toBe(false);
     expect(report.blockers).toContain("planning:dispatch-coherence");
+  });
+
+  it("rejects a broker changed after its disposable proof", async () => {
+    const prepared = await fixture();
+    await protectedFile(
+      prepared.paths.claimBrokerExecutable,
+      "#!/bin/sh\nexit 1\n",
+      0o700,
+    );
+    const report = await auditPilotReadiness({
+      repository: "freed-project/freed",
+      issueNumber: 1234,
+      auditedAt,
+      paths: prepared.paths,
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers).toContain("authority:broker-conformance");
   });
 });

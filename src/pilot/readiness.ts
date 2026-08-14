@@ -36,6 +36,7 @@ export interface PilotReadinessPaths {
   readonly symphonyExecutable: string;
   readonly workflowFile: string;
   readonly claimBrokerExecutable: string;
+  readonly brokerConformanceReportFile: string;
   readonly planningSnapshotFile: string;
   readonly dispatchIntentionFile: string;
   readonly hostEnrollmentsFile: string;
@@ -109,6 +110,23 @@ const lockSchema = z.object({
   ).min(1),
   reviewedCapabilities: z.array(z.string().min(1)),
   knownGaps: z.array(z.string().min(1)),
+});
+
+const brokerConformanceSchema = z.object({
+  schemaVersion: z.literal(1),
+  profile: z.string().regex(/^conformance-[a-z0-9][a-z0-9-]{2,63}$/u),
+  brokerExecutable: z.string().min(1),
+  brokerSha256: z.string().regex(digestPattern),
+  checkedAt: z.iso.datetime(),
+  passed: z.literal(true),
+  checks: z.array(
+    z.object({
+      id: z.string().min(1),
+      passed: z.literal(true),
+      detail: z.string().min(1),
+    }),
+  ).min(13),
+  blockers: z.array(z.never()).length(0),
 });
 
 function repositoryName(value: z.infer<typeof repositorySchema>): string {
@@ -292,6 +310,43 @@ export async function auditPilotReadiness(input: {
         maxBytes: 64 * 1024 * 1024,
       }),
     ),
+    check("authority:broker-conformance", async () => {
+      const report = brokerConformanceSchema.parse(
+        await loadProtectedJsonFile({
+          file: input.paths.brokerConformanceReportFile,
+          label: "Freed broker conformance report",
+          maxBytes: 1024 * 1024,
+        }),
+      );
+      assertFresh(report.checkedAt, input.auditedAt, 600);
+      if (report.brokerExecutable !== input.paths.claimBrokerExecutable) {
+        throw new Error("Broker conformance tested another executable.");
+      }
+      if (sha256(await readFile(input.paths.claimBrokerExecutable)) !== report.brokerSha256) {
+        throw new Error("Broker executable changed after conformance.");
+      }
+      const requiredChecks = [
+        "broker-integrity",
+        "acquire",
+        "acquire-replay",
+        "changed-operation-replay",
+        "show-after-acquire",
+        "duplicate-acquire",
+        "heartbeat-replay",
+        "changed-heartbeat-replay",
+        "transfer-replay",
+        "stale-epoch-fenced",
+        "show-after-transfer",
+        "release-replay",
+        "show-after-release",
+      ];
+      const observed = new Set(report.checks.map((candidate) => candidate.id));
+      const missing = requiredChecks.filter((candidate) => !observed.has(candidate));
+      if (missing.length > 0) {
+        throw new Error(`Broker conformance lacks checks: ${missing.join(", ")}.`);
+      }
+      return `${report.profile}:${report.brokerSha256}`;
+    }),
   ]);
 
   checks.push(

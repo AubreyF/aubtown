@@ -135,6 +135,26 @@ describe("native Linux deployment", () => {
     expect(`${service}\n${environment}`).not.toMatch(/docker|compose|restate/iu);
   });
 
+  it("requires a disposable broker conformance proof before pilot readiness", async () => {
+    const conformance = await fixture(
+      "deploy/systemd/aubtown-freed-broker-conformance.service",
+    );
+    const readiness = await fixture(
+      "deploy/systemd/aubtown-pilot-readiness.service",
+    );
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    const packageJson = await fixture("package.json");
+    expect(conformance).toContain("dist/cli/verify-freed-broker.js");
+    expect(conformance).toContain("/etc/aubtown/freed-broker-conformance.json");
+    expect(conformance).toContain("ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/aubtown/conformance");
+    expect(readiness).toContain("aubtown-freed-broker-conformance.service");
+    expect(environment).toContain(
+      "AUBTOWN_FREED_BROKER_CONFORMANCE_FILE=/var/lib/aubtown/coordinator/freed-broker-conformance.json",
+    );
+    expect(packageJson).toContain('"freed:broker-conformance"');
+    expect(conformance).not.toMatch(/docker|compose|restate/iu);
+  });
+
   it("ships a native non-authoritative admission candidate publisher", async () => {
     const packageJson = await fixture("package.json");
     const publisher = await fixture(

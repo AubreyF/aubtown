@@ -31,6 +31,9 @@ const report = await auditPilotReadiness({
     symphonyExecutable: absolute("AUBTOWN_SYMPHONY_EXECUTABLE"),
     workflowFile: absolute("AUBTOWN_SYMPHONY_WORKFLOW_FILE"),
     claimBrokerExecutable: absolute("AUBTOWN_FREED_CLAIM_BROKER"),
+    brokerConformanceReportFile: absolute(
+      "AUBTOWN_FREED_BROKER_CONFORMANCE_FILE",
+    ),
     planningSnapshotFile: absolute("AUBTOWN_PLANNING_SNAPSHOT_FILE"),
     dispatchIntentionFile: absolute("AUBTOWN_DISPATCH_INTENTION_FILE"),
     hostEnrollmentsFile: absolute("AUBTOWN_HOST_ENROLLMENTS_FILE"),

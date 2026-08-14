@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "broker": {
+    "executable": "/opt/freed/bin/factory-coordinator",
+    "cwd": "/srv/freed",
+    "profile": "conformance-freed-pilot"
+  },
+  "acquire": {
+    "schemaVersion": 1,
+    "taskId": "conformance-task-1",
+    "expectedTaskRevision": 1,
+    "bindingDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "claim": {
+      "claimId": "conformance-claim-1",
+      "githubIssue": {
+        "number": 1465,
+        "url": "https://github.com/freed-project/freed/issues/1465"
+      },
+      "custodyEpoch": 1,
+      "hostId": "conformance-linux",
+      "workerId": "conformance-worker-linux",
+      "branch": "test/disposable-broker-conformance",
+      "worktree": "/var/lib/aubtown/conformance/worktree-linux",
+      "conflictDomains": [
+        "conformance"
+      ],
+      "conflictDomainDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "baseHead": "cccccccccccccccccccccccccccccccccccccccc",
+      "accountId": "conformance-account",
+      "driverId": "conformance-driver",
+      "target": "shared",
+      "publicationCeiling": "draft-pr"
+    }
+  },
+  "transfer": {
+    "destinationHostId": "conformance-macos",
+    "destinationWorkerId": "conformance-worker-macos",
+    "destinationWorktree": "/var/lib/aubtown/conformance/worktree-macos",
+    "checkpointReference": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "release": {
+    "reason": "worker-completed"
+  }
+}

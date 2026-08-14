@@ -1,0 +1,286 @@
+import path from "node:path";
+import { z } from "zod";
+import type { CommandRunner } from "../command-runner.js";
+import type { ExecutionAdmission } from "../execution-admission.js";
+import { executionAdmissionSchema } from "../execution-admission.js";
+import { canonicalJson } from "../../security/canonical-json.js";
+
+const digestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
+const releaseReasonSchema = z.enum([
+  "prelaunch-denied",
+  "worker-completed",
+  "worker-failed",
+  "worker-interrupted",
+  "reconciled-unlaunched",
+]);
+
+const issueIdentitySchema = z.object({
+  number: z.number().int().positive(),
+  url: z.url(),
+}).strict();
+
+const brokerClaimSchema = z.object({
+  claimId: z.string().min(1),
+  githubIssue: issueIdentitySchema,
+  custodyEpoch: z.number().int().positive(),
+  hostId: z.string().min(1),
+  workerId: z.string().min(1),
+  branch: z.string().min(1),
+  worktree: z.string().min(1),
+  conflictDomains: z.array(z.string().min(1)),
+  conflictDomainDigest: digestSchema,
+  claimedAt: z.iso.datetime(),
+  heartbeatAt: z.iso.datetime(),
+  baseHead: z.string().regex(/^[0-9a-f]{40}$/u),
+  accountId: z.string().min(1),
+  driverId: z.string().min(1),
+  target: z.enum(["shared", "desktop", "pwa", "website"]),
+  publicationCeiling: z.literal("draft-pr"),
+  transferredAt: z.iso.datetime().optional(),
+  checkpointReference: digestSchema.optional(),
+}).strict();
+
+export type FreedBrokerClaim = z.infer<typeof brokerClaimSchema>;
+
+const acquireRequestSchema = z.object({
+  schemaVersion: z.literal(1),
+  operationId: z.uuid(),
+  taskId: z.string().min(1),
+  expectedTaskRevision: z.number().int().positive(),
+  bindingDigest: digestSchema,
+  claim: brokerClaimSchema.omit({
+    heartbeatAt: true,
+    transferredAt: true,
+    checkpointReference: true,
+  }),
+  requestedAt: z.iso.datetime(),
+}).strict();
+
+export type FreedClaimAcquireRequest = z.infer<typeof acquireRequestSchema>;
+
+const acquireOutputSchema = z.object({
+  action: z.literal("task.claim-acquire"),
+  result: z.object({
+    schemaVersion: z.literal(1),
+    operationId: z.uuid(),
+    taskId: z.string().min(1),
+    taskRevision: z.number().int().positive(),
+    authorityClaimId: z.string().min(1),
+    custodyEpoch: z.number().int().positive(),
+    bindingDigest: digestSchema,
+    conflictDomainDigest: digestSchema,
+    admission: executionAdmissionSchema,
+  }).strict(),
+}).strict();
+
+export type FreedClaimAcquireReceipt = z.infer<typeof acquireOutputSchema>["result"];
+
+const showRequestSchema = z.object({
+  schemaVersion: z.literal(1),
+  taskId: z.string().min(1),
+}).strict();
+
+export type FreedClaimShowRequest = z.infer<typeof showRequestSchema>;
+
+const showOutputSchema = z.object({
+  action: z.literal("task.claim-show"),
+  result: z.object({
+    schemaVersion: z.literal(1),
+    taskId: z.string().min(1),
+    taskRevision: z.number().int().positive(),
+    bindingDigest: digestSchema.nullable(),
+    claim: brokerClaimSchema.nullable(),
+  }).strict(),
+}).strict();
+
+export type FreedClaimShowReceipt = z.infer<typeof showOutputSchema>["result"];
+
+const heartbeatRequestSchema = z.object({
+  schemaVersion: z.literal(1),
+  operationId: z.uuid(),
+  taskId: z.string().min(1),
+  taskRevision: z.number().int().positive(),
+  authorityClaimId: z.string().min(1),
+  custodyEpoch: z.number().int().positive(),
+  bindingDigest: digestSchema,
+  heartbeatAt: z.iso.datetime(),
+}).strict();
+
+export type FreedClaimHeartbeatRequest = z.infer<typeof heartbeatRequestSchema>;
+
+const heartbeatOutputSchema = z.object({
+  action: z.literal("task.claim-heartbeat"),
+  result: heartbeatRequestSchema,
+}).strict();
+
+export type FreedClaimHeartbeatReceipt = z.infer<
+  typeof heartbeatOutputSchema
+>["result"];
+
+const transferRequestSchema = z.object({
+  schemaVersion: z.literal(1),
+  operationId: z.uuid(),
+  taskId: z.string().min(1),
+  taskRevision: z.number().int().positive(),
+  authorityClaimId: z.string().min(1),
+  bindingDigest: digestSchema,
+  priorEpoch: z.number().int().positive(),
+  nextEpoch: z.number().int().positive(),
+  destinationHostId: z.string().min(1),
+  destinationWorkerId: z.string().min(1),
+  destinationWorktree: z.string().min(1),
+  checkpointReference: digestSchema,
+  transferredAt: z.iso.datetime(),
+}).strict();
+
+export type FreedClaimTransferRequest = z.infer<typeof transferRequestSchema>;
+
+const transferOutputSchema = z.object({
+  action: z.literal("task.claim-transfer"),
+  result: transferRequestSchema,
+}).strict();
+
+export type FreedClaimTransferReceipt = z.infer<
+  typeof transferOutputSchema
+>["result"];
+
+const releaseRequestSchema = z.object({
+  schemaVersion: z.literal(1),
+  operationId: z.uuid(),
+  taskId: z.string().min(1),
+  expectedTaskRevision: z.number().int().positive(),
+  authorityClaimId: z.string().min(1),
+  bindingDigest: digestSchema,
+  reason: releaseReasonSchema,
+  releasedAt: z.iso.datetime(),
+  custodyEpoch: z.number().int().positive().optional(),
+}).strict();
+
+export type FreedClaimReleaseRequest = z.infer<typeof releaseRequestSchema>;
+
+const releaseOutputSchema = z.object({
+  action: z.literal("task.claim-release"),
+  result: z.object({
+    schemaVersion: z.literal(1),
+    operationId: z.uuid(),
+    taskId: z.string().min(1),
+    taskRevision: z.number().int().positive(),
+    authorityClaimId: z.string().min(1),
+    bindingDigest: digestSchema,
+    reason: releaseReasonSchema,
+    releasedAt: z.iso.datetime(),
+    custodyEpoch: z.number().int().positive().optional(),
+  }).strict(),
+}).strict();
+
+export type FreedClaimReleaseReceipt = z.infer<
+  typeof releaseOutputSchema
+>["result"];
+
+export interface FreedClaimBrokerOptions {
+  readonly executable: string;
+  readonly args?: readonly string[];
+  readonly cwd: string;
+  readonly timeoutMs?: number;
+}
+
+function canonicalJsonText(value: unknown): string {
+  return Buffer.from(canonicalJson(value)).toString("utf8");
+}
+
+function assertAbsoluteExecutable(executable: string): void {
+  if (!path.isAbsolute(executable)) {
+    throw new Error("Freed coordinator broker path must be absolute.");
+  }
+}
+
+export class FreedClaimBrokerClient {
+  constructor(
+    private readonly runner: CommandRunner,
+    private readonly options: FreedClaimBrokerOptions,
+  ) {
+    assertAbsoluteExecutable(options.executable);
+    if (!path.isAbsolute(options.cwd)) {
+      throw new Error("Freed coordinator broker working directory must be absolute.");
+    }
+  }
+
+  async acquire(request: FreedClaimAcquireRequest): Promise<FreedClaimAcquireReceipt> {
+    const payload = acquireRequestSchema.parse(request);
+    const output = await this.#run("claim-acquire", payload);
+    return acquireOutputSchema.parse(JSON.parse(output)).result;
+  }
+
+  async show(request: FreedClaimShowRequest): Promise<FreedClaimShowReceipt> {
+    const payload = showRequestSchema.parse(request);
+    const output = await this.#run("claim-show", payload, false);
+    return showOutputSchema.parse(JSON.parse(output)).result;
+  }
+
+  async heartbeat(
+    request: FreedClaimHeartbeatRequest,
+  ): Promise<FreedClaimHeartbeatReceipt> {
+    const payload = heartbeatRequestSchema.parse(request);
+    const output = await this.#run("claim-heartbeat", payload);
+    return heartbeatOutputSchema.parse(JSON.parse(output)).result;
+  }
+
+  async transfer(
+    request: FreedClaimTransferRequest,
+  ): Promise<FreedClaimTransferReceipt> {
+    const payload = transferRequestSchema.parse(request);
+    if (payload.nextEpoch !== payload.priorEpoch + 1) {
+      throw new Error("Freed claim transfer must advance exactly one custody epoch.");
+    }
+    const output = await this.#run("claim-transfer", payload);
+    return transferOutputSchema.parse(JSON.parse(output)).result;
+  }
+
+  async release(
+    request: FreedClaimReleaseRequest,
+  ): Promise<FreedClaimReleaseReceipt> {
+    const payload = releaseRequestSchema.parse(request);
+    const output = await this.#run("claim-release", payload);
+    return releaseOutputSchema.parse(JSON.parse(output)).result;
+  }
+
+  async #run(
+    operation:
+      | "claim-acquire"
+      | "claim-show"
+      | "claim-heartbeat"
+      | "claim-transfer"
+      | "claim-release",
+    request: unknown,
+    retry = true,
+  ): Promise<string> {
+    const command = {
+      executable: this.options.executable,
+      args: [
+        ...(this.options.args ?? []),
+        "task",
+        operation,
+        "--request-json",
+        canonicalJsonText(request),
+      ],
+      cwd: this.options.cwd,
+      env: {},
+      timeoutMs: this.options.timeoutMs ?? 30_000,
+      maxBufferBytes: 1024 * 1024,
+    } as const;
+    try {
+      return (await this.runner.run(command)).stdout;
+    } catch (error) {
+      if (!retry) {
+        throw error;
+      }
+      return (await this.runner.run(command)).stdout;
+    }
+  }
+}
+
+export function admissionFromAcquire(
+  receipt: FreedClaimAcquireReceipt,
+): ExecutionAdmission {
+  return receipt.admission;
+}

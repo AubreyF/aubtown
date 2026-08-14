@@ -31,6 +31,8 @@ The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every
 
 `aubtown-pilot-readiness.service` is a manual, read-only launch gate. It runs only after a fresh planning collection. It verifies protected physical runtime files, the immutable Symphony executable path, every reviewed patch digest, the workflow policy, prelaunch and active-guard builds, the installed Freed claim broker, a planning snapshot no older than 90 seconds, and one coherent ready dispatch for the configured repository and issue. It writes `/var/lib/aubtown/coordinator/pilot-readiness.json` and exits nonzero when any check fails. A blocked report is evidence, not permission to weaken the check.
 
+`aubtown-freed-broker-conformance.service` runs immediately before pilot readiness against a disposable `conformance-*` broker profile. Each operation starts a separate broker process. The gate checks acquire, exact replay, changed-replay rejection, claim projection, duplicate rejection, heartbeat, checkpoint-backed transfer, stale-epoch fencing, exact release, and post-release restart state. Its protected report binds the exact broker path and SHA-256 digest. Pilot readiness accepts only a complete passing report from the last 10 minutes for the executable it is about to trust.
+
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
 
 The future authority broker runs under its own service identity beside the canonical Freed state root. Symphony and workers receive scoped receipts, not authority tokens or direct state-root access.
@@ -48,6 +50,8 @@ The future authority broker runs under its own service identity beside the canon
 - `/var/lib/aubtown/coordinator/planning-snapshot.json`: protected read-only cross-source planning evidence
 - `/var/lib/aubtown/coordinator/dispatch-intention.json`: protected deterministic proposal or blockers
 - `/var/lib/aubtown/coordinator/pilot-readiness.json`: protected live launch-gate report
+- `/var/lib/aubtown/coordinator/freed-broker-conformance.json`: protected disposable broker proof
+- `/var/lib/aubtown/conformance`: disposable broker profile state, never canonical Freed authority
 - `/var/lib/aubtown/coordinator/custody-transfer-plan.json`: non-authoritative verified-checkpoint transfer proposal
 - `/var/lib/aubtown/admission/candidates`: protected non-authoritative per-issue dispatch requests
 - `/var/lib/aubtown/admission/envelopes`: protected per-issue Freed authority and quota envelopes
@@ -116,8 +120,9 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 9. Install the Symphony workflow and SSH configuration.
 10. Run the read-only upstream, host, quota, issue, task, branch, and workspace checks, then invoke the native publisher for one protected non-authoritative candidate.
 11. Run the fake worker, exact-claim restart, concurrent prelaunch, rolling-week, daily ceiling, and Mac-offline Linux routing proofs.
-12. Run `systemctl start aubtown-pilot-readiness.service` and inspect the protected report.
-13. Keep the writer disabled until the audit is ready and the Freed task-claim integration test passes.
+12. Install `/etc/aubtown/freed-broker-conformance.json` from `config/repositories/freed-broker-conformance.example.json`, map its `conformance-*` profile to disposable state, then run `systemctl start aubtown-freed-broker-conformance.service`.
+13. Run `systemctl start aubtown-pilot-readiness.service` and inspect both protected reports.
+14. Keep the writer disabled until the audit is ready and the real Freed task-claim integration test passes.
 
 ## macOS executor
 
@@ -141,6 +146,7 @@ Before enabling a writer, verify:
 - the active Symphony run loop interrupts at the hard quota boundary before unattended operation
 - a new reconciled authority claim can proceed without deleting the prior crash receipt
 - the native pilot audit reports ready for the exact selected issue and installed immutable release
+- the disposable broker report proves all named lifecycle checks against the exact installed executable digest
 - no container runtime is running or required
 
 Provider-specific provisioning may use Terraform or OpenTofu later. Hosting APIs do not belong in the scheduler or authority domain.

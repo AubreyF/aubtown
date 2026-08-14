@@ -1,7 +1,7 @@
 [Unit]
 Description=Audit AubTown Freed pilot readiness
-Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service
-After=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service
+Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service aubtown-freed-broker-conformance.service
+After=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service aubtown-freed-broker-conformance.service
 
 [Service]
 Type=oneshot

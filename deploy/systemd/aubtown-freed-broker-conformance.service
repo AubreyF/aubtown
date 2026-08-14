@@ -1,0 +1,28 @@
+[Unit]
+Description=Verify the disposable Freed authority broker contract
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=aubtown-symphony
+Group=aubtown-symphony
+WorkingDirectory=/var/lib/aubtown/symphony
+EnvironmentFile=/etc/aubtown/symphony.env
+ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/verify-freed-broker.js /etc/aubtown/freed-broker-conformance.json
+StateDirectory=aubtown/coordinator aubtown/conformance
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed
+ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/aubtown/conformance
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
