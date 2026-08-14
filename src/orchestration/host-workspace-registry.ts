@@ -1,5 +1,5 @@
 import * as restate from "@restatedev/restate-sdk";
-import { canonicalJson } from "../security/canonical-json.js";
+import { canonicalJsonEqual } from "../security/canonical-json.js";
 import {
   initialWorkspaceReceiptSchema,
   initialWorkspaceRequirementSchema,
@@ -28,7 +28,7 @@ export const hostWorkspaceRegistry = restate.object({
       }
       const current = await ctx.get("workspace");
       if (current !== null) {
-        if (canonicalJson(current.requirement) === canonicalJson(requirement)) {
+        if (canonicalJsonEqual(current.requirement, requirement)) {
           return current;
         }
         if (current.stage !== "prepared") {

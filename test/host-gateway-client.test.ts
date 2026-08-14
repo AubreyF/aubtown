@@ -405,4 +405,110 @@ describe("HostGatewayClient", () => {
       expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
     }
   });
+
+  it("signs validation and independent-review receipts for one work product", async () => {
+    const keys = keyPair();
+    const requests: RequestInit[] = [];
+    let sequence = 20;
+    const checkpointReference = "d".repeat(64);
+    const workProduct = {
+      schemaVersion: 1 as const,
+      repository: {
+        owner: "freed-project",
+        name: "freed",
+        defaultBranch: "dev",
+      },
+      issueNumber: 1_234,
+      claimId: "claim-1234",
+      custodyEpoch: 1,
+      hostId: "linux-control-1",
+      branch: "fix/deterministic-validation",
+      worktree: "/srv/freedworks/worktrees/freed/1234",
+      commandId: "50e13459-412e-41f7-809f-0d91dc660d52",
+      checkpointReference,
+      baseHead: "a".repeat(40),
+      head: "b".repeat(40),
+      patchDigest: "c".repeat(64),
+      implementation: {
+        driverId: "codex-app-server-v1",
+        threadId: "implementation-thread",
+        turnId: "implementation-turn",
+      },
+    };
+    const client = new HostGatewayClient(
+      "http://127.0.0.1:8080",
+      "linux-control-1",
+      keys.privateKey,
+      { next: async () => ++sequence },
+      async (_input, init) => {
+        requests.push(init ?? {});
+        return Response.json(
+          requests.length === 1
+            ? {
+                kind: "validation-receipt",
+                hostId: "linux-control-1",
+                sequence: 21,
+                acceptedAt: "2026-08-13T18:00:02.000Z",
+                checkpointReference,
+                stage: "awaiting-review",
+              }
+            : {
+                kind: "review-receipt",
+                hostId: "linux-control-1",
+                sequence: 22,
+                acceptedAt: "2026-08-13T18:00:03.000Z",
+                checkpointReference,
+                stage: "ready",
+              },
+        );
+      },
+      () => new Date("2026-08-13T18:00:01.000Z"),
+    );
+
+    await expect(
+      client.reportValidation({
+        schemaVersion: 1,
+        kind: "exact-validation",
+        workProduct,
+        passed: true,
+        commands: [
+          {
+            argv: ["/opt/node/bin/npm", "test"],
+            cwd: workProduct.worktree,
+            exitCode: 0,
+            outputDigest: "e".repeat(64),
+            durationMs: 1_000,
+          },
+        ],
+        completedAt: "2026-08-13T18:00:02.000Z",
+        summary: "Validation passed.",
+      }),
+    ).resolves.toMatchObject({ stage: "awaiting-review" });
+    await expect(
+      client.reportReview({
+        schemaVersion: 1,
+        kind: "independent-review",
+        workProduct,
+        reviewer: {
+          driverId: "codex-app-server-review-v1",
+          threadId: "review-thread",
+          turnId: "review-turn",
+        },
+        verdict: "pass",
+        findings: [],
+        completedAt: "2026-08-13T18:00:03.000Z",
+        summary: "Review passed.",
+      }),
+    ).resolves.toMatchObject({ stage: "ready" });
+    const envelopes = requests.map((request) =>
+      parseSignedHostEnvelope(JSON.parse(String(request.body))),
+    );
+    expect(envelopes.map((envelope) => envelope.kind)).toEqual([
+      "validation-receipt",
+      "review-receipt",
+    ]);
+    for (const envelope of envelopes) {
+      expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
+    }
+  });
 });

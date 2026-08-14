@@ -36,8 +36,12 @@ import type {
   InitialWorkspaceRequirement,
   InitialWorkspaceState,
 } from "../execution/workspace.js";
-import { createWorkProductIdentity } from "../adjudication/receipts.js";
+import {
+  createWorkProductIdentity,
+  type WorkProductIdentity,
+} from "../adjudication/receipts.js";
 import { handoffRegistry } from "./handoff-registry.js";
+import { canonicalJsonEqual } from "../security/canonical-json.js";
 
 const MAX_ENVELOPE_AGE_SECONDS = 300;
 const MAX_FUTURE_SKEW_SECONDS = 120;
@@ -150,10 +154,45 @@ export type HostGatewayReceipt =
         | "restore-required"
         | "quota-unavailable"
         | "quota-blocked";
+    }
+  | {
+      readonly kind: "validation-receipt";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly checkpointReference: string;
+      readonly stage: "awaiting-review" | "ready" | "blocked";
+    }
+  | {
+      readonly kind: "review-receipt";
+      readonly hostId: string;
+      readonly sequence: number;
+      readonly acceptedAt: string;
+      readonly checkpointReference: string;
+      readonly stage: "ready" | "blocked";
     };
 
 function terminal(message: string, errorCode = 403): never {
   throw new restate.TerminalError(message, { errorCode });
+}
+
+function workProductMatchesClaim(
+  product: WorkProductIdentity,
+  claim: DispatchClaim,
+  hostId: string,
+): boolean {
+  return (
+    product.repository.owner === claim.repository.owner &&
+    product.repository.name === claim.repository.name &&
+    product.repository.defaultBranch === claim.repository.defaultBranch &&
+    product.issueNumber === claim.issueNumber &&
+    product.claimId === claim.claimId &&
+    product.custodyEpoch === claim.custodyEpoch &&
+    product.hostId === hostId &&
+    claim.hostId === hostId &&
+    product.branch === claim.branch &&
+    product.worktree === claim.worktree
+  );
 }
 
 function restoreRequirementMatchesClaim(
@@ -853,6 +892,69 @@ export function createHostGateway(
                   }
                 }
               }
+            }
+          } else if (
+            envelope.kind === "validation-receipt" ||
+            envelope.kind === "review-receipt"
+          ) {
+            const product = envelope.payload.workProduct;
+            if (product.hostId !== envelope.hostId) {
+              return terminal("Adjudication receipt targets another host", 409);
+            }
+            const claimKey = `${product.repository.owner}/${product.repository.name}#${product.issueNumber.toLocaleString("en-US", { useGrouping: false })}`;
+            const currentClaim = await ctx
+              .objectClient(claimRegistry, claimKey)
+              .read();
+            if (
+              currentClaim === null ||
+              !workProductMatchesClaim(
+                product,
+                currentClaim,
+                envelope.hostId,
+              )
+            ) {
+              return terminal(
+                "Adjudication receipt does not match current claim custody",
+                409,
+              );
+            }
+            const handoff = ctx.objectClient(
+              handoffRegistry,
+              product.checkpointReference,
+            );
+            const current = await handoff.read();
+            if (
+              current === null ||
+              !canonicalJsonEqual(current.workProduct, product)
+            ) {
+              return terminal(
+                "Adjudication receipt does not match its durable handoff",
+                409,
+              );
+            }
+            if (envelope.kind === "validation-receipt") {
+              const recorded = await handoff.recordValidation(envelope.payload);
+              receipt = {
+                kind: "validation-receipt",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                checkpointReference: product.checkpointReference,
+                stage: recorded.stage as
+                  | "awaiting-review"
+                  | "ready"
+                  | "blocked",
+              };
+            } else {
+              const recorded = await handoff.recordReview(envelope.payload);
+              receipt = {
+                kind: "review-receipt",
+                hostId: envelope.hostId,
+                sequence: envelope.sequence,
+                acceptedAt,
+                checkpointReference: product.checkpointReference,
+                stage: recorded.stage as "ready" | "blocked",
+              };
             }
           } else {
             const reported = envelope.payload;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { workProductIdentitySchema } from "../adjudication/receipts.js";
 import type { DraftPublicationReceipt } from "../publication/draft-publisher.js";
 import type { PublicationPlan } from "../publication/policy.js";
-import { canonicalJson } from "../security/canonical-json.js";
+import { canonicalJsonEqual } from "../security/canonical-json.js";
 
 const draftPublicationReceiptSchema = z.object({
   schemaVersion: z.literal(1),
@@ -28,7 +28,7 @@ export interface PublicationState {
 }
 
 function same(left: unknown, right: unknown): boolean {
-  return Buffer.from(canonicalJson(left)).equals(Buffer.from(canonicalJson(right)));
+  return canonicalJsonEqual(left, right);
 }
 
 export function initializePublication(

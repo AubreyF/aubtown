@@ -31,3 +31,7 @@ function canonicalValue(value: unknown): string {
 export function canonicalJson(value: unknown): Uint8Array {
   return new TextEncoder().encode(canonicalValue(value));
 }
+
+export function canonicalJsonEqual(left: unknown, right: unknown): boolean {
+  return Buffer.from(canonicalJson(left)).equals(Buffer.from(canonicalJson(right)));
+}

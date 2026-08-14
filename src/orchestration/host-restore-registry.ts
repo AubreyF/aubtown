@@ -1,5 +1,5 @@
 import * as restate from "@restatedev/restate-sdk";
-import { canonicalJson } from "../security/canonical-json.js";
+import { canonicalJsonEqual } from "../security/canonical-json.js";
 import {
   custodyRestoreReceiptSchema,
   custodyRestoreRequirementSchema,
@@ -33,7 +33,7 @@ export const hostRestoreRegistry = restate.object({
       }
       const current = await ctx.get("restore");
       if (current !== null) {
-        if (canonicalJson(current.requirement) === canonicalJson(requirement)) {
+        if (canonicalJsonEqual(current.requirement, requirement)) {
           return current;
         }
         if (current.stage !== "restored") {

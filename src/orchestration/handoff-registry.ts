@@ -8,7 +8,7 @@ import {
   type IndependentReviewReceipt,
   type WorkProductIdentity,
 } from "../adjudication/receipts.js";
-import { canonicalJson } from "../security/canonical-json.js";
+import { canonicalJsonEqual } from "../security/canonical-json.js";
 
 export type HandoffStage =
   | "awaiting-validation"
@@ -25,7 +25,7 @@ export interface HandoffState {
 }
 
 function same(left: unknown, right: unknown): boolean {
-  return Buffer.from(canonicalJson(left)).equals(Buffer.from(canonicalJson(right)));
+  return canonicalJsonEqual(left, right);
 }
 
 export function initializeHandoff(

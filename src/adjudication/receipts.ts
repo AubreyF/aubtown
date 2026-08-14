@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { canonicalJson } from "../security/canonical-json.js";
+import { canonicalJsonEqual } from "../security/canonical-json.js";
 import type { CustodyCheckpoint } from "../domain/types.js";
 import type { ExecutorStartCommand } from "../execution/command.js";
 import type { WorkerTurnHandle } from "../drivers/worker.js";
@@ -159,7 +159,7 @@ export interface HandoffAssessment {
 }
 
 function sameCanonical(left: unknown, right: unknown): boolean {
-  return Buffer.from(canonicalJson(left)).equals(Buffer.from(canonicalJson(right)));
+  return canonicalJsonEqual(left, right);
 }
 
 export function assessHandoff(input: {

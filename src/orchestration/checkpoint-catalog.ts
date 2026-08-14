@@ -3,7 +3,7 @@ import {
   parseSignedCheckpointStorageReceipt,
   type SignedCheckpointStorageReceipt,
 } from "../checkpoints/receipt.js";
-import { canonicalJson } from "../security/canonical-json.js";
+import { canonicalJsonEqual } from "../security/canonical-json.js";
 
 interface CheckpointCatalogState {
   receipt: SignedCheckpointStorageReceipt;
@@ -25,7 +25,7 @@ export const checkpointCatalog = restate.object({
       }
       const current = await ctx.get("receipt");
       if (current !== null) {
-        if (canonicalJson(current) !== canonicalJson(receipt)) {
+        if (!canonicalJsonEqual(current, receipt)) {
           throw new restate.TerminalError(
             "Checkpoint catalog reference already contains a different receipt.",
           );

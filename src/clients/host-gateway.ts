@@ -38,6 +38,12 @@ import {
   initialWorkspaceRequirementSchema,
   type InitialWorkspaceReceipt,
 } from "../execution/workspace.js";
+import {
+  exactValidationReceiptSchema,
+  independentReviewReceiptSchema,
+  type ExactValidationReceipt,
+  type IndependentReviewReceipt,
+} from "../adjudication/receipts.js";
 
 const quotaDecisionSchema = z.object({
   action: z.enum(["admit", "throttle", "stop-admission", "interrupt"]),
@@ -175,6 +181,22 @@ const gatewayReceiptSchema = z.discriminatedUnion("kind", [
       "quota-unavailable",
       "quota-blocked",
     ]),
+  }),
+  z.object({
+    kind: z.literal("validation-receipt"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u),
+    stage: z.enum(["awaiting-review", "ready", "blocked"]),
+  }),
+  z.object({
+    kind: z.literal("review-receipt"),
+    hostId: z.string().min(1),
+    sequence: z.number().int().positive().safe(),
+    acceptedAt: z.iso.datetime(),
+    checkpointReference: z.string().regex(/^[0-9a-f]{64}$/u),
+    stage: z.enum(["ready", "blocked"]),
   }),
 ]);
 
@@ -342,6 +364,51 @@ export class HostGatewayClient implements DurableUsageGovernor {
       receipt.checkpointReference !== restored.checkpointReference
     ) {
       throw new Error("Host gateway restore receipt does not match its request.");
+    }
+    return receipt;
+  }
+
+  async reportValidation(
+    input: ExactValidationReceipt,
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "validation-receipt" }>> {
+    const validation = exactValidationReceiptSchema.parse(input);
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "validation-receipt",
+      payload: validation,
+    });
+    if (receipt.kind !== "validation-receipt") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    if (
+      receipt.checkpointReference !==
+      validation.workProduct.checkpointReference
+    ) {
+      throw new Error("Host gateway validation receipt changes its work product.");
+    }
+    return receipt;
+  }
+
+  async reportReview(
+    input: IndependentReviewReceipt,
+  ): Promise<Extract<HostGatewayReceipt, { readonly kind: "review-receipt" }>> {
+    const review = independentReviewReceiptSchema.parse(input);
+    const receipt = await this.#submit({
+      schemaVersion: 1,
+      hostId: this.hostId,
+      sequence: await this.sequences.next(),
+      issuedAt: this.now().toISOString(),
+      kind: "review-receipt",
+      payload: review,
+    });
+    if (receipt.kind !== "review-receipt") {
+      throw new Error("Host gateway returned the wrong receipt kind.");
+    }
+    if (receipt.checkpointReference !== review.workProduct.checkpointReference) {
+      throw new Error("Host gateway review receipt changes its work product.");
     }
     return receipt;
   }

@@ -633,13 +633,79 @@ jq -e \
   '.stage == "awaiting-validation" and .workProduct.checkpointReference == $reference and .workProduct.commandId == $commandId and .workProduct.implementation.driverId == "codex-app-server-v1"' \
   "${TMP_DIR}/executor-handoff.json" \
   >/dev/null
-jq '.sequence = 12' "${TMP_DIR}/executor-reconcile-unsigned.json" > "${TMP_DIR}/executor-reconcile-terminal-unsigned.json"
+jq -n \
+  --arg now "$NOW" \
+  --slurpfile handoff "${TMP_DIR}/executor-handoff.json" \
+  '{schemaVersion: 1, kind: "exact-validation", workProduct: $handoff[0].workProduct, passed: true, commands: [{argv: ["/usr/bin/node", "--test"], cwd: $handoff[0].workProduct.worktree, exitCode: 0, outputDigest: ("d" * 64), durationMs: 10}], completedAt: $now, summary: "Integration validation passed."}' \
+  > "${TMP_DIR}/validation-receipt.json"
+jq '.workProduct.head = ("e" * 40)' \
+  "${TMP_DIR}/validation-receipt.json" \
+  > "${TMP_DIR}/validation-receipt-tampered.json"
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --slurpfile validation "${TMP_DIR}/validation-receipt-tampered.json" \
+  '{schemaVersion: 1, hostId: $host, sequence: 12, issuedAt: $now, kind: "validation-receipt", payload: $validation[0]}' \
+  > "${TMP_DIR}/validation-receipt-tampered-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/validation-receipt-tampered-unsigned.json" \
+  > "${TMP_DIR}/validation-receipt-tampered-envelope.json"
+TAMPERED_VALIDATION_STATUS="$(curl --silent --show-error \
+  -o "${TMP_DIR}/validation-receipt-tampered-response.json" \
+  -w '%{http_code}' \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-validation-receipt-tampered-12' \
+  --data-binary "@${TMP_DIR}/validation-receipt-tampered-envelope.json")"
+if [[ "$TAMPERED_VALIDATION_STATUS" != "409" ]]; then
+  echo "Expected changed validation work product to return 409, received ${TAMPERED_VALIDATION_STATUS}." >&2
+  exit 1
+fi
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --slurpfile validation "${TMP_DIR}/validation-receipt.json" \
+  '{schemaVersion: 1, hostId: $host, sequence: 12, issuedAt: $now, kind: "validation-receipt", payload: $validation[0]}' \
+  > "${TMP_DIR}/validation-receipt-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/validation-receipt-unsigned.json" \
+  > "${TMP_DIR}/validation-receipt-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-validation-receipt-12' \
+  --data-binary "@${TMP_DIR}/validation-receipt-envelope.json" \
+  | jq -e '.kind == "validation-receipt" and .stage == "awaiting-review"' \
+  >/dev/null
+jq -n \
+  --arg now "$NOW" \
+  --slurpfile handoff "${TMP_DIR}/executor-handoff.json" \
+  '{schemaVersion: 1, kind: "independent-review", workProduct: $handoff[0].workProduct, reviewer: {driverId: "codex-app-server-review-v1", threadId: "integration-review-thread", turnId: "integration-review-turn"}, verdict: "pass", findings: [], completedAt: $now, summary: "Integration review passed."}' \
+  > "${TMP_DIR}/review-receipt.json"
+jq -n \
+  --arg host "$HOST_ID" \
+  --arg now "$NOW" \
+  --slurpfile review "${TMP_DIR}/review-receipt.json" \
+  '{schemaVersion: 1, hostId: $host, sequence: 13, issuedAt: $now, kind: "review-receipt", payload: $review[0]}' \
+  > "${TMP_DIR}/review-receipt-unsigned.json"
+"${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/review-receipt-unsigned.json" \
+  > "${TMP_DIR}/review-receipt-envelope.json"
+curl --fail --silent --show-error \
+  -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: integration-review-receipt-13' \
+  --data-binary "@${TMP_DIR}/review-receipt-envelope.json" \
+  | jq -e '.kind == "review-receipt" and .stage == "ready"' \
+  >/dev/null
+harness_key readHandoff "$CHECKPOINT_REFERENCE" "${TMP_DIR}/executor-handoff-ready.json"
+jq -e '.stage == "ready" and .validation.passed == true and .review.verdict == "pass"' \
+  "${TMP_DIR}/executor-handoff-ready.json" \
+  >/dev/null
+jq '.sequence = 14' "${TMP_DIR}/executor-reconcile-unsigned.json" > "${TMP_DIR}/executor-reconcile-terminal-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" "${ROOT_DIR}/src/cli/sign-host-envelope.ts" "$PRIVATE_KEY" "${TMP_DIR}/executor-reconcile-terminal-unsigned.json" \
   > "${TMP_DIR}/executor-reconcile-terminal.json"
 curl --fail --silent --show-error \
   -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
   -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-executor-reconcile-12' \
+  -H 'idempotency-key: integration-executor-reconcile-14' \
   --data-binary "@${TMP_DIR}/executor-reconcile-terminal.json" \
   | jq -e \
     --arg commandId "$COMMAND_ID" \
@@ -681,7 +747,7 @@ jq -n \
   --arg host "$HOST_ID" \
   --arg now "$NOW" \
   --slurpfile receipt "${TMP_DIR}/checkpoint-storage-receipt-tampered.json" \
-  '{schemaVersion: 1, hostId: $host, sequence: 13, issuedAt: $now, kind: "checkpoint-receipt", payload: $receipt[0]}' \
+  '{schemaVersion: 1, hostId: $host, sequence: 15, issuedAt: $now, kind: "checkpoint-receipt", payload: $receipt[0]}' \
   > "${TMP_DIR}/checkpoint-receipt-tampered-unsigned.json"
 "${ROOT_DIR}/node_modules/.bin/tsx" \
   "${ROOT_DIR}/src/cli/sign-host-envelope.ts" \
@@ -693,7 +759,7 @@ TAMPERED_RECEIPT_STATUS="$(curl --silent --show-error \
   -w '%{http_code}' \
   -X POST "${HOST_EDGE}/HostGateway/${HOST_ID}/submit" \
   -H 'content-type: application/json' \
-  -H 'idempotency-key: integration-checkpoint-receipt-tampered-13' \
+  -H 'idempotency-key: integration-checkpoint-receipt-tampered-15' \
   --data-binary "@${TMP_DIR}/checkpoint-receipt-tampered-envelope.json")"
 if [[ "$TAMPERED_RECEIPT_STATUS" != "409" ]]; then
   echo "Expected forged checkpoint storage receipt to return 409, received ${TAMPERED_RECEIPT_STATUS}." >&2
@@ -944,4 +1010,4 @@ if [[ "$REPLAY_AFTER_RESTART_STATUS" != "409" ]]; then
   exit 1
 fi
 
-echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound authority admission dispatched through durable routing, Linux and macOS routing used quota and heartbeat state, initial execution stayed fenced until signed workspace receipt, executor lifecycle completed into one durable work-product handoff, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."
+echo "Signed host ingress passed: narrow edge enforced, enrolled identities accepted, tampering rejected, internal services private, claim-bound authority admission dispatched through durable routing, Linux and macOS routing used quota and heartbeat state, initial execution stayed fenced until signed workspace receipt, executor lifecycle completed into one durable work-product handoff, current-custody validation and fresh review advanced it to ready, current turn resume approved, terminal turn quarantined, active transfer blocked, pending command cancelled, encrypted checkpoint moved from Mac to Linux custody, destination execution stayed fenced until signed restore receipt, replay and restart fencing passed."
