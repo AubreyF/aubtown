@@ -2,11 +2,11 @@
 
 ## Governing rule
 
-GitHub Issues are the only backlog and the complete operator-visible work view. Lifecycle labels and one machine-managed comment show every factory state and assigned executor. Restate owns only crash-safe claims and workflow progress underneath that view. A repository authority adapter decides whether work may execute. Neither Restate state nor a GitHub label can replace repository authority.
+GitHub Issues are the only backlog and the complete operator-visible work view. Lifecycle labels and one machine-managed comment show every factory state and assigned executor. Immutable machine comments provide the canonical dispatcher election record. A repository authority adapter decides whether work may execute. Neither a dispatcher claim nor a GitHub lifecycle label can replace repository authority.
 
 The coordinator polls open debt issues once per minute or responds to the equivalent webhook. Only an issue whose sole `factory:` lifecycle label is `factory:ready` can enter admission. Dispatch replaces that label with `factory:running`. The machine-managed comment shows the stage, host, worker, execution account alias, claim, custody epoch, branch, last heartbeat, draft pull request, blocker, summary, and next action. Ready issues show those unassigned fields explicitly. The coordinator never rewrites the human-authored issue description to record dispatch state.
 
-Workers do not infer authority from that projection. They execute only a signed command bound to the current durable claim and repository authority receipt. This keeps the GitHub view simple without treating a last-write-wins issue edit as an atomic lock.
+Workers do not infer authority from that projection. They execute only a signed command bound to the winning GitHub claim and repository authority receipt. The issue body remains human-owned and never carries machine coordination state.
 
 For Freed, dispatch requires all of these conditions:
 
@@ -42,32 +42,25 @@ External systems implement narrow interfaces:
 
 This separation permits a later Grok or other API driver without changing issue authority, claims, conflict control, custody, or publication policy. A future OpenHands driver has the same boundary. It is not part of the initial writer path.
 
-## Durable orchestration
+## Dispatcher election and recovery
 
-Restate is the initial durable runtime. The `ClaimRegistry` virtual object serializes mutations for one repository and issue key. Its record contains no issue prose or backlog semantics. It holds only the claim identity, epoch, worker, host, timestamps, and current execution state needed to prevent duplicate work after a crash. A custody transfer must advance exactly one epoch. The `QualificationWorkflow` stores its report and terminal qualification stage.
+Every coordinator uses the same GitHub App identity and a separately enrolled Ed25519 host identity. To compete for an eligible issue, a coordinator posts one immutable claim comment containing its host ID, public-key fingerprint, nonce, repository, issue, lease, and signature. The signed payload is hidden in the comment and the human-readable fields make the event auditable.
 
-Restate state is operational state, not a second backlog. A startup reconciler compares durable claims against GitHub, Freed tasks, leases, branches, worktrees, and pull requests before dispatch or retry.
+The first valid claim is the valid claim with the lowest GitHub comment ID. A coordinator waits through the 30 second collection window, rereads the issue comments, and computes that winner. It reads once more immediately before launching a worker and proceeds only if the same claim still wins. Missing, partial, or unavailable GitHub evidence stops dispatch. Invalid authors, unenrolled hosts, bad signatures, mismatched repositories or issues, and stale replayed payloads are ignored.
 
-The ingress-private `AdmittedDispatchWorkflow` is the transaction boundary after repository authority. It accepts only a short-lived admission bound to the exact task revision, qualification, claim, selected account, base commit, and workspace target. It rechecks the current durable route, acquires the repository conflict slot and issue claim, creates the host workspace requirement, and enqueues one claim-bound command. It compensates those Restate records if enqueue fails. The binding digest prevents accidental substitution but is not an authority signature. Only a repository bridge that has already verified and acquired the repository-owned authority receipt may call this workflow. No such production caller is installed before the Freed authority extension is approved.
+The winning claim is a short lease, not a permanent lock. The managed status comment carries its heartbeat and work-product projection. When the lease and heartbeat expire, another coordinator may publish a new claim round. It first reconciles the GitHub issue, repository authority, branch, draft pull request, checkpoint, and host journal. Ordinary process death therefore recovers automatically. Human reconciliation is reserved for ambiguous work products or policy gates, not every crash.
 
-The production deployment pins the native Restate 1.7.3 Linux binary and TypeScript SDK 1.16.5. The server data directory lives on durable storage. Release archives are selected by CPU architecture and verified against checked-in upstream SHA-256 checksums. Upgrades are reviewed and pinned. Docker Compose remains an optional disposable integration harness and is not part of the Linux production service graph.
-
-References:
-
-- [Restate 1.7.3 release](https://github.com/restatedev/restate/releases/tag/v1.7.3)
-- [Restate TypeScript services](https://docs.restate.dev/develop/ts/services)
-- [Restate server configuration](https://docs.restate.dev/server/configuration)
-- [Restate networking](https://docs.restate.dev/server/networking)
+GitHub is the shared coordination ledger. A small host-local SQLite or atomic-file journal records process custody, subscription observations, and idempotency receipts so one host can resume without repeating expensive work. The journal is not a queue and cannot grant authority. AubTown v1 has no Restate server, database service, Docker container, or Compose runtime.
 
 ## Hosts
 
 `linux-control-1` owns the durable runtime and generic Linux execution. `macos-executor-1` is an intermittent specialist for native macOS, Tauri, install, and soak work. Its absence does not stop portable work.
 
-Each executor has one local Codex profile and one host identity. Credentials never move between hosts. Future subscription scaling assigns each subscription to an isolated executor profile. The ingress-private route planner reads only enrolled hosts, canonical heartbeats, configured account-to-host assignments, and durable rolling-week usage. It excludes accounts not advertised by the current host heartbeat, fails closed when telemetry is missing, and selects the compatible account with the most weekly headroom. It never logs one process into a carousel of copied account files.
+Each executor has one local Codex profile and one host identity. Credentials never move between hosts. Future subscription scaling assigns each subscription to an isolated executor profile. The route planner reads only enrolled hosts, GitHub-projected heartbeats, configured account-to-host assignments, and rolling-week usage observations. It excludes accounts not advertised by the current host heartbeat, fails closed when telemetry is missing, and selects the compatible account with the most weekly headroom. It never logs one process into a carousel of copied account files.
 
-Linux is the eventual canonical authority and scheduling host. A Mac is an intermittent executor, not an authority replica. Each host signs heartbeats and quota observations with its own Ed25519 key. The Linux coordinator enrolls the corresponding public key, fixed lane, and allowed account IDs. A durable monotonic sequence rejects replay before host or account state changes.
+Linux is the preferred always-on coordinator and generic executor. A Mac is an intermittent specialist for native work and may also compete as a coordinator when Linux is unavailable. Each host signs claims, heartbeats, and quota observations with its own Ed25519 key. Enrollment fixes the corresponding public key, lane, and allowed account IDs. A host-local monotonic sequence and GitHub server timestamps reject replay before state changes.
 
-Remote executors never receive general Restate ingress. A narrow host edge accepts only `POST /HostGateway/<host>/submit`, requires an idempotency key, limits request size, and forwards to the signed Restate gateway. Restate ingress and administration remain bound to loopback. Tailscale carries the private network connection to the narrow edge. Every durable registry, worker, and workflow behind `HostGateway` is ingress-private even if another local process reaches Restate. A public `IntegrationHarness` is bound only by an exact local-test opt-in and is absent from the production service manifest.
+Coordinators do not expose a general workflow ingress. Hosts communicate through GitHub for shared claims and projections, plus a narrow private checkpoint transfer edge when unpublished bytes must move. Tailscale carries that private transfer connection. The worker never receives GitHub App, subscription, checkpoint-root, or repository-authority credentials.
 
 ## Quota
 

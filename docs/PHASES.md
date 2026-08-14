@@ -1,6 +1,6 @@
 # Delivery phases
 
-Status: Phase 1 complete. Phase 2 control-plane proofs complete except external status projection. Real Freed execution remains gated on explicit approval and implementation of the coordinator plus task-scoped claim authority correction.
+Status: Phase 1 complete. Phase 2 is being simplified around GitHub-native dispatcher election. Real Freed execution remains gated on implementation of the coordinator plus the approved task-scoped claim authority correction.
 
 ## Phase 0: architecture and threat model
 
@@ -18,6 +18,12 @@ Status: Phase 1 complete. Phase 2 control-plane proofs complete except external 
 - [x] Compare results against a representative issue sample.
 
 ## Phase 2: durable dry run
+
+- [x] Prove deterministic dispatcher election from immutable, signed GitHub claim comments.
+- [x] Elect the lowest valid GitHub comment ID after a 30 second collection window.
+- [x] Reject spoofed, tampered, unenrolled, cross-issue, and stale replayed claims.
+- [ ] Replace the Restate runtime with a native coordinator and host-local idempotency journal.
+- [ ] Remove Restate, Docker, and Compose from the AubTown v1 runtime and deployment surface.
 
 - [x] Run Restate with a fake worker.
 - [x] Prove restart reconciliation and duplicate-dispatch prevention.

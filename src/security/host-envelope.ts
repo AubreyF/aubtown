@@ -216,3 +216,9 @@ export function verifyHostEnvelope(
 export function hostEnvelopeDigest(envelope: SignedHostEnvelope): string {
   return createHash("sha256").update(canonicalJson(envelope)).digest("hex");
 }
+
+export function hostPublicKeyFingerprint(publicKeyPem: string): string {
+  const key = assertEd25519(createPublicKey(publicKeyPem), "Host public key");
+  const der = key.export({ type: "spki", format: "der" });
+  return `SHA256:${createHash("sha256").update(der).digest("base64url")}`;
+}
