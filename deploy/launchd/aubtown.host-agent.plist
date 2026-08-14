@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>aubtown.host-agent</string>
+  <string>aubtown.host-monitor</string>
   <key>ProgramArguments</key>
   <array>
     <string>/opt/aubtown/node/bin/node</string>
-    <string>/opt/aubtown/current/dist/host-agent.js</string>
+    <string>/opt/aubtown/current/dist/host-monitor.js</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/opt/aubtown/current</string>
@@ -27,22 +27,6 @@
     <string>replace-with-exact-codex-version-output</string>
     <key>AUBTOWN_HOST_GATEWAY_URL</key>
     <string>https://replace-private-linux-host-name</string>
-    <key>AUBTOWN_GIT_EXECUTABLE</key>
-    <string>/usr/bin/git</string>
-    <key>AUBTOWN_EXECUTION_JOURNAL_FILE</key>
-    <string>/Users/aubtown/Library/Application Support/AubTown/state/execution.json</string>
-    <key>AUBTOWN_ADJUDICATION_JOURNAL_FILE</key>
-    <string>/Users/aubtown/Library/Application Support/AubTown/state/adjudication.json</string>
-    <key>AUBTOWN_VALIDATION_PATH</key>
-    <string>/opt/aubtown/node/bin:/usr/bin:/bin</string>
-    <key>AUBTOWN_CHECKPOINT_EDGE_URL</key>
-    <string>https://replace-private-linux-checkpoint-edge</string>
-    <key>AUBTOWN_CHECKPOINT_KEY_FILE</key>
-    <string>/Users/aubtown/Library/Application Support/AubTown/identity/checkpoint-key.bin</string>
-    <key>AUBTOWN_CHECKPOINT_KEY_REFERENCE</key>
-    <string>pilot:checkpoint-v1</string>
-    <key>AUBTOWN_CHECKPOINT_LOCAL_STORE_ROOT</key>
-    <string>/Users/aubtown/Library/Application Support/AubTown/checkpoints</string>
     <key>AUBTOWN_HOST_ID</key>
     <string>macos-executor-1</string>
     <key>AUBTOWN_HOST_LANE</key>
@@ -53,12 +37,6 @@
     <string>/Users/aubtown/Library/Application Support/AubTown/state/host-envelope.sequence</string>
     <key>AUBTOWN_QUOTA_SAMPLE_SECONDS</key>
     <string>60</string>
-    <key>FREED_REPOSITORY_ROOT</key>
-    <string>/Users/aubtown/Repositories/freed</string>
-    <key>AUBTOWN_WORKTREE_HELPER</key>
-    <string>/Users/aubtown/Repositories/freed/scripts/worktree-add.sh</string>
-    <key>AUBTOWN_WORKTREE_ROOT</key>
-    <string>/Users/aubtown/Worktrees/freed</string>
   </dict>
   <key>KeepAlive</key>
   <true/>
@@ -67,9 +45,9 @@
   <key>ProcessType</key>
   <string>Background</string>
   <key>StandardOutPath</key>
-  <string>/Users/aubtown/Library/Logs/AubTown/host-agent.log</string>
+  <string>/Users/aubtown/Library/Logs/AubTown/host-monitor.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/aubtown/Library/Logs/AubTown/host-agent-error.log</string>
+  <string>/Users/aubtown/Library/Logs/AubTown/host-monitor-error.log</string>
   <key>ThrottleInterval</key>
   <integer>10</integer>
 </dict>

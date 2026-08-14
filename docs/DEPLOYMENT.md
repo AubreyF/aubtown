@@ -23,6 +23,8 @@ Docker Desktop, Docker Engine, Compose, Restate, PostgreSQL, Redis, and a second
 
 `aubtown-host-gateway.service` receives signed heartbeat and quota envelopes as `aubtown-symphony`. It binds to `127.0.0.1:8090`, persists `/var/lib/aubtown/coordinator/host-observations.json`, and reads only enrolled public keys from `/etc/aubtown/hosts.json`. A Mac reaches it through a private Tailscale HTTPS forward. Do not bind it publicly. Execution, workspace, restore, checkpoint, validation, and review commands remain closed until their coordinator state machines and the Freed claim path are enabled.
 
+`aubtown-host-agent.service` currently runs `dist/host-monitor.js`. Despite the legacy unit filename, this process only reads Codex account usage and sends signed heartbeat and quota observations. It does not run AubTown's optional executor, workspace, validation, checkpoint, or adjudication supervisors. Symphony owns execution.
+
 `aubtown-planning-snapshot.timer` invokes a native one-shot collector once per minute. The collector reads GitHub, the supported Freed task command, signed host state, local Git refs, and local worktrees. It atomically replaces `/var/lib/aubtown/coordinator/planning-snapshot.json` and `/var/lib/aubtown/coordinator/dispatch-intention.json`. The second file contains either one deterministic proposed initial dispatch or explicit blockers. These files are read-only planning evidence. Neither is an execution claim, candidate, queue, or launch authority.
 
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
@@ -129,6 +131,7 @@ Before enabling a writer, verify:
 - Codex reports the expected account, callable model, and rate-limit windows
 - restart does not duplicate a fake issue
 - daily and rolling-week stops reject new fake dispatches
+- the active Symphony run loop interrupts at the hard quota boundary before unattended operation
 - a new reconciled authority claim can proceed without deleting the prior crash receipt
 - no container runtime is running or required
 

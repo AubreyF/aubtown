@@ -1,5 +1,5 @@
 [Unit]
-Description=AubTown signed host and quota agent
+Description=AubTown signed host and quota monitor
 Wants=network-online.target
 After=network-online.target
 
@@ -9,7 +9,7 @@ User=aubtown-executor
 Group=aubtown-executor
 WorkingDirectory=/opt/aubtown/current
 EnvironmentFile=/etc/aubtown/host-agent.env
-ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/host-agent.js
+ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/host-monitor.js
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true

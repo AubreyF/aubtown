@@ -66,7 +66,24 @@ describe("native Linux deployment", () => {
       "AUBTOWN_HOST_GATEWAY_URL=http://127.0.0.1:8090",
     );
     expect(hostAgent).toContain("AUBTOWN_QUOTA_SAMPLE_SECONDS=60");
+    expect(hostAgent).not.toMatch(
+      /EXECUTION_JOURNAL|ADJUDICATION_JOURNAL|CHECKPOINT|WORKTREE/iu,
+    );
     expect(hostAgent).not.toMatch(/replace-with-private-key|BEGIN PRIVATE KEY/iu);
+  });
+
+  it("deploys telemetry without a second worker scheduler", async () => {
+    const service = await fixture("deploy/systemd/aubtown-host-agent.service");
+    const monitor = await fixture("src/host-monitor.ts");
+    const launchd = await fixture("deploy/launchd/aubtown.host-agent.plist");
+    expect(service).toContain("dist/host-monitor.js");
+    expect(service).not.toContain("dist/host-agent.js");
+    expect(launchd).toContain("dist/host-monitor.js");
+    expect(monitor).toContain("CodexQuotaSource");
+    expect(monitor).toContain("host-telemetry-sampled");
+    expect(monitor).not.toMatch(
+      /HostExecutionSupervisor|HostWorkspaceSupervisor|pollExecutor|worker\.start/iu,
+    );
   });
 
   it("collects read-only planning evidence every minute without containers", async () => {

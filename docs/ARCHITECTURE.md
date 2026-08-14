@@ -45,6 +45,8 @@ A native one-shot collector now reads the owner-selected GitHub issue, exact def
 
 Host agents deliver Ed25519-signed heartbeat and rolling-week quota envelopes to one native Linux observation gateway. The gateway binds to loopback, with private Mac access supplied by Tailscale forwarding. It verifies enrollment scope, signature, host identity, sequence, timestamp, and request idempotency identity before atomically updating one mode-restricted journal. The same signed sequence and digest returns its original receipt after restart. Stale or conflicting sequence reuse fails closed. The journal is operational observation state, not a queue and not execution authority.
 
+The deployed host process is telemetry only. It runs one idle Codex app-server connection to read the authenticated account's rolling-week window, then sends signed quota and heartbeat observations. It does not poll for executor commands, create worktrees, start coding turns, validate candidates, or review work. Symphony remains the one scheduler and Codex runner. The richer driver-neutral executor modules remain library code for future harness portability, but no v1 service launches them.
+
 The native AubTown candidate publisher accepts that candidate as one protected physical input file. It applies the same runtime-neutral binding policy used by the Freed bridge, checks route identity and current quota, and publishes a mode-restricted candidate. Prelaunch checks the candidate against the actual launch instant before touching authority. A stale candidate therefore cannot acquire a claim and fail only afterward.
 
 The AubTown bridge caller constructs the exact canonical claim request, invokes one absolute reviewed broker without a shell or inherited credentials, verifies every returned identity, and retries one lost local response with the same operation ID. It publishes the envelope only after successful claim acquisition. If envelope publication fails, it requests release of that exact claim. The prelaunch hook resolves candidates through this bridge and reuses only byte-equivalent dispatch state. The Freed command and installed broker remain pending, so this code cannot yet grant live authority.
@@ -92,6 +94,8 @@ Conflict domains include qualified path prefixes and logical locks such as behav
 Each execution account has its own usage identity and Codex app-server process. AubTown samples the rolling-week window and active turns at least once per minute. Missing or stale telemetry stops new dispatch.
 
 The governor reserves 10 percent by default, enforces a hard daily ceiling, and compares current use with the permitted rolling-week trajectory. It throttles before the hard boundary and interrupts targeted active turns when continuing would consume the protected reserve. Authority and human blockers do not consume retry budget.
+
+Prelaunch quota enforcement is implemented. Active-turn interruption in the Symphony runner is still a required patch before unattended operation. The telemetry monitor emits `active-run-interrupt-required` at the hard boundary, but it does not pretend it can interrupt a Symphony-owned turn. The pilot writer stays disabled until Symphony consumes that signal or performs the equivalent current-usage check inside its active run loop.
 
 Future subscriptions and APIs use separate account records, credentials, quotas, and worker drivers. Queue, authority, conflict, custody, and publication contracts remain unchanged.
 

@@ -35,6 +35,7 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - A native protected non-authoritative dispatch-candidate publisher with matching-envelope reuse
 - A native deterministic reconciler CLI across conflict, host, account, route, and quota state
 - A native signed host observation gateway with durable heartbeat and quota state
+- A lightweight host telemetry process that does not run a second scheduler or worker loop
 - A native minute-by-minute protected planning snapshot across GitHub, Freed task, host, quota, ref, pull-request, and worktree evidence
 - A deterministic dispatch-intention builder that derives one host, account, branch, worktree, target, and initial claim without granting authority
 - A Freed workflow that accepts only helper-prepared, policy-safe worktrees

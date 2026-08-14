@@ -70,6 +70,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 - No direct mutation of Freed authority files.
 - No provider-visible or sensitive unattended execution.
 - No new dispatch when subscription telemetry is stale or protected capacity would be crossed.
+- No unattended active Symphony turn until the hard quota signal can interrupt that exact run.
 - No transferred execution without the exact restored checkpoint receipt.
 - No terminal handoff before encrypted checkpoint persistence.
 - No publication for an unreviewed or changed work-product identity.
