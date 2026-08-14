@@ -9,6 +9,27 @@ async function fixture(relative: string): Promise<string> {
 }
 
 describe("native Linux deployment", () => {
+  it("builds one clean manifest-bound host release", async () => {
+    const packageJson = await fixture("package.json");
+    const cleaner = await fixture("scripts/clean-dist.mjs");
+    const release = await fixture("src/deployment/release-manifest.ts");
+    const builder = await fixture("src/cli/build-release-bundle.ts");
+    const verifier = await fixture("src/cli/verify-release-install.ts");
+
+    expect(packageJson).toContain(
+      '"build": "node scripts/clean-dist.mjs && tsc',
+    );
+    expect(packageJson).toContain('"release:bundle"');
+    expect(packageJson).toContain('"release:verify-install"');
+    expect(cleaner).toContain('path.basename(target) !== "dist"');
+    expect(release).toContain('"--omit=dev"');
+    expect(release).toContain('"--ignore-scripts"');
+    expect(release).toContain("Release contains a symbolic link");
+    expect(release).toContain("Release file differs from its manifest");
+    expect(builder).toContain("buildReleaseBundle");
+    expect(verifier).toContain("requiredUid: 0");
+  });
+
   it("runs one pinned Symphony coordinator without containers or Restate", async () => {
     const unit = await fixture("deploy/systemd/aubtown-symphony.service");
     expect(unit).toContain(

@@ -15,6 +15,26 @@ Status: native deployment skeleton and authority broker source, writer disabled
 
 Docker Desktop, Docker Engine, Compose, Restate, PostgreSQL, Redis, and a second queue are not runtime dependencies.
 
+## Immutable release bundle
+
+Build each host release on the target operating system and architecture with the pinned Node toolchain:
+
+```sh
+npm ci
+npm run check
+npm run release:bundle
+```
+
+The build deletes `dist` before compilation so removed modules cannot survive as stale runtime files. `release:bundle` refuses a dirty Git tree, copies only the compiled output and tracked operational assets, installs production dependencies with `npm ci --omit=dev --ignore-scripts`, removes dependency command shims, normalizes file modes, and writes `.aubtown/releases/<commit>/release-manifest.json`. The manifest binds the commit, operating system, architecture, Node version, exact file set, modes, sizes, and SHA-256 digests. Linux and macOS therefore receive separate bundles from the same reviewed commit.
+
+Copy the completed directory to `/opt/aubtown/releases/<commit>`, make the entire tree root-owned, and run:
+
+```sh
+/opt/aubtown/node/bin/node /opt/aubtown/releases/<commit>/dist/cli/verify-release-install.js /opt/aubtown/releases/<commit>
+```
+
+The installed verifier rejects the wrong path, platform, architecture, Node version, owner, mode, digest, missing file, unexpected file, or any symbolic link. Point `/opt/aubtown/current` at the release only after this proof succeeds. The pilot audit still binds its critical executables individually. The release manifest closes the broader dependency and stale-file gap around them.
+
 ## Service graph
 
 `aubtown-symphony.service` runs the one scheduler and dashboard as `aubtown-symphony`. It binds the dashboard to `127.0.0.1:7080`. Tailscale may expose that loopback service privately. Never bind it to a public interface.
