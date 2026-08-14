@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "hostId": "linux-control-1",
+  "repositoryRoot": "/srv/freed/repository",
+  "worktreeRoot": "/var/lib/aubtown/workspaces",
+  "gitExecutable": "/usr/bin/git"
+}

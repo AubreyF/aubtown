@@ -33,6 +33,9 @@ describe("Symphony upstream contract", () => {
     expect(lock.reviewedCapabilities).toContain(
       "capability-aware-ssh-worker-routing",
     );
+    expect(lock.reviewedCapabilities).toContain(
+      "fail-closed-prelaunch-admission-command",
+    );
     expect(lock.knownGaps).not.toContain(
       "worker-host-selection-is-load-based-not-lane-aware",
     );
@@ -44,6 +47,9 @@ describe("Symphony upstream contract", () => {
     );
     expect(patchBytes.toString("utf8")).toContain(
       "select_worker_host_for_issue_for_test",
+    );
+    expect(patchBytes.toString("utf8")).toContain(
+      "Prelaunch admission failed closed",
     );
     expect(patchBytes.toString("utf8")).toContain("GITHUB_TOKEN_FILE");
     expect(patchBytes.toString("utf8")).not.toContain(

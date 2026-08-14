@@ -20,7 +20,7 @@ function admission() {
   return {
     schemaVersion: 1 as const,
     bridgeId: "freed-task-claim-v1",
-    authorityClaimId: "authority-claim-1234",
+    authorityClaimId: binding.claim.claimId,
     taskId: binding.authorityTask.id,
     taskRevision: binding.authorityTask.revision,
     bindingDigest: createExecutionAdmissionDigest(binding),
@@ -69,5 +69,12 @@ describe("execution authority admission", () => {
         now: "2026-08-13T08:05:00.000Z",
       }),
     ).toThrow("outside its valid lifetime");
+    expect(() =>
+      assertExecutionAdmission({
+        admission: { ...admission(), authorityClaimId: "another-claim" },
+        binding,
+        now: "2026-08-13T08:00:00.000Z",
+      }),
+    ).toThrow("changes the task-scoped claim");
   });
 });

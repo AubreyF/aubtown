@@ -1,5 +1,151 @@
+diff --git a/elixir/lib/symphony_elixir/admission.ex b/elixir/lib/symphony_elixir/admission.ex
+new file mode 100644
+index 0000000000000000000000000000000000000000..50044b8c4d7d2e974c9034d6cf660e51c47a107a
+--- /dev/null
++++ b/elixir/lib/symphony_elixir/admission.ex
+@@ -0,0 +1,140 @@
++defmodule SymphonyElixir.Admission do
++  @moduledoc """
++  Runs an optional final host-side admission command immediately before worker launch.
++
++  The command receives only stable issue and selected-host identifiers. It must emit one JSON
++  decision. Missing, malformed, mismatched, failed, or timed-out decisions fail closed.
++  """
++
++  alias SymphonyElixir.Config
++  alias SymphonyElixir.Tracker.Issue
++
++  @max_output_bytes 65_536
++  @reason_pattern ~r/^[a-z0-9][a-z0-9._:-]{0,127}$/
++  @receipt_pattern ~r/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/
++
++  @type worker_host :: String.t() | nil
++  @type decision :: {:admit, String.t()} | {:deny, String.t()} | {:error, term()}
++
++  @spec check(Issue.t(), worker_host()) :: decision()
++  def check(%Issue{id: issue_id, identifier: identifier}, worker_host)
++      when is_binary(issue_id) and is_binary(identifier) do
++    settings = Config.settings!()
++
++    case settings.admission.command do
++      [] ->
++        {:admit, "admission-disabled"}
++
++      [executable | configured_args] ->
++        host = worker_host || "local"
++
++        args =
++          configured_args ++
++            [
++              "--schema-version",
++              "1",
++              "--issue-id",
++              issue_id,
++              "--issue-identifier",
++              identifier,
++              "--worker-host",
++              host
++            ]
++
++        run(executable, args, issue_id, host, settings.admission.timeout_ms)
++    end
++  end
++
++  def check(_issue, _worker_host), do: {:error, :invalid_admission_issue}
++
++  defp run(executable, args, issue_id, worker_host, timeout_ms) do
++    task =
++      Task.async(fn ->
++        try do
++          {:ok,
++           System.cmd(executable, args,
++             env: secret_environment_scrub(),
++             stderr_to_stdout: true
++           )}
++        rescue
++          error in [ArgumentError, ErlangError] ->
++            {:error, {:admission_command_start_failed, Exception.message(error)}}
++        end
++      end)
++
++    case Task.yield(task, timeout_ms) do
++      {:ok, {:ok, {output, 0}}} ->
++        parse(output, issue_id, worker_host)
++
++      {:ok, {:ok, {output, status}}} ->
++        {:error, {:admission_command_failed, status, bounded_output(output)}}
++
++      {:ok, {:error, reason}} ->
++        {:error, reason}
++
++      {:exit, reason} ->
++        {:error, {:admission_command_crashed, reason}}
++
++      nil ->
++        Task.shutdown(task, :brutal_kill)
++        {:error, {:admission_command_timeout, timeout_ms}}
++    end
++  end
++
++  defp parse(output, issue_id, worker_host) when is_binary(output) do
++    with true <- byte_size(output) <= @max_output_bytes or {:error, :admission_output_too_large},
++         {:ok, payload} <- Jason.decode(String.trim(output)),
++         true <- is_map(payload) or {:error, :invalid_admission_response},
++         1 <- payload["schemaVersion"],
++         ^issue_id <- payload["issueId"],
++         ^worker_host <- payload["workerHost"] do
++      parse_decision(payload)
++    else
++      {:error, reason} -> {:error, reason}
++      _ -> {:error, :admission_response_mismatch}
++    end
++  end
++
++  defp parse(_output, _issue_id, _worker_host), do: {:error, :invalid_admission_response}
++
++  defp parse_decision(%{"decision" => "admit", "receiptId" => receipt_id})
++       when is_binary(receipt_id) do
++    if Regex.match?(@receipt_pattern, receipt_id) do
++      {:admit, receipt_id}
++    else
++      {:error, :invalid_admission_receipt}
++    end
++  end
++
++  defp parse_decision(%{"decision" => "deny", "reason" => reason}) when is_binary(reason) do
++    if Regex.match?(@reason_pattern, reason) do
++      {:deny, reason}
++    else
++      {:error, :invalid_admission_reason}
++    end
++  end
++
++  defp parse_decision(_payload), do: {:error, :invalid_admission_decision}
++
++  defp secret_environment_scrub do
++    Config.settings!().tracker.secret_environment_names
++    |> Kernel.++([
++      "AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE",
++      "GITHUB_TOKEN",
++      "GITHUB_TOKEN_FILE",
++      "GH_TOKEN",
++      "GITHUB_ENTERPRISE_TOKEN",
++      "GH_ENTERPRISE_TOKEN"
++    ])
++    |> Enum.uniq()
++    |> Enum.map(&{&1, nil})
++  end
++
++  defp bounded_output(output) when is_binary(output) and byte_size(output) <= @max_output_bytes,
++    do: output
++
++  defp bounded_output(output) when is_binary(output),
++    do: binary_part(output, 0, @max_output_bytes)
++
++  defp bounded_output(_output), do: ""
++end
 diff --git a/elixir/lib/symphony_elixir/config/schema.ex b/elixir/lib/symphony_elixir/config/schema.ex
-index 6ebb278..76ed83d 100644
+index 6ebb278faca9e9e112058fb0817e6a7aa1201214..5b7607efc739f2ec5e4d8e44fc86fc58319d236b 100644
 --- a/elixir/lib/symphony_elixir/config/schema.ex
 +++ b/elixir/lib/symphony_elixir/config/schema.ex
 @@ -130,13 +130,27 @@ defmodule SymphonyElixir.Config.Schema do
@@ -8,7 +154,7 @@ index 6ebb278..76ed83d 100644
        field(:max_concurrent_agents_per_host, :integer)
 +      field(:capabilities_by_host, :map, default: %{})
      end
- 
+
      @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
      def changeset(schema, attrs) do
        schema
@@ -30,21 +176,78 @@ index 6ebb278..76ed83d 100644
 +      end)
      end
    end
- 
+
+@@ -171,6 +185,40 @@ defmodule SymphonyElixir.Config.Schema do
+     end
+   end
+
++  defmodule Admission do
++    @moduledoc false
++    use Ecto.Schema
++    import Ecto.Changeset
++
++    @primary_key false
++    embedded_schema do
++      field(:command, {:array, :string}, default: [])
++      field(:timeout_ms, :integer, default: 30_000)
++    end
++
++    @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
++    def changeset(schema, attrs) do
++      schema
++      |> cast(attrs, [:command, :timeout_ms], empty_values: [])
++      |> validate_number(:timeout_ms, greater_than: 0, less_than_or_equal_to: 60_000)
++      |> validate_change(:command, fn :command, command ->
++        cond do
++          command == [] ->
++            []
++
++          not Enum.all?(command, &(is_binary(&1) and String.trim(&1) != "")) ->
++            [command: "must contain only nonblank arguments"]
++
++          Path.type(List.first(command)) != :absolute ->
++            [command: "executable must use an absolute path"]
++
++          true ->
++            []
++        end
++      end)
++    end
++  end
++
+   defmodule Codex do
+     @moduledoc false
+     use Ecto.Schema
+@@ -295,6 +343,7 @@ defmodule SymphonyElixir.Config.Schema do
+     embeds_one(:workspace, Workspace, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:worker, Worker, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:agent, Agent, on_replace: :update, defaults_to_struct: true)
++    embeds_one(:admission, Admission, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:codex, Codex, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:hooks, Hooks, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:observability, Observability, on_replace: :update, defaults_to_struct: true)
+@@ -389,6 +438,7 @@ defmodule SymphonyElixir.Config.Schema do
+     |> cast_embed(:workspace, with: &Workspace.changeset/2)
+     |> cast_embed(:worker, with: &Worker.changeset/2)
+     |> cast_embed(:agent, with: &Agent.changeset/2)
++    |> cast_embed(:admission, with: &Admission.changeset/2)
+     |> cast_embed(:codex, with: &Codex.changeset/2)
+     |> cast_embed(:hooks, with: &Hooks.changeset/2)
+     |> cast_embed(:observability, with: &Observability.changeset/2)
 diff --git a/elixir/lib/symphony_elixir/github/client.ex b/elixir/lib/symphony_elixir/github/client.ex
-index 8bd63c1..575c6ed 100644
+index 8bd63c1b737b7ab570f6bd0721b8921b6fc3ce5d..e4ae30a679c978cab040b251bf6f94222d7103ae 100644
 --- a/elixir/lib/symphony_elixir/github/client.ex
 +++ b/elixir/lib/symphony_elixir/github/client.ex
 @@ -23,9 +23,11 @@ defmodule SymphonyElixir.GitHub.Client do
- 
+
      [
        "GITHUB_TOKEN",
 +      "GITHUB_TOKEN_FILE",
        "GH_TOKEN",
        "GITHUB_ENTERPRISE_TOKEN",
 -      "GH_ENTERPRISE_TOKEN" | env_reference_names([provider["token"]])
-+      "GH_ENTERPRISE_TOKEN" |
-+        env_reference_names([provider["token"], provider["token_file"]])
++      "GH_ENTERPRISE_TOKEN"
++      | env_reference_names([provider["token"], provider["token_file"]])
      ]
      |> Enum.uniq()
    end
@@ -54,7 +257,7 @@ index 8bd63c1..575c6ed 100644
      repo = resolve_setting(provider["repo"], System.get_env("GITHUB_REPO"))
 -    token = resolve_setting(provider["token"], System.get_env("GITHUB_TOKEN"))
 +    token_result = resolve_token(provider)
- 
+
 -    cond do
 -      not valid_api_url?(api_url) -> {:error, :invalid_github_api_url}
 -      not present_string?(repo) -> {:error, :missing_github_repo}
@@ -100,11 +303,20 @@ index 8bd63c1..575c6ed 100644
 +      _ -> {:error, :invalid_github_token_file}
      end
    end
- 
+
 diff --git a/elixir/lib/symphony_elixir/orchestrator.ex b/elixir/lib/symphony_elixir/orchestrator.ex
-index b52e991..1660592 100644
+index b52e991c08ac14d1d5c1c4e6f63e33c35f35bb8c..dfa8a867f1a894b04a5b97b51be12437258f632a 100644
 --- a/elixir/lib/symphony_elixir/orchestrator.ex
 +++ b/elixir/lib/symphony_elixir/orchestrator.ex
+@@ -7,7 +7,7 @@ defmodule SymphonyElixir.Orchestrator do
+   require Logger
+   import Bitwise, only: [<<<: 2]
+
+-  alias SymphonyElixir.{AgentRunner, Config, StatusDashboard, Tracker, Workspace}
++  alias SymphonyElixir.{Admission, AgentRunner, Config, StatusDashboard, Tracker, Workspace}
+   alias SymphonyElixir.Tracker.Issue
+
+   @continuation_retry_delay_ms 1_000
 @@ -404,7 +404,14 @@ defmodule SymphonyElixir.Orchestrator do
    @doc false
    @spec select_worker_host_for_test(term(), String.t() | nil) :: String.t() | nil | :no_worker_capacity
@@ -119,40 +331,59 @@ index b52e991..1660592 100644
 +  def select_worker_host_for_issue_for_test(%State{} = state, %Issue{} = issue, preferred_worker_host) do
 +    select_worker_host(state, issue, preferred_worker_host)
    end
- 
+
    defp reconcile_running_issue_states([], state, _active_states, _terminal_states), do: state
-@@ -940,7 +947,7 @@ defmodule SymphonyElixir.Orchestrator do
+@@ -940,13 +947,25 @@ defmodule SymphonyElixir.Orchestrator do
    defp do_dispatch_issue(%State{} = state, issue, attempt, preferred_worker_host) do
      recipient = self()
- 
+
 -    case select_worker_host(state, preferred_worker_host) do
 +    case select_worker_host(state, issue, preferred_worker_host) do
        :no_worker_capacity ->
          Logger.debug("No SSH worker slots available for #{issue_context(issue)} preferred_worker_host=#{inspect(preferred_worker_host)}")
          state
-@@ -1278,13 +1285,16 @@ defmodule SymphonyElixir.Orchestrator do
+
+       worker_host ->
+-        spawn_issue_on_worker_host(state, issue, attempt, recipient, worker_host)
++        case Admission.check(issue, worker_host) do
++          {:admit, receipt_id} ->
++            Logger.info("Prelaunch admission accepted #{issue_context(issue)} worker_host=#{worker_host || "local"} receipt_id=#{receipt_id}")
++            spawn_issue_on_worker_host(state, issue, attempt, recipient, worker_host)
++
++          {:deny, reason} ->
++            Logger.info("Prelaunch admission denied #{issue_context(issue)} worker_host=#{worker_host || "local"} reason=#{reason}")
++            state
++
++          {:error, reason} ->
++            Logger.warning("Prelaunch admission failed closed #{issue_context(issue)} worker_host=#{worker_host || "local"} reason=#{inspect(reason)}")
++            state
++        end
+     end
+   end
+
+@@ -1278,13 +1297,16 @@ defmodule SymphonyElixir.Orchestrator do
      Map.put(running_entry, key, value)
    end
- 
+
 -  defp select_worker_host(%State{} = state, preferred_worker_host) do
 +  defp select_worker_host(%State{} = state, issue, preferred_worker_host) do
      case Config.settings!().worker.ssh_hosts do
        [] ->
          nil
- 
+
        hosts ->
 -        available_hosts = Enum.filter(hosts, &worker_host_slots_available?(state, &1))
 +        available_hosts =
 +          Enum.filter(hosts, fn host ->
 +            worker_host_slots_available?(state, host) and worker_host_capable?(host, issue)
 +          end)
- 
+
          cond do
            available_hosts == [] ->
-@@ -1299,6 +1309,48 @@ defmodule SymphonyElixir.Orchestrator do
+@@ -1299,6 +1321,48 @@ defmodule SymphonyElixir.Orchestrator do
      end
    end
- 
+
 +  defp worker_host_capable?(_worker_host, nil), do: true
 +
 +  defp worker_host_capable?(worker_host, %Issue{labels: labels}) when is_binary(worker_host) do
@@ -198,22 +429,22 @@ index b52e991..1660592 100644
    defp preferred_worker_host_available?(preferred_worker_host, hosts)
         when is_binary(preferred_worker_host) and is_list(hosts) do
      preferred_worker_host != "" and preferred_worker_host in hosts
-@@ -1323,11 +1375,11 @@ defmodule SymphonyElixir.Orchestrator do
+@@ -1323,11 +1387,11 @@ defmodule SymphonyElixir.Orchestrator do
    end
- 
+
    defp worker_slots_available?(%State{} = state) do
 -    select_worker_host(state, nil) != :no_worker_capacity
 +    select_worker_host(state, nil, nil) != :no_worker_capacity
    end
- 
+
    defp worker_slots_available?(%State{} = state, preferred_worker_host) do
 -    select_worker_host(state, preferred_worker_host) != :no_worker_capacity
 +    select_worker_host(state, nil, preferred_worker_host) != :no_worker_capacity
    end
- 
+
    defp worker_host_slots_available?(%State{} = state, worker_host) when is_binary(worker_host) do
 diff --git a/elixir/mix.exs b/elixir/mix.exs
-index be14dd8..35a30db 100644
+index be14dd8b4aed15fcccbbb8c7b991c06c06e09c59..35a30dbe32cd48cb2893c35f437593092b7d5443 100644
 --- a/elixir/mix.exs
 +++ b/elixir/mix.exs
 @@ -79,7 +79,7 @@ defmodule SymphonyElixir.MixProject do
@@ -226,7 +457,7 @@ index be14dd8..35a30db 100644
        {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
        {:dialyxir, "~> 1.4", only: [:dev], runtime: false}
 diff --git a/elixir/mix.lock b/elixir/mix.lock
-index c8ef36e..514affc 100644
+index c8ef36ee849b44175ee60d3337ca43fb1b77dce3..514affcb718cc75b93d6578008a673891d39bd4f 100644
 --- a/elixir/mix.lock
 +++ b/elixir/mix.lock
 @@ -1,41 +1,41 @@
@@ -296,10 +527,19 @@ index c8ef36e..514affc 100644
 +  "yaml_elixir": {:hex, :yaml_elixir, "2.12.2", "9dd1330fb4cd9a36a7b0f502e5b12486eff632792ee4a5f0eba52a4d4ec32c9c", [:mix], [{:yamerl, "~> 0.10", [hex: :yamerl, repo: "hexpm", optional: false]}], "hexpm", "e7c1b10122f973e6558462d51c39026ba0e14afbc6745318e990ea82cfe9e159"},
  }
 diff --git a/elixir/test/support/test_support.exs b/elixir/test/support/test_support.exs
-index ca7c5dd..f12eafd 100644
+index ca7c5ddfff7b812ac74e8a582eaa02ccf814cc8b..ddf514e82a9d375b7dc025790eafdfc228282f2a 100644
 --- a/elixir/test/support/test_support.exs
 +++ b/elixir/test/support/test_support.exs
-@@ -141,6 +141,7 @@ defmodule SymphonyElixir.TestSupport do
+@@ -107,6 +107,8 @@ defmodule SymphonyElixir.TestSupport do
+           max_turns: 20,
+           max_retry_backoff_ms: 300_000,
+           max_concurrent_agents_by_state: %{},
++          admission_command: [],
++          admission_timeout_ms: 30_000,
+           codex_command: "codex app-server",
+           codex_approval_policy: %{reject: %{sandbox_approval: true, rules: true, mcp_elicitations: true}},
+           codex_thread_sandbox: "workspace-write",
+@@ -141,10 +143,13 @@ defmodule SymphonyElixir.TestSupport do
      workspace_root = Keyword.get(config, :workspace_root)
      worker_ssh_hosts = Keyword.get(config, :worker_ssh_hosts)
      worker_max_concurrent_agents_per_host = Keyword.get(config, :worker_max_concurrent_agents_per_host)
@@ -307,7 +547,13 @@ index ca7c5dd..f12eafd 100644
      max_concurrent_agents = Keyword.get(config, :max_concurrent_agents)
      max_turns = Keyword.get(config, :max_turns)
      max_retry_backoff_ms = Keyword.get(config, :max_retry_backoff_ms)
-@@ -180,7 +181,7 @@ defmodule SymphonyElixir.TestSupport do
+     max_concurrent_agents_by_state = Keyword.get(config, :max_concurrent_agents_by_state)
++    admission_command = Keyword.get(config, :admission_command)
++    admission_timeout_ms = Keyword.get(config, :admission_timeout_ms)
+     codex_command = Keyword.get(config, :codex_command)
+     codex_approval_policy = Keyword.get(config, :codex_approval_policy)
+     codex_thread_sandbox = Keyword.get(config, :codex_thread_sandbox)
+@@ -180,12 +185,15 @@ defmodule SymphonyElixir.TestSupport do
          "  interval_ms: #{yaml_value(poll_interval_ms)}",
          "workspace:",
          "  root: #{yaml_value(workspace_root)}",
@@ -316,17 +562,25 @@ index ca7c5dd..f12eafd 100644
          "agent:",
          "  max_concurrent_agents: #{yaml_value(max_concurrent_agents)}",
          "  max_turns: #{yaml_value(max_turns)}",
-@@ -242,16 +243,19 @@ defmodule SymphonyElixir.TestSupport do
+         "  max_retry_backoff_ms: #{yaml_value(max_retry_backoff_ms)}",
+         "  max_concurrent_agents_by_state: #{yaml_value(max_concurrent_agents_by_state)}",
++        "admission:",
++        "  command: #{yaml_value(admission_command)}",
++        "  timeout_ms: #{yaml_value(admission_timeout_ms)}",
+         "codex:",
+         "  command: #{yaml_value(codex_command)}",
+         "  approval_policy: #{yaml_value(codex_approval_policy)}",
+@@ -242,16 +250,19 @@ defmodule SymphonyElixir.TestSupport do
      |> Enum.join("\n")
    end
- 
+
 -  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host)
 -       when ssh_hosts in [nil, []] and is_nil(max_concurrent_agents_per_host),
 +  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host, capabilities_by_host)
 +       when ssh_hosts in [nil, []] and is_nil(max_concurrent_agents_per_host) and
 +              capabilities_by_host in [nil, %{}],
         do: nil
- 
+
 -  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host) do
 +  defp worker_yaml(ssh_hosts, max_concurrent_agents_per_host, capabilities_by_host) do
      [
@@ -340,14 +594,272 @@ index ca7c5dd..f12eafd 100644
      ]
      |> Enum.reject(&(&1 in [nil, false]))
      |> Enum.join("\n")
+diff --git a/elixir/test/symphony_elixir/admission_test.exs b/elixir/test/symphony_elixir/admission_test.exs
+new file mode 100644
+index 0000000000000000000000000000000000000000..fe321c68a11857ad26560405c82474bb0948d1fb
+--- /dev/null
++++ b/elixir/test/symphony_elixir/admission_test.exs
+@@ -0,0 +1,155 @@
++defmodule SymphonyElixir.AdmissionTest do
++  use SymphonyElixir.TestSupport
++
++  alias SymphonyElixir.Admission
++  alias SymphonyElixir.Tracker.Issue
++
++  setup do
++    root = Path.join(System.tmp_dir!(), "symphony-admission-#{System.unique_integer([:positive])}")
++    File.mkdir_p!(root)
++    on_exit(fn -> File.rm_rf(root) end)
++    %{root: root}
++  end
++
++  test "admits only a matching decision from an absolute no-shell command", %{root: root} do
++    prior_token = System.get_env("GITHUB_TOKEN")
++    prior_token_file = System.get_env("GITHUB_TOKEN_FILE")
++    prior_private_key = System.get_env("AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE")
++
++    on_exit(fn ->
++      restore_secret_env("GITHUB_TOKEN", prior_token)
++      restore_secret_env("GITHUB_TOKEN_FILE", prior_token_file)
++      restore_secret_env("AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE", prior_private_key)
++    end)
++
++    System.put_env("GITHUB_TOKEN", "must-not-leak")
++    System.put_env("GITHUB_TOKEN_FILE", "/must/not/leak")
++    System.put_env("AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE", "/must/not/leak")
++
++    script =
++      write_script!(root, "admit", """
++      #!/bin/sh
++      if [ -n "${GITHUB_TOKEN:-}" ] || [ -n "${GITHUB_TOKEN_FILE:-}" ] || [ -n "${AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE:-}" ]; then
++        exit 9
++      fi
++      issue_id=''
++      worker_host=''
++      while [ "$#" -gt 0 ]; do
++        case "$1" in
++          --issue-id) issue_id="$2"; shift 2 ;;
++          --worker-host) worker_host="$2"; shift 2 ;;
++          *) shift ;;
++        esac
++      done
++      printf '{"schemaVersion":1,"decision":"admit","issueId":"%s","workerHost":"%s","receiptId":"receipt-123"}\n' "$issue_id" "$worker_host"
++      """)
++
++    write_workflow_file!(Workflow.workflow_file_path(),
++      tracker_kind: "memory",
++      admission_command: [script]
++    )
++
++    assert Admission.check(issue(), "worker-linux") == {:admit, "receipt-123"}
++  end
++
++  test "returns a bounded denial without launching a worker", %{root: root} do
++    script =
++      write_script!(root, "deny", """
++      #!/bin/sh
++      issue_id=''
++      worker_host=''
++      while [ "$#" -gt 0 ]; do
++        case "$1" in
++          --issue-id) issue_id="$2"; shift 2 ;;
++          --worker-host) worker_host="$2"; shift 2 ;;
++          *) shift ;;
++        esac
++      done
++      printf '{"schemaVersion":1,"decision":"deny","issueId":"%s","workerHost":"%s","reason":"quota-blocked"}\n' "$issue_id" "$worker_host"
++      """)
++
++    write_workflow_file!(Workflow.workflow_file_path(),
++      tracker_kind: "memory",
++      admission_command: [script]
++    )
++
++    assert Admission.check(issue(), "worker-linux") == {:deny, "quota-blocked"}
++  end
++
++  test "fails closed on mismatched, malformed, or failed responses", %{root: root} do
++    mismatch =
++      write_script!(root, "mismatch", """
++      #!/bin/sh
++      printf '{"schemaVersion":1,"decision":"admit","issueId":"other","workerHost":"worker-linux","receiptId":"receipt-123"}\n'
++      """)
++
++    malformed =
++      write_script!(root, "malformed", """
++      #!/bin/sh
++      printf 'not json\n'
++      """)
++
++    failed =
++      write_script!(root, "failed", """
++      #!/bin/sh
++      printf 'nope\n'
++      exit 7
++      """)
++
++    for {script, expected} <- [
++          {mismatch, :admission_response_mismatch},
++          {malformed, %Jason.DecodeError{}},
++          {failed, {:admission_command_failed, 7, "nope\n"}}
++        ] do
++      write_workflow_file!(Workflow.workflow_file_path(),
++        tracker_kind: "memory",
++        admission_command: [script]
++      )
++
++      case {Admission.check(issue(), "worker-linux"), expected} do
++        {{:error, %Jason.DecodeError{}}, %Jason.DecodeError{}} -> :ok
++        {{:error, actual}, expected} -> assert actual == expected
++      end
++    end
++  end
++
++  test "keeps upstream dispatch behavior when admission is unconfigured" do
++    write_workflow_file!(Workflow.workflow_file_path(),
++      tracker_kind: "memory",
++      admission_command: []
++    )
++
++    assert Admission.check(issue(), nil) == {:admit, "admission-disabled"}
++  end
++
++  test "rejects relative executables and excessive timeouts" do
++    write_workflow_file!(Workflow.workflow_file_path(), admission_command: ["relative-command"])
++    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
++    assert message =~ "executable must use an absolute path"
++
++    write_workflow_file!(Workflow.workflow_file_path(), admission_timeout_ms: 60_001)
++    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
++    assert message =~ "admission.timeout_ms"
++  end
++
++  defp issue do
++    %Issue{
++      id: "issue-123",
++      identifier: "GH-123",
++      title: "Guard launch",
++      state: "open",
++      labels: ["factory:running"],
++      dispatchable: true
++    }
++  end
++
++  defp write_script!(root, name, content) do
++    path = Path.join(root, name)
++    File.write!(path, content)
++    File.chmod!(path, 0o700)
++    path
++  end
++
++  defp restore_secret_env(name, nil), do: System.delete_env(name)
++  defp restore_secret_env(name, value), do: System.put_env(name, value)
++end
 diff --git a/elixir/test/symphony_elixir/core_test.exs b/elixir/test/symphony_elixir/core_test.exs
-index 1263601..3802c01 100644
+index 1263601cdcc106b92a371084fef0198926ac5846..1beea17e41ea9bd83caa6f1cde8716678e90774b 100644
 --- a/elixir/test/symphony_elixir/core_test.exs
 +++ b/elixir/test/symphony_elixir/core_test.exs
-@@ -1255,6 +1255,31 @@ defmodule SymphonyElixir.CoreTest do
+@@ -471,6 +471,96 @@ defmodule SymphonyElixir.CoreTest do
+     assert Process.alive?(second_worker_pid)
+   end
+
++  test "prelaunch denial prevents the worker process and workspace from starting" do
++    issue_suffix = System.unique_integer([:positive])
++
++    test_root =
++      Path.join(
++        System.tmp_dir!(),
++        "symphony-elixir-prelaunch-denial-#{issue_suffix}"
++      )
++
++    admission_marker = Path.join(test_root, "admission-checked")
++    admission_script = Path.join(test_root, "deny-admission")
++    runtime_supervisor_name = Module.concat(__MODULE__, "AdmissionRuntime#{issue_suffix}")
++    task_supervisor_name = Module.concat(__MODULE__, "AdmissionTasks#{issue_suffix}")
++    orchestrator_name = Module.concat(__MODULE__, "AdmissionOrchestrator#{issue_suffix}")
++    previous_memory_issues = Application.get_env(:symphony_elixir, :memory_tracker_issues)
++
++    issue = %Issue{
++      id: "issue-admission-#{issue_suffix}",
++      identifier: "MT-#{issue_suffix}",
++      title: "Deny a worker at prelaunch",
++      description: "No process or workspace may start",
++      state: "In Progress",
++      url: "https://example.org/issues/MT-#{issue_suffix}",
++      labels: [],
++      dispatchable: true
++    }
++
++    on_exit(fn ->
++      if pid = Process.whereis(runtime_supervisor_name) do
++        GenServer.stop(pid)
++      end
++
++      restore_app_env(:memory_tracker_issues, previous_memory_issues)
++      restart_default_runtime!()
++      File.rm_rf(test_root)
++    end)
++
++    if Process.whereis(SymphonyElixir.AgentRuntimeSupervisor) do
++      assert :ok =
++               Supervisor.terminate_child(
++                 SymphonyElixir.Supervisor,
++                 SymphonyElixir.AgentRuntimeSupervisor
++               )
++    end
++
++    File.mkdir_p!(test_root)
++
++    File.write!(
++      admission_script,
++      """
++      #!/bin/sh
++      issue_id=''
++      worker_host=''
++      while [ "$#" -gt 0 ]; do
++        case "$1" in
++          --issue-id) issue_id="$2"; shift 2 ;;
++          --worker-host) worker_host="$2"; shift 2 ;;
++          *) shift ;;
++        esac
++      done
++      : > "#{admission_marker}"
++      printf '{"schemaVersion":1,"decision":"deny","issueId":"%s","workerHost":"%s","reason":"authority-blocked"}\n' "$issue_id" "$worker_host"
++      """
++    )
++
++    File.chmod!(admission_script, 0o700)
++
++    write_workflow_file!(Workflow.workflow_file_path(),
++      tracker_kind: "memory",
++      workspace_root: Path.join(test_root, "workspaces"),
++      poll_interval_ms: 10,
++      admission_command: [admission_script]
++    )
++
++    Application.put_env(:symphony_elixir, :memory_tracker_issues, [issue])
++
++    assert {:ok, runtime_supervisor_pid} =
++             SymphonyElixir.AgentRuntimeSupervisor.start_link(
++               name: runtime_supervisor_name,
++               task_supervisor_name: task_supervisor_name,
++               orchestrator_name: orchestrator_name
++             )
++
++    Process.unlink(runtime_supervisor_pid)
++
++    assert eventually_value(fn -> if File.exists?(admission_marker), do: true end)
++    assert Task.Supervisor.children(task_supervisor_name) == []
++    refute File.exists?(Path.join([test_root, "workspaces", Workspace.workspace_key(issue)]))
++  end
++
+   test "linear issue state reconciliation fetch with no running issues is a no-op" do
+     assert {:ok, []} = Client.fetch_issues_by_ids([])
+   end
+@@ -1255,6 +1345,31 @@ defmodule SymphonyElixir.CoreTest do
      assert Orchestrator.select_worker_host_for_test(state, "worker-a") == "worker-a"
    end
- 
+
 +  test "select_worker_host_for_issue_for_test routes required host capabilities" do
 +    write_workflow_file!(Workflow.workflow_file_path(),
 +      worker_ssh_hosts: ["worker-linux", "worker-macos"],
@@ -375,13 +887,13 @@ index 1263601..3802c01 100644
 +
    defp assert_due_in_range(due_at_ms, min_remaining_ms, max_remaining_ms) do
      remaining_ms = due_at_ms - System.monotonic_time(:millisecond)
- 
+
 diff --git a/elixir/test/symphony_elixir/github_adapter_test.exs b/elixir/test/symphony_elixir/github_adapter_test.exs
-index 2475853..1d4dad8 100644
+index 24758530aa20eb4033e986e7f7af87cb34f010ea..1d4dad8d4e17b89cef1d472aa90b58bc43805aa2 100644
 --- a/elixir/test/symphony_elixir/github_adapter_test.exs
 +++ b/elixir/test/symphony_elixir/github_adapter_test.exs
 @@ -95,6 +95,7 @@ defmodule SymphonyElixir.GitHub.AdapterTest do
- 
+
      assert GitHubClient.secret_environment_names(tracker_settings(%{"token" => "$SYMPHONY_GITHUB_TOKEN"})) == [
               "GITHUB_TOKEN",
 +             "GITHUB_TOKEN_FILE",
@@ -391,7 +903,7 @@ index 2475853..1d4dad8 100644
 @@ -102,6 +103,31 @@ defmodule SymphonyElixir.GitHub.AdapterTest do
             ]
    end
- 
+
 +  test "client reloads a mode-restricted GitHub token file" do
 +    token_file =
 +      Path.join(
@@ -419,13 +931,12 @@ index 2475853..1d4dad8 100644
 +
    test "client normalizes GitHub issues without dropping provider details" do
      issue = GitHubClient.normalize_issue_for_test(raw_issue(42), "octo/repo")
- 
+
 @@ -386,6 +412,7 @@ defmodule SymphonyElixir.GitHub.AdapterTest do
- 
+
      assert binding.secret_environment_names == [
               "GITHUB_TOKEN",
 +             "GITHUB_TOKEN_FILE",
               "GH_TOKEN",
               "GITHUB_ENTERPRISE_TOKEN",
               "GH_ENTERPRISE_TOKEN",
-

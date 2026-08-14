@@ -25,6 +25,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | Linux and Mac both own one issue | One task-scoped claim and custody epoch, plus a final authoritative reread before worker launch |
 | A stale host resumes after transfer | Claim epoch advances only after checkpoint-backed transfer; old-epoch journal and publication requests are rejected |
 | A host lies about being compatible | Enrolled immutable host capabilities and issue-qualified lane are checked by the scheduler patch and authority receipt |
+| Symphony starts in an empty or foreign directory | Admission waits for helper-created host attestation; `after_create` rejects fallback directories and `before_run` verifies a clean worktree under the enrolled Freed repository |
 | Conflicting tasks run concurrently | Qualified path domains and logical locks are compared against every active claim before admission |
 | A GitHub label alone grants Freed execution | Dispatch also requires an exact active Freed task and supported claim-acquire receipt |
 | A worker edits Freed authority files | Worker has no authority credential or canonical state-root access; bridge uses supported commands only |
@@ -68,4 +69,4 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 
 ## Current gate
 
-The repository contains tested domain components, not an authorized live factory. Cloud provisioning, GitHub App installation, Symphony patches, the Freed claim extension, native broker installation, and the real Freed pilot remain pending. Every writer stays disabled until those specific gates have current evidence.
+The repository contains tested domain components and a reviewed Symphony patch, not an authorized live factory. Cloud provisioning, GitHub App installation, the Freed claim extension, native service installation, restart proof, and the real Freed pilot remain pending. The checked-in prelaunch executable denies every launch until the Freed bridge replaces that denial with a current task-scoped claim receipt.

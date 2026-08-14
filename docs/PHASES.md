@@ -29,9 +29,9 @@ Status: Phase 1 is complete. Phase 2 is in progress around pinned Symphony, nati
 - [x] Add the reviewed Symphony patch for GitHub App token refresh and capability-aware SSH routing.
 - [x] Add native mode-0600 Coordinator token refresh before startup and every 35 minutes.
 - [x] Refresh compatible locked dependencies until the Hex audit has no current security advisories.
-- [ ] Add the reviewed Symphony prelaunch admission boundary.
-- [ ] Add the Freed-specific `WORKFLOW.md` and worktree hooks.
-- [x] Run the complete upstream Symphony suite against the pinned commit and patch, with 292 passing and 6 explicit skips.
+- [x] Add the reviewed Symphony prelaunch admission boundary.
+- [x] Add the Freed-specific `WORKFLOW.md`, helper-only workspace preparation, and fail-closed workspace guards.
+- [x] Run the complete upstream Symphony suite against the pinned commit and patch, with 298 passing and 6 explicit skips.
 - [ ] Prove a fake issue cannot dispatch twice across coordinator restart.
 - [ ] Prove daily and rolling-week quota stops through the Symphony admission boundary.
 - [ ] Prove Linux continues generic work while the Mac is offline.

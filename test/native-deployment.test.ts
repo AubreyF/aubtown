@@ -20,6 +20,17 @@ describe("native Linux deployment", () => {
     expect(unit).not.toMatch(/docker|compose|restate/iu);
   });
 
+  it("ships a Freed workflow with fail-closed admission and helper-only workspaces", async () => {
+    const workflow = await fixture("config/symphony/freed.WORKFLOW.md");
+    expect(workflow).toContain("kind: github");
+    expect(workflow).toContain('required_labels: [debt, "factory:ready"]');
+    expect(workflow).toContain("max_concurrent_agents: 1");
+    expect(workflow).toContain("symphony-prelaunch.js");
+    expect(workflow).toContain("reject-unprepared-symphony-workspace.js");
+    expect(workflow).toContain("verify-symphony-workspace.js");
+    expect(workflow).not.toMatch(/docker|compose|restate/iu);
+  });
+
   it("refreshes the coordinator token natively before expiry", async () => {
     const service = await fixture("deploy/systemd/aubtown-github-token.service");
     const timer = await fixture("deploy/systemd/aubtown-github-token.timer");

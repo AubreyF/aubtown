@@ -1,0 +1,45 @@
+import { lstat, readFile, realpath } from "node:fs/promises";
+import path from "node:path";
+import { z } from "zod";
+
+export interface WorkerRuntimeConfig {
+  readonly schemaVersion: 1;
+  readonly hostId: string;
+  readonly repositoryRoot: string;
+  readonly worktreeRoot: string;
+  readonly gitExecutable: string;
+}
+
+const absolutePath = z.string().refine((value) => path.isAbsolute(value), {
+  message: "must be an absolute path",
+});
+
+const configSchema: z.ZodType<WorkerRuntimeConfig> = z.object({
+  schemaVersion: z.literal(1),
+  hostId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u),
+  repositoryRoot: absolutePath,
+  worktreeRoot: absolutePath,
+  gitExecutable: absolutePath,
+});
+
+export async function loadWorkerRuntimeConfig(
+  file: string,
+): Promise<WorkerRuntimeConfig> {
+  if (!path.isAbsolute(file)) {
+    throw new Error("Worker runtime config path must be absolute.");
+  }
+  if ((await realpath(file)) !== file) {
+    throw new Error("Worker runtime config path cannot contain symbolic links.");
+  }
+  const stats = await lstat(file);
+  if (
+    !stats.isFile() ||
+    stats.isSymbolicLink() ||
+    stats.size < 1 ||
+    stats.size > 64 * 1_024 ||
+    (stats.mode & 0o022) !== 0
+  ) {
+    throw new Error("Worker runtime config must be a protected physical file.");
+  }
+  return configSchema.parse(JSON.parse(await readFile(file, "utf8")));
+}

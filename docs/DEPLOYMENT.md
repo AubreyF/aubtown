@@ -63,7 +63,7 @@ The reviewed AubTown patch maps each alias to capabilities. A task labeled or qu
 
 ## Workspace creation
 
-Symphony names workspaces by GitHub issue identifier. The AubTown creation hook derives the issue number, then invokes Freed's physical `scripts/worktree-add.sh` with:
+Symphony names workspaces by GitHub issue identifier. Before admitting launch, AubTown gives the selected host one claim-bound initial-workspace requirement. The host workspace supervisor invokes Freed's physical `scripts/worktree-add.sh` with:
 
 - a deterministic host-local path
 - a hygienic branch name with no authorship giveaway
@@ -71,7 +71,9 @@ Symphony names workspaces by GitHub issue identifier. The AubTown creation hook 
 - the qualified target
 - `--swarm` during deferred bootstrap
 
-Bare `git worktree add` and direct workspace copying are prohibited.
+Admission returns only after the host reports the exact clean branch and base head. Symphony then finds the prepared directory. Its `before_run` guard verifies that the directory is a clean worktree belonging to the enrolled Freed repository and that the branch obeys publication naming policy.
+
+If Symphony ever creates an empty fallback directory, its `after_create` guard fails immediately and removes it. This turns a missing host preparation into a block instead of silently running Codex in an empty directory. Bare `git worktree add` in production and direct workspace copying are prohibited.
 
 ## Bring-up sequence
 

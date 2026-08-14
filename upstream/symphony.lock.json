@@ -22,11 +22,12 @@
   "patches": [
     {
       "path": "upstream/patches/0001-aubtown-runtime-compatibility.patch",
-      "sha256": "550e0d6e0d23f666d159eed4274f271aa1b526fffa818b5bfd2d3ab9dd5771d5",
+      "sha256": "6da8661a216e671d3026e3adf989ced7d77dff40796fe3594542d22098615622",
       "verifiedAgainst": "8001b52e3062495a16e520e4ceaf8f9de868c4d0",
       "purpose": [
         "mode-restricted-refreshable-github-token-file",
         "capability-aware-ssh-worker-routing",
+        "fail-closed-prelaunch-admission-command",
         "security-advisory-free-compatible-dependency-lock"
       ]
     }
@@ -44,13 +45,14 @@
     "tracker-token-environment-scrubbing",
     "refreshable-github-app-token-file",
     "capability-aware-ssh-worker-routing",
+    "fail-closed-prelaunch-admission-command",
     "security-audited-compatible-dependencies"
   ],
   "knownGaps": [
     "blocked-and-retry-state-is-memory-only",
     "configured-ssh-workers-replace-local-execution-instead-of-forming-one-mixed-pool",
-    "freed-worktrees-require-a-custom-workspace-creation-hook",
-    "freed-authority-requires-a-prelaunch-admission-hook",
+    "freed-worktree-admission-handshake-is-not-yet-wired",
+    "freed-authority-claim-commands-are-not-yet-implemented",
     "rolling-week-subscription-governance-requires-aubtown-policy"
   ]
 }

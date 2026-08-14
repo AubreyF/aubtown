@@ -68,6 +68,9 @@ export function assertExecutionAdmission(input: {
   ) {
     throw new Error("Execution authority admission changes the authority task.");
   }
+  if (admission.authorityClaimId !== input.binding.claim.claimId) {
+    throw new Error("Execution authority admission changes the task-scoped claim.");
+  }
   if (admission.bindingDigest !== createExecutionAdmissionDigest(input.binding)) {
     throw new Error("Execution authority admission does not bind the dispatch.");
   }

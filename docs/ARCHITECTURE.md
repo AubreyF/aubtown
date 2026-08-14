@@ -12,7 +12,7 @@ The normal path is:
 2. AubTown reads the issue, parses its qualification evidence, and inspects current GitHub, Freed, quota, host, pull-request, worktree, and conflict state.
 3. AubTown acquires the exact task-scoped execution claim through a supported Freed command.
 4. The issue moves to `factory:running` and its one machine-managed status comment records the claim, host, branch, heartbeat, and next action.
-5. Symphony creates the issue workspace on the selected SSH worker and starts one Codex app-server session.
+5. The selected host prepares the issue worktree through Freed's supported helper. Symphony verifies that exact worktree and starts one Codex app-server session.
 6. The worker plans, implements, validates, repairs its candidate when permitted, and hands the exact candidate to a fresh reviewer context.
 7. The trusted host may push the reviewed exact head and create or update one draft pull request.
 8. The issue moves to `factory:human-review` or `factory:blocked`. AubTown does not merge, release, deploy, close the issue, or claim that merge equals completion.
@@ -31,12 +31,16 @@ Symphony owns tracker polling, bounded concurrency, retry timing, issue workspac
 
 Production executes one immutable Symphony commit and verifies its source checksum. A separate tracking job observes upstream `main`. An upstream update becomes a deployment candidate only after the upstream suite, AubTown compatibility tests, disposable GitHub exercise, and restart proof pass.
 
-The pinned upstream currently needs narrow reviewed extensions for:
+The reviewed patch now supplies:
 
 - GitHub App token refresh without exposing raw credentials to workers
 - capability-aware SSH host routing
 - a fail-closed AubTown admission boundary before worker launch
-- deterministic Freed worktree creation through `scripts/worktree-add.sh`
+
+The remaining integration work is:
+
+- connect the admission command to Freed's task-scoped claim operations
+- stage and attest deterministic Freed worktrees through `scripts/worktree-add.sh`
 - durable startup reconciliation around upstream's memory-only blocked and retry maps
 
 These remain an auditable patch series against the pin. AubTown will not maintain a TypeScript replacement for Symphony during v1.
