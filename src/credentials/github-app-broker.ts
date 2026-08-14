@@ -67,7 +67,7 @@ const DRAFT_PUBLISHER_PERMISSIONS = {
 export class GitHubAppBroker {
   constructor(
     private readonly coordinator: GitHubAppIdentity,
-    private readonly publisher: GitHubAppIdentity,
+    private readonly publisher: GitHubAppIdentity | undefined,
     private readonly keys: PrivateKeyProvider,
     private readonly authenticate: InstallationAuthenticator = defaultAuthenticator,
   ) {}
@@ -98,6 +98,9 @@ export class GitHubAppBroker {
     readonly repository: string;
     readonly plan: PublicationPlan;
   }): Promise<InstallationTokenReceipt> {
+    if (this.publisher === undefined) {
+      throw new Error("Draft Publisher GitHub App is not configured.");
+    }
     if (
       !input.plan.allowed ||
       (input.plan.action !== "create-draft" && input.plan.action !== "update-draft") ||

@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh the AubTown Coordinator GitHub App token periodically
+
+[Timer]
+OnBootSec=35min
+OnUnitActiveSec=35min
+RandomizedDelaySec=2min
+Persistent=true
+Unit=aubtown-github-token.service
+
+[Install]
+WantedBy=timers.target

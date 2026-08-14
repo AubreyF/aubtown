@@ -33,6 +33,10 @@ If a future task must modify `.github/workflows`, that class requires a separate
 
 The App private keys stay in the host credential store. Workers never receive them. The host mints installation tokens on demand, narrows each token to the selected repository and required permissions, and discards it after the operation. Tokens never appear in Git arguments or remote URLs. GitHub installation tokens currently expire after one hour.
 
+For the native MVP, `aubtown-github-token.service` mints a repository-scoped Coordinator read token at startup and every 35 minutes. It atomically installs the token as a mode-0600 file under the coordinator state directory. The reviewed Symphony patch reads that file for each request, so refresh does not require a restart. The service logs only the repository, expiry, permission receipt, and destination path. It never logs the token.
+
+The Draft Publisher still mints a separate token only for an admitted draft publication operation. Its private key and token do not pass through the Symphony tracker configuration.
+
 References:
 
 - [Choosing GitHub App permissions](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app)

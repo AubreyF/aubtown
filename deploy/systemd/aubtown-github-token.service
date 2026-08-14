@@ -1,0 +1,29 @@
+[Unit]
+Description=Refresh the AubTown Coordinator GitHub App token
+Wants=network-online.target
+After=network-online.target
+Before=aubtown-symphony.service
+
+[Service]
+Type=oneshot
+User=aubtown-symphony
+Group=aubtown-symphony
+EnvironmentFile=/etc/aubtown/symphony.env
+ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/refresh-github-token.js
+StateDirectory=aubtown/symphony/secrets
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/aubtown /opt/aubtown
+ReadWritePaths=/var/lib/aubtown/symphony/secrets
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+SystemCallArchitectures=native

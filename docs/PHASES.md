@@ -27,6 +27,7 @@ Status: Phase 1 is complete. Phase 2 is in progress around pinned Symphony, nati
 - [x] Preserve host-local journals, encrypted checkpoints, exact-head publication, and quota policy as reusable AubTown components.
 - [x] Prove receipt publication is serialized across completion, flush, and shutdown.
 - [x] Add the reviewed Symphony patch for GitHub App token refresh and capability-aware SSH routing.
+- [x] Add native mode-0600 Coordinator token refresh before startup and every 35 minutes.
 - [x] Refresh compatible locked dependencies until the Hex audit has no current security advisories.
 - [ ] Add the reviewed Symphony prelaunch admission boundary.
 - [ ] Add the Freed-specific `WORKFLOW.md` and worktree hooks.

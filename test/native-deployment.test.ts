@@ -16,7 +16,20 @@ describe("native Linux deployment", () => {
     );
     expect(unit).toContain("/etc/aubtown/WORKFLOW.md");
     expect(unit).toContain("--port 7080");
+    expect(unit).toContain("Requires=aubtown-github-token.service");
     expect(unit).not.toMatch(/docker|compose|restate/iu);
+  });
+
+  it("refreshes the coordinator token natively before expiry", async () => {
+    const service = await fixture("deploy/systemd/aubtown-github-token.service");
+    const timer = await fixture("deploy/systemd/aubtown-github-token.timer");
+    expect(service).toContain("User=aubtown-symphony");
+    expect(service).toContain("dist/cli/refresh-github-token.js");
+    expect(service).toContain("UMask=0077");
+    expect(service).toContain("ReadWritePaths=/var/lib/aubtown/symphony/secrets");
+    expect(timer).toContain("OnUnitActiveSec=35min");
+    expect(timer).toContain("RandomizedDelaySec=2min");
+    expect(service).not.toMatch(/docker|compose|restate/iu);
   });
 
   it("keeps coordinator and checkpoint credentials under distinct users", async () => {
@@ -45,6 +58,9 @@ describe("native Linux deployment", () => {
     expect(environment).toContain("AUBTOWN_GITHUB_APP_ID=");
     expect(environment).toContain(
       "AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE=/etc/aubtown/keys/github-app-private.pem",
+    );
+    expect(environment).toContain(
+      "GITHUB_TOKEN_FILE=/var/lib/aubtown/symphony/secrets/github.token",
     );
     expect(environment).not.toMatch(/BEGIN (?:RSA |EC )?PRIVATE KEY/u);
   });

@@ -19,6 +19,8 @@ Docker Desktop, Docker Engine, Compose, Restate, PostgreSQL, Redis, and a second
 
 `aubtown-symphony.service` runs the one scheduler and dashboard as `aubtown-symphony`. It binds the dashboard to `127.0.0.1:7080`. Tailscale may expose that loopback service privately. Never bind it to a public interface.
 
+`aubtown-github-token.timer` refreshes the Coordinator GitHub App installation token every 35 minutes. The one-shot refresher runs before Symphony starts, reads the host-side private key, and atomically replaces a mode-0600 token file. The initial native deployment uses the same restricted OS identity for the refresher and coordinator because Symphony must read that file. The private key remains outside Symphony's workflow and worker environments.
+
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
 
 The future authority broker runs under its own service identity beside the canonical Freed state root. Symphony and workers receive scoped receipts, not authority tokens or direct state-root access.
@@ -42,7 +44,7 @@ No service resolves a security-sensitive executable from an interactive shell co
 
 The Coordinator GitHub App reads issues and manages approved lifecycle labels and one status comment. The Draft Publisher App receives repository-scoped contents and pull-request access only for an admitted exact-head plan.
 
-Installation tokens are short-lived. The Symphony integration must read a broker-refreshed mode-0600 token file or invoke an equally narrow host-side provider. A static long-lived token in `WORKFLOW.md`, shell history, or a worker environment is prohibited.
+Installation tokens are short-lived. The native refresher writes `/var/lib/aubtown/symphony/secrets/github.token` before startup and every 35 minutes. The reviewed Symphony patch rereads that mode-0600 file for each GitHub request. A static long-lived token in `WORKFLOW.md`, shell history, or a worker environment is prohibited.
 
 ## SSH workers
 
@@ -74,10 +76,10 @@ Bare `git worktree add` and direct workspace copying are prohibited.
 ## Bring-up sequence
 
 1. Provision Linux, persistent storage, firewall rules, and Tailscale.
-2. Create dedicated coordinator, broker, checkpoint, and executor users.
+2. Create dedicated coordinator, checkpoint, and executor users. The MVP token refresher uses the restricted coordinator identity. A later broker split must preserve mode-0600 delivery without widening access.
 3. Install reviewed absolute Git, Node, Codex, SSH, and certificate paths.
 4. Install the pinned Symphony source or binary and verify its checksum.
-5. Install the reviewed AubTown build and native service units.
+5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer.
 6. Check out Freed and verify `scripts/worktree-add.sh` at the expected path.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
