@@ -230,6 +230,7 @@ describe("HostExecutionSupervisor", () => {
     await supervisor.accept(command());
     completion.resolve("completed");
     await terminalReport.promise;
+    await supervisor.flush();
     expect(observedNonce).toMatch(/^[0-9a-f-]{36}$/u);
     expect(reports).toEqual(["started", "completed"]);
     await expect(journal.read()).resolves.toMatchObject({

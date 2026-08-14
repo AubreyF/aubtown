@@ -15,10 +15,7 @@
     "host:monitor": "tsx src/host-agent.ts",
     "shadow": "tsx src/cli/shadow.ts",
     "shadow:github": "tsx src/cli/shadow-github.ts",
-    "start": "tsx src/service.ts",
     "test": "vitest run",
-    "test:dry-run": "scripts/test-dry-run.sh",
-    "test:host-ingress": "scripts/test-host-ingress.sh",
     "test:native-deployment": "vitest run test/native-deployment.test.ts test/network-config.test.ts",
     "test:pilot-readiness": "vitest run test/pilot-readiness.test.ts",
     "test:watch": "vitest",
@@ -29,7 +26,6 @@
     "@noble/ciphers": "2.3.0",
     "@octokit/auth-app": "8.3.0",
     "@octokit/rest": "22.0.1",
-    "@restatedev/restate-sdk": "1.16.5",
     "zod": "4.4.3"
   },
   "devDependencies": {

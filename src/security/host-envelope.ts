@@ -7,7 +7,7 @@ import {
   type KeyObject,
 } from "node:crypto";
 import { z } from "zod";
-import type { HostHeartbeat } from "../orchestration/host-registry.js";
+import type { HostHeartbeat } from "../domain/host.js";
 import type { RawAccountUsageObservation } from "../domain/types.js";
 import { canonicalJson } from "./canonical-json.js";
 import { checkpointGrantRequestSchema } from "../checkpoints/grant.js";

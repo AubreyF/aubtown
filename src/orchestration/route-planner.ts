@@ -1,5 +1,3 @@
-import * as restate from "@restatedev/restate-sdk";
-import { z } from "zod";
 import type { ExecutionAccountProfiles } from "../config/account-profiles.js";
 import type {
   AccountUsageSnapshot,
@@ -8,14 +6,6 @@ import type {
   HostRecord,
 } from "../domain/types.js";
 import { selectExecutionRoute } from "../policy/routing.js";
-import type { HostEnrollments } from "../security/host-enrollment.js";
-import { accountGovernor } from "./account-governor.js";
-import { hostRegistry } from "./host-registry.js";
-
-const requestSchema = z.object({
-  requiredLane: z.enum(["linux", "macos"]),
-  now: z.iso.datetime(),
-});
 
 export interface RoutePlannerRequest {
   readonly requiredLane: HostLane;
@@ -101,50 +91,3 @@ export function planExecutionRouteFromState(input: {
       : decision.reason;
   return { reason, missingTelemetryAccountIds };
 }
-
-export function createRoutePlanner(
-  enrollments: HostEnrollments,
-  profiles: ExecutionAccountProfiles,
-) {
-  const hostIds = Object.entries(enrollments)
-    .filter(([, enrollment]) => enrollment.enabled)
-    .map(([hostId]) => hostId)
-    .sort();
-  const accountIds = Object.keys(profiles).sort();
-  return restate.service({
-    name: "RoutePlanner",
-    options: { ingressPrivate: true },
-    handlers: {
-      plan: async (
-        ctx: restate.Context,
-        rawRequest: RoutePlannerRequest,
-      ): Promise<RoutePlannerResult> => {
-        const request = requestSchema.parse(rawRequest);
-        const hosts: HostRecord[] = [];
-        for (const hostId of hostIds) {
-          const host = await ctx.objectClient(hostRegistry, hostId).read({
-            now: request.now,
-            staleAfterSeconds: 120,
-          });
-          if (host !== null) {
-            hosts.push(host);
-          }
-        }
-        const usageByAccountId: Record<string, AccountUsageSnapshot | null> = {};
-        for (const accountId of accountIds) {
-          const status = await ctx.objectClient(accountGovernor, accountId).status();
-          usageByAccountId[accountId] = status.snapshot;
-        }
-        return planExecutionRouteFromState({
-          requiredLane: request.requiredLane,
-          hosts,
-          profiles,
-          usageByAccountId,
-          now: request.now,
-        });
-      },
-    },
-  });
-}
-
-export const routePlannerApi = createRoutePlanner({}, {});

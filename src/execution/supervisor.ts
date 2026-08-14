@@ -1,4 +1,4 @@
-import type { HostGatewayReceipt } from "../orchestration/host-gateway.js";
+import type { HostGatewayReceipt } from "../gateway/receipt.js";
 import type {
   WorkerDriver,
   WorkerTurnHandle,
@@ -39,6 +39,7 @@ export type ExecutionEvent = Readonly<Record<string, unknown>> & {
 export class HostExecutionSupervisor {
   #watchingTurnId: string | undefined;
   #watchingCompletion: Promise<void> | undefined;
+  #reporting: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly accountId: string,
@@ -64,7 +65,7 @@ export class HostExecutionSupervisor {
       );
     }
     if (record.stage !== "started") {
-      await this.#reportIfNeeded(record);
+      await this.#reportCurrent();
       return;
     }
     const handle = this.#requiredHandle(record);
@@ -91,7 +92,7 @@ export class HostExecutionSupervisor {
     const status = await this.worker.recover(handle, record.command.repositoryRoot);
     if (status === "running") {
       this.turns.track(this.accountId, handle);
-      await this.#reportIfNeeded(record);
+      await this.#reportCurrent();
       this.#watch(record.command, handle);
       this.eventSink({
         event: "executor-turn-recovered",
@@ -123,7 +124,7 @@ export class HostExecutionSupervisor {
     });
     const started = await this.journal.started(command.commandId, handle);
     this.turns.track(this.accountId, handle);
-    await this.#reportIfNeeded(started);
+    await this.#reportCurrent();
     this.#watch(command, handle);
     this.eventSink({
       event: "executor-turn-started",
@@ -134,10 +135,7 @@ export class HostExecutionSupervisor {
   }
 
   async flush(): Promise<void> {
-    const record = await this.journal.read();
-    if (record !== null && record.stage !== "accepted") {
-      await this.#reportIfNeeded(record);
-    }
+    await this.#reportCurrent();
   }
 
   async activeClaimIds(): Promise<readonly string[]> {
@@ -193,12 +191,12 @@ export class HostExecutionSupervisor {
     if (record.stage === "started") {
       const handle = this.#requiredHandle(record);
       this.turns.track(this.accountId, handle);
-      await this.#reportIfNeeded(record);
+      await this.#reportCurrent();
       this.#watch(record.command, handle);
       return;
     }
     if (record.stage !== "accepted") {
-      await this.#reportIfNeeded(record);
+      await this.#reportCurrent();
     }
   }
 
@@ -269,13 +267,25 @@ export class HostExecutionSupervisor {
       this.now().toISOString(),
     );
     this.turns.untrack(this.accountId, handle.turnId);
-    await this.#reportIfNeeded(finished);
+    await this.#reportCurrent();
     this.eventSink({
       event: "executor-turn-finished",
       commandId: command.commandId,
       turnId: handle.turnId,
       status: terminalStatus,
     });
+  }
+
+  async #reportCurrent(): Promise<void> {
+    const operation = async (): Promise<void> => {
+      const record = await this.journal.read();
+      if (record !== null && record.stage !== "accepted") {
+        await this.#reportIfNeeded(record);
+      }
+    };
+    const current = this.#reporting.then(operation, operation);
+    this.#reporting = current.catch(() => undefined);
+    await current;
   }
 
   async #reportIfNeeded(record: HostExecutionRecord): Promise<void> {

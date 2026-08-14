@@ -1,4 +1,3 @@
-import * as restate from "@restatedev/restate-sdk";
 import {
   assessHandoff,
   exactValidationReceiptSchema,
@@ -118,68 +117,3 @@ export function applyReview(
     reasons: assessment.reasons,
   };
 }
-
-interface HandoffRegistryState {
-  state: HandoffState;
-}
-
-function terminal(error: unknown): never {
-  throw new restate.TerminalError(
-    error instanceof Error ? error.message : String(error),
-  );
-}
-
-export const handoffRegistry = restate.object({
-  name: "HandoffRegistry",
-  options: { ingressPrivate: true },
-  handlers: {
-    initialize: async (
-      ctx: restate.ObjectContext<HandoffRegistryState>,
-      workProduct: WorkProductIdentity,
-    ): Promise<HandoffState> => {
-      try {
-        const next = initializeHandoff(await ctx.get("state"), workProduct);
-        ctx.set("state", next);
-        return next;
-      } catch (error) {
-        return terminal(error);
-      }
-    },
-    recordValidation: async (
-      ctx: restate.ObjectContext<HandoffRegistryState>,
-      validation: ExactValidationReceipt,
-    ): Promise<HandoffState> => {
-      const current = await ctx.get("state");
-      if (current === null) {
-        throw new restate.TerminalError("Handoff is not initialized.");
-      }
-      try {
-        const next = applyValidation(current, validation);
-        ctx.set("state", next);
-        return next;
-      } catch (error) {
-        return terminal(error);
-      }
-    },
-    recordReview: async (
-      ctx: restate.ObjectContext<HandoffRegistryState>,
-      review: IndependentReviewReceipt,
-    ): Promise<HandoffState> => {
-      const current = await ctx.get("state");
-      if (current === null) {
-        throw new restate.TerminalError("Handoff is not initialized.");
-      }
-      try {
-        const next = applyReview(current, review);
-        ctx.set("state", next);
-        return next;
-      } catch (error) {
-        return terminal(error);
-      }
-    },
-    read: restate.handlers.object.shared(
-      async (ctx: restate.ObjectSharedContext<HandoffRegistryState>) =>
-        await ctx.get("state"),
-    ),
-  },
-});

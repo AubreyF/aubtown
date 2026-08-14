@@ -1,4 +1,3 @@
-import * as restate from "@restatedev/restate-sdk";
 import { z } from "zod";
 import { workProductIdentitySchema } from "../adjudication/receipts.js";
 import type { DraftPublicationReceipt } from "../publication/draft-publisher.js";
@@ -121,68 +120,3 @@ export function blockPublication(
   }
   return { ...current, stage: "blocked", reason };
 }
-
-interface PublicationRegistryState {
-  state: PublicationState;
-}
-
-function terminal(error: unknown): never {
-  throw new restate.TerminalError(
-    error instanceof Error ? error.message : String(error),
-  );
-}
-
-export const publicationRegistry = restate.object({
-  name: "PublicationRegistry",
-  options: { ingressPrivate: true },
-  handlers: {
-    initialize: async (
-      ctx: restate.ObjectContext<PublicationRegistryState>,
-      plan: PublicationPlan,
-    ): Promise<PublicationState> => {
-      try {
-        const next = initializePublication(await ctx.get("state"), plan);
-        ctx.set("state", next);
-        return next;
-      } catch (error) {
-        return terminal(error);
-      }
-    },
-    record: async (
-      ctx: restate.ObjectContext<PublicationRegistryState>,
-      receipt: DraftPublicationReceipt,
-    ): Promise<PublicationState> => {
-      const current = await ctx.get("state");
-      if (current === null) {
-        throw new restate.TerminalError("Publication is not initialized.");
-      }
-      try {
-        const next = recordPublication(current, receipt);
-        ctx.set("state", next);
-        return next;
-      } catch (error) {
-        return terminal(error);
-      }
-    },
-    block: async (
-      ctx: restate.ObjectContext<PublicationRegistryState>,
-      reason: string,
-    ): Promise<PublicationState> => {
-      const current = await ctx.get("state");
-      if (current === null) {
-        throw new restate.TerminalError("Publication is not initialized.");
-      }
-      try {
-        const next = blockPublication(current, reason);
-        ctx.set("state", next);
-        return next;
-      } catch (error) {
-        return terminal(error);
-      }
-    },
-    read: restate.handlers.object.shared(
-      async (ctx: restate.ObjectSharedContext<PublicationRegistryState>) =>
-        await ctx.get("state"),
-    ),
-  },
-});

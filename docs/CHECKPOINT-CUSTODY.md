@@ -1,44 +1,56 @@
 # Checkpoint custody
 
-AubTown can move unpublished repository state without moving credentials or an existing worktree directory.
+AubTown moves unpublished Git state, not worktree directories, credentials, or running agent processes.
 
 ## Capture
 
-The source executor records:
+A terminal or interrupted worker candidate is captured from a trusted host journal. The archive binds:
 
-- exact repository owner, repository name, default branch, and issue number
-- exact repository and base Git heads
-- one binary Git patch from the base head through the current working tree
-- nonignored, physical, approved untracked files
+- repository and issue
+- claim ID and custody epoch
+- source host
+- admitted base commit and current repository head
+- binary tracked patch
+- approved nonignored untracked files
 - validation receipts
-- claim ID, source host, and custody epoch
+- creation time
 
-Ignored paths, dependencies, authentication caches, key files, symlinks, absolute paths, and parent-directory escapes are rejected. The archive is capped at 256 MiB and one untracked file at 64 MiB during the pilot.
+Ignored paths, dependencies, authentication caches, key files, symlinks, absolute paths, and parent escapes are rejected. Pilot limits are 256 MiB per archive and 64 MiB per untracked file.
 
-The complete archive is encrypted with XChaCha20-Poly1305. The manifest is authenticated as associated data. Altering its claim, epoch, heads, path list, digest, or receipts makes decryption fail. The content-addressed local pilot store uses private directories, synchronized atomic publication, digest verification, and recoverable retirement instead of deletion.
+The complete archive uses XChaCha20-Poly1305. Its manifest is authenticated associated data. Changing the claim, epoch, heads, paths, digest, or receipts makes decryption fail. Storage is content-addressed and verifies bytes on every read.
 
-The host execution journal persists trusted candidate finalization, capture, edge storage receipt, and catalog admission separately. A completed worker may not commit. The host first persists a random nonce that was unavailable to the worker, verifies the candidate remains on the qualified base with changes confined to owned paths, and creates one local commit containing that execution receipt. On restart, only that exact one-commit result is accepted. A completed checkpoint must name the journaled finalized head before it can be uploaded. A terminal executor receipt is withheld until capture, storage, and catalog stages succeed. That receipt carries the checkpoint content address. Restate accepts it only when the authenticated manifest names the current host, claim, epoch, command ID, and reported terminal stage. After a restart, the host resumes at the first missing stage and never starts another worker turn for that command.
-
-The same archive builder exposes a read-only worktree inspection path. Validation compares the current Git head and complete archive digest with the terminal checkpoint before and after every command. The digest includes the full committed binary patch from the qualified base. This catches candidate mutation that a Git-head check alone would miss.
-
-Manifest schema 2 binds the checkpoint to its repository, issue, claim, custody epoch, and source host. Schema 1 checkpoints were never used for real factory work and are not accepted by the remote transfer path.
+Candidate finalization, capture, remote storage, and coordinator acknowledgement are separate journal stages. A crash resumes the first missing stage. It never reruns an already completed worker merely because a receipt response was lost.
 
 ## Transfer
 
-After 24 hours without a source heartbeat, the durable custody workflow may select an online compatible host. Before transfer it resolves the requested content address through the ingress-private checkpoint catalog. That catalog accepts only a storage-edge-signed receipt submitted by the source host while it owns the exact current claim and epoch. The workflow ignores caller-supplied checkpoint manifests. Both the per-issue registry and repository scheduler advance exactly one epoch and change the destination worker and worktree.
+After 24 hours without a source heartbeat, AubTown may transfer only portable work to a compatible online host.
 
-The destination creates a worktree through Freed's `scripts/worktree-add.sh` at the checkpoint's exact authenticated base head. Restore requires that worktree to be clean, applies the binary patch, and creates approved untracked files exclusively. It never overwrites an existing destination file. The host then re-derives the complete tracked patch, untracked path set, file bytes, and executable bits from disk and compares them with the decrypted archive. Its signed restore receipt must match the exact claim, new epoch, host, worktree, content address, and base head. Executor polling and app-server resume remain fenced until Restate records that receipt. A stale source host cannot release or publish the new epoch.
+The transfer sequence is:
 
-## Remote data plane
+1. Re-read the current GitHub lifecycle state and Freed execution claim.
+2. Confirm the exact source heartbeat interval and authenticated checkpoint receipt.
+3. Fence or supersede the old command.
+4. Advance exactly one custody epoch through the supported Freed claim-transfer operation.
+5. Create the destination worktree through `scripts/worktree-add.sh` at the authenticated base.
+6. Download and decrypt the exact content address.
+7. Restore tracked and approved untracked state without overwriting an existing file.
+8. Recompute the complete archive from disk and require byte-equivalent identity.
+9. Record the destination receipt before resuming execution.
 
-Raw storage credentials remain in the Linux checkpoint edge. They never enter an executor or worker. An executor asks the signed host gateway for a five-minute transfer grant. Restate checks the current claim first. The coordinator signs the exact repository, issue, claim, current custody epoch, checkpoint epoch, host, operation, content address, byte length, issue time, expiry, and nonce.
+A returning source host with the old epoch cannot resume, release, or publish the transferred claim.
 
-The executor signs the HTTP method, exact path, grant nonce, body digest, and request time with its enrolled host key. The checkpoint edge verifies both signatures before accepting a body. Upload is content-addressed and idempotent. After the store confirms the write, the edge signs the reference, byte length, source host, grant nonce, complete manifest, and storage time with a receipt key held only by the storage edge. The control plane has only the receipt public key. It verifies the receipt and current claim before cataloging the checkpoint. Download checks the stored manifest against the grant before returning encrypted bytes. A transferred destination can download only the immediately prior checkpoint epoch or its current epoch. A host cannot substitute another repository, issue, claim, object, operation, path, size, or manifest.
+Linux may inherit runtime-neutral work. A macOS-only task remains blocked until a compatible Mac executor is online.
 
-The Linux pilot uses a private persistent volume behind this edge. An S3-compatible adapter can replace that volume without changing the grant or receipt protocols. The integration proof uses distinct Mac and Linux identities, rejects terminal completion without a matching cataloged checkpoint, accepts completion bound to the exact command checkpoint, rejects a forged storage receipt, advances custody from epoch 1 to epoch 2, proves destination execution is fenced, compares the uploaded and downloaded bytes, records a signed restore receipt, proves execution can then be offered, restarts Restate and both edges, downloads again, releases the claim, and confirms that no new grant can be issued. The durable workflow proof separately confirms that a content address with no authenticated catalog receipt cannot transfer custody.
+## Storage boundary
 
-## Production storage
+The Linux checkpoint edge owns local or S3-compatible storage credentials. An executor receives a five-minute grant bound to one repository, issue, claim, epoch, host, operation, content address, and byte length.
 
-The local store remains useful for one-host tests. The shared adapter uses an S3-compatible object service with the same content-addressed payload format. It performs a conditional create, checks the content digest on every read, copies an authenticated object into a deterministic retired namespace before deleting the active name, and remains portable across storage vendors. Bucket versioning and retention are required in production so retirement stays recoverable.
+The executor signs the method, path, grant nonce, body digest, and request time with its enrolled host key. The storage edge signs the persisted reference and manifest. The coordinator verifies that receipt against current claim custody before accepting it.
 
-The encryption key is never stored in the archive, Restate, GitHub, or the repository. During the single-factory pilot, a secret manager provisions the same 32-byte checkpoint key as a mode-restricted physical file on each authorized executor. The key is not copied during custody transfer and never enters a worker process or prompt. This pilot choice makes every enrolled executor a confidentiality boundary for all pilot checkpoints. Before adding less-trusted hosts or multiple tenants, replace it with distinct host credentials against an external key service or envelope-encryption service.
+Workers and Codex prompts never receive raw storage credentials or the checkpoint encryption key.
+
+## Key model
+
+The single-factory pilot may provision the same 32-byte checkpoint key as a mode-0600 file to the two equally trusted executors. It is never stored in GitHub, Symphony, Freed task state, the repository, or the archive.
+
+Before enrolling less-trusted hosts, multiple tenants, or external workers, replace the shared pilot key with per-host envelope encryption backed by an external key service.

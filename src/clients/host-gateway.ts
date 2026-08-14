@@ -1,7 +1,5 @@
-import type {
-  HostHeartbeat,
-} from "../orchestration/host-registry.js";
-import type { HostGatewayReceipt } from "../orchestration/host-gateway.js";
+import type { HostHeartbeat } from "../domain/host.js";
+import type { HostGatewayReceipt } from "../gateway/receipt.js";
 import type { RawAccountUsageObservation } from "../domain/types.js";
 import type { QuotaDecision } from "../policy/quota.js";
 import {

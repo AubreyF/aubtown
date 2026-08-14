@@ -3,102 +3,69 @@
 ## Protected assets
 
 - repository source and unpublished work
-- GitHub App credentials and installation scope
-- Codex subscription credentials and quota
-- Freed task, lease, event, and outcome integrity
-- claim uniqueness and custody ownership
-- provider and owner approval boundaries
+- GitHub App and subscription credentials
+- daily and rolling-week Codex capacity
+- Freed task, lease, claim, event, and outcome integrity
+- one-current-owner custody
+- provider, owner-review, publication, release, and deployment boundaries
 - checkpoint confidentiality and integrity
 
 ## Trust boundaries
 
-The coordinator, worker, GitHub App, Codex profile, repository authority system, checkpoint store, and each host are separate identities. A worker receives a scoped workspace and task prompt. It does not receive raw GitHub tracker credentials, checkpoint encryption roots, other subscriptions, or authority-state write access.
+The Linux coordinator, authority broker, checkpoint edge, Linux worker, and Mac worker are separate processes and may use separate operating-system users. GitHub and the Codex service are external systems. Issue prose and repository code are untrusted worker inputs.
 
-## Primary failures and controls
+Symphony may schedule only after AubTown admission. AubTown may admit only after GitHub and Freed authority agree. Neither local journal state nor Symphony memory can create authority.
 
-| Failure | Control |
+## Principal threats and controls
+
+| Threat | Control |
 | --- | --- |
-| Duplicate dispatch after crash | Lowest valid immutable GitHub claim comment wins, short claim lease, prelaunch reread, and startup reconciliation |
-| Stale host publishes after transfer | Monotonic custody epoch checked before every write and publication |
-| Label grants accidental authority | Exact active authority task and task-scoped repository execution claim are also required |
-| Conflicting lifecycle labels trigger redispatch | Admission requires `factory:ready` to be the sole `factory:` label; projection replaces the known lifecycle label set atomically from one coordinator plan |
-| Issue description edit races with worker launch | Dispatch state never mutates the issue description; an immutable per-issue claim comment is elected before the visible running projection |
-| Nightly runner and factory race | Proposed task-scoped claim must make the existing runner skip claimed work before the first writer is enabled |
-| Quota telemetry disappears | No new admission and active turn interruption after 120 seconds |
-| One account consumes the week in a day | Daily baseline thresholds plus 80 percent weekly ceiling |
-| Codex update changes the worker or quota protocol | Absolute executable, exact version, generated-schema compatibility check, and advertised model and effort gate before host admission |
-| Another harness consumes an admitted account and claim | Authority admission binds the route-selected driver, the executor command carries it immutably, and the host rejects new or persisted work for another local driver |
-| Poll retry or host restart starts a second turn | One elected issue claim plus a mode-0600 local execution journal and app-server thread resume |
-| Terminal result is accepted before work is recoverable | Host journal requires encrypted capture, edge-signed storage receipt, and catalog admission before the terminal executor receipt |
-| Terminal result describes work other than the stored checkpoint | Receipt carries the content address; authenticated manifest must match current host, claim, epoch, exact command ID, and terminal stage |
-| Successful work is acknowledged but lost before adjudication | Terminal receipt acceptance initializes the checkpoint-keyed handoff before returning its completion receipt, and exact retries are idempotent |
-| Worker creates or counterfeits the publication commit | Worker prompt forbids commits; host requires the worker head to remain at the qualified base, persists a private random nonce after the turn, and creates one bounded commit carrying that receipt |
-| Worker moves the local remote-tracking branch to redefine its base | Executor command carries the immutable admitted base SHA; finalization never derives authority from a worker-writable Git ref |
-| Host crashes after committing but before terminal journaling | Persisted finalization nonce lets restart accept only the exact one-commit head and receipt; any other clean commit fails closed |
-| Checkpoint captures a head other than the trusted finalization | Completed checkpoint head must equal the finalized head in the private execution journal before upload or catalog admission |
-| Validation or review is replayed against another change | Both receipts bind the complete checkpoint-backed work-product identity, including immutable base, head, and patch digest |
-| Publication token leaks through process arguments or Git remote | Private askpass helper supplies the token from the publisher environment; arguments contain only the credential-free HTTPS repository URL |
-| Remote branch changes after publication planning | Exact force-with-lease binds new branches to absence and updates to the observed prior head; GitHub must then report the planned head |
-| Publisher crash creates a duplicate pull request | Retry reconciles the exact remote branch and one exact open draft before any write; publication registry accepts only one plan and receipt |
-| Ready or unrelated pull request is overwritten | Publisher accepts only the observed open draft number and branch, and refuses duplicate open pull requests or any create-time mismatch |
-| Validation command changes uncommitted work while preserving Git HEAD | Custody archive digest is recomputed before and after each no-shell command and includes tracked plus approved-untracked state |
-| Issue text injects a shell pipeline as validation | Repository adapter supplies reviewed argv recipes with absolute physical executables; issue prose is never executed |
-| Host invents or substitutes an adjudication plan | The signed poll returns only an ingress-private immutable plan bound to the exact work product, qualification, account, reviewer driver, current custody, and quota state |
-| Host restarts during validation or review and repeats expensive work | A private atomic journal fails closed at ambiguous start boundaries and resumes only a persisted validation receipt or exact reviewer handle |
-| Repository validation reads host credentials from the environment | Validation receives a minimal environment containing only a reviewed absolute `PATH` and `CI=true`; host, subscription, GitHub, checkpoint, and signing variables are withheld |
-| Implementation context approves its own work | Independent review requires a different thread and structured verdict; implementation-thread reuse is rejected |
-| Reviewer changes the candidate while inspecting it | Review runs in a read-only, network-disabled app-server sandbox and publication rechecks the exact work-product identity |
-| App-server blocks on diagnostics, wedges an RPC, exits mid-turn, or reuses a numeric ID for a server request | The host drains stderr, bounds request and shutdown time, discriminates bidirectional requests by method, rejects unsupported client-side methods without resolving the pending call, and exits for journal-based service-manager recovery after unexpected child failure |
-| Restart skips validation or replaces a prior verdict | Checkpoint-keyed durable handoff registry enforces ordered immutable validation and review receipts |
-| A stale or different host submits adjudication evidence | Signed validation and review receipts must byte-match an existing handoff whose exact work product still belongs to that host under the current claim epoch |
-| Returning stale host resumes work after failover | Signed startup reconciliation requires the exact current claim epoch, command, thread, turn, enrolled account, and quota headroom before app-server resume |
-| Custody moves while the old host may still write | Per-host transfer fence cancels only unoffered commands and blocks offered, started, or ambiguous commands until terminal adjudication |
-| Caller lies that a host is offline | Failover rereads the signed GitHub status projection and requires the configured offline interval |
-| Caller downgrades macOS-only work to Linux | Scheduler persists the qualified host lane with the claim and failover rejects any caller-supplied lane mismatch |
-| Offline source command never reports interruption | Validated 24-hour failover marks it superseded before epoch transfer; startup adjudication quarantines the old turn when that host returns |
-| Destination starts before unpublished work arrives | Every transferred epoch creates a durable restore requirement; executor poll and resume stay fenced until the destination's signed exact-state receipt is recorded |
-| Initial worker starts in a guessed or stale directory | Every first-epoch claim creates a durable workspace requirement; poll and resume stay fenced until the selected host signs the exact clean branch and base commit |
-| Restore is repeated after a crash | Destination first verifies the complete tracked and untracked worktree against the decrypted archive; exact restored state is accepted, while partial or divergent state fails closed |
-| Scheduler chooses an arbitrary writable restore path | Host resolves the destination beneath its configured physical worktree root and invokes only the physical Freed helper inside the configured repository |
-| Credential leaks into checkpoint | Denylisted paths, ignored-file exclusion, encryption, manifest review |
-| Checkpoint manifest is changed | Manifest is authenticated as XChaCha20-Poly1305 associated data |
-| Checkpoint restore overwrites destination work | Clean exact-base requirement and exclusive untracked-file creation |
-| Provider-visible change runs unattended | Provider lane cap is zero and qualification is blocking |
-| Repository adapter broadens authority | Adapter conformance tests and supported command allowlist |
-| Dispatch input substitutes a host, account, driver, branch, base, or task revision after authority | Short-lived admission digest binds the complete dispatch, then the coordinator rechecks the canonical route before worker launch |
-| Tracker token reaches worker | Host-side GitHub App broker only |
-| App token has unnecessary authority | One enrolled repository and operation-specific installation permissions |
-| Malicious issue prompt changes policy | Issue text is data, fixed system policy remains outside worker input |
-| Retry burns subscription quota | Retry budget distinguishes transient failure from authority and human blocks |
-| Second queue appears | No ticket database or Markdown work queue in AubTown |
-| GitHub returns an unavailable or incomplete claim view | Dispatch fails closed; the coordinator performs a second authoritative read immediately before launch |
-| A losing coordinator ignores the protocol | Workers require a signed winning claim and repository authority receipt; nonconforming software is outside the trusted factory boundary |
-| Host message is forged or changed | Per-host Ed25519 signature over canonical identity, sequence, kind, time, and payload |
-| Accepted host message is replayed | GitHub server timestamp bounds plus a host-local durable monotonic sequence checked before state mutation |
-| Host key silently broadens authority | Enrollment fixes the host lane and allowed execution account IDs |
-| Executor receives object-store credentials | Separate checkpoint edge owns storage and accepts only five-minute claim-bound grants |
-| Stale host substitutes checkpoint content | Content address, schema 2 manifest identity, custody epoch, exact byte length, and host request proof must all match |
-| Caller invents checkpoint metadata for failover | Storage edge signs the persisted reference, length, grant nonce, source host, and full manifest; Restate verifies current custody and catalogs the receipt before transfer |
-| Compromised control plane invents a stored checkpoint | Receipt private key exists only at the checkpoint edge; the control plane receives only its public key |
-| Pilot executor is compromised | Pilot checkpoint key can decrypt pilot archives, so only equally trusted executors receive it; external per-host key service is required before broadening trust |
-| Grant is stolen or replayed | Grant binds one host and operation, requires that host's signature, and expires after five minutes; upload replay is idempotent and download remains encrypted |
+| Two issues are dispatched as the same work | Exact repository and issue identity bind the Freed task, claim, workspace, branch, prompt, receipts, and status projection |
+| Coordinator restart dispatches an issue twice | Startup reconciles GitHub lifecycle state, current Freed claim, worktree, branch, journal, process custody, and draft PR before launch |
+| Linux and Mac both own one issue | One task-scoped claim and custody epoch, plus a final authoritative reread before worker launch |
+| A stale host resumes after transfer | Claim epoch advances only after checkpoint-backed transfer; old-epoch journal and publication requests are rejected |
+| A host lies about being compatible | Enrolled immutable host capabilities and issue-qualified lane are checked by the scheduler patch and authority receipt |
+| Conflicting tasks run concurrently | Qualified path domains and logical locks are compared against every active claim before admission |
+| A GitHub label alone grants Freed execution | Dispatch also requires an exact active Freed task and supported claim-acquire receipt |
+| A worker edits Freed authority files | Worker has no authority credential or canonical state-root access; bridge uses supported commands only |
+| Coordinator credential reaches Codex | GitHub App token remains host-side and is scrubbed from the child environment |
+| Installation token becomes long-lived | Broker refreshes a mode-restricted short-lived token; workflow contains no literal token |
+| Malicious issue text executes shell | Qualification data is parsed as data; validation uses reviewed no-shell argv; fixed policy remains outside issue prose |
+| Worker publishes unrelated content | Publication binds repository, branch, admitted base, exact reviewed head, prior remote head, draft number, and checkpoint identity |
+| Worker merges, releases, or deploys | Separate credentials and explicit draft-only publication ceiling |
+| Subscription spends the week in a day | Fresh usage telemetry, 10 percent reserve, daily hard ceiling, rolling-week trajectory, retry suppression, and targeted interruption |
+| Usage telemetry disappears | New dispatch fails closed when observation age exceeds policy |
+| Retry loop consumes quota on a human blocker | Authority, approval, rate-limit, and human-input blockers do not receive automatic subscription retries |
+| Candidate is lost before acknowledgement | Encrypted content-addressed checkpoint completes before terminal handoff is acknowledged |
+| Checkpoint is modified | XChaCha20-Poly1305 authentication plus content digest and signed storage receipt |
+| Checkpoint leaks credentials | Ignored and denylisted paths are excluded; only approved untracked files enter the encrypted archive |
+| Storage credential reaches executor | Separate checkpoint edge owns storage credential and accepts claim-bound short-lived grants |
+| Validation or review targets another candidate | Receipts bind the full checkpoint-backed work-product identity and immutable base |
+| Implementation approves itself | Independent review requires a fresh thread with read-only, network-disabled policy |
+| GitHub status comment is spoofed | Only configured App author and schema are accepted; signed coordinator fingerprints are required for standby election |
+| Two standby coordinators promote themselves | Earliest valid immutable GitHub comment ID wins, followed by a propagation delay and final reread before any launch |
+| Upstream Symphony changes silently | Production commit and source checksum are immutable; tracking and promotion are separate operations |
+| Upstream memory loses blocked or retry state | GitHub, Freed, workspaces, journals, PRs, and checkpoints are reconciled at startup; uncertain state blocks |
+| Dashboard becomes public | Loopback binding plus private Tailscale exposure only |
+| Another backlog appears | No AubTown ticket database, Markdown ticket queue, or CAR dispatcher |
 
 ## Fail-closed invariants
 
-- One issue, one elected unexpired claim, one current custody epoch.
+- One issue, one current Freed execution claim, one custody epoch.
 - One claim, one branch, one worktree, one worker owner.
-- No authority mutation through direct filesystem writes.
-- No publication above the repository ceiling.
-- No dispatch with stale GitHub, quota, host, authority, lease, pull request, or worktree evidence.
-- No account selection without an enabled account and a compatible host.
-- No execution at custody epoch two or later without the matching destination restore receipt.
-- No execution at custody epoch one without the matching initial workspace receipt.
-- No terminal executor result without its matching authenticated, cataloged command checkpoint.
-- No publication with validation or review receipts for another work-product identity.
-- No independent-review receipt from the implementation thread.
-- No draft handoff before the checkpoint-keyed durable state reaches `ready`.
-- No admitted dispatch workflow call from an unverified repository authority bridge.
+- No dispatch from `debt` alone.
+- No dispatch without `factory:ready`, complete qualification, fresh quota, and compatible host evidence.
+- No direct mutation of Freed authority files.
+- No provider-visible or sensitive unattended execution.
+- No new dispatch when subscription telemetry is stale or protected capacity would be crossed.
+- No transferred execution without the exact restored checkpoint receipt.
+- No terminal handoff before encrypted checkpoint persistence.
+- No publication for an unreviewed or changed work-product identity.
+- No publication above draft pull request.
+- No automatic merge, release, deployment, issue closure, signing, secret use, migration, or provider traffic.
+- No floating Symphony branch or tag in production.
+- No public coordinator or dashboard listener.
 
-## Deferred risks
+## Current gate
 
-The initial code does not provision GitHub Apps, cloud hosts, checkpoint encryption keys, or the Freed factory coordinator. Those operations require separate deployment receipts. The first real writer remains gated until Aubrey explicitly approves the task-scoped authority-claim correction and that extension is reviewed and installed.
+The repository contains tested domain components, not an authorized live factory. Cloud provisioning, GitHub App installation, Symphony patches, the Freed claim extension, native broker installation, and the real Freed pilot remain pending. Every writer stays disabled until those specific gates have current evidence.

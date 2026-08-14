@@ -1,4 +1,4 @@
-import type { HostGatewayReceipt } from "../orchestration/host-gateway.js";
+import type { HostGatewayReceipt } from "../gateway/receipt.js";
 import type { ExactValidationReceipt, IndependentReviewReceipt } from "./receipts.js";
 import type { AdjudicationCommand } from "./command.js";
 import {

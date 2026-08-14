@@ -15,7 +15,7 @@ function keyPair() {
 }
 
 describe("HostGatewayClient", () => {
-  it("signs quota observations and uses a stable Restate idempotency key", async () => {
+  it("signs quota observations and uses a stable request idempotency key", async () => {
     const keys = keyPair();
     let requestedUrl = "";
     let request: RequestInit | undefined;

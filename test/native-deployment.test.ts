@@ -9,64 +9,48 @@ async function fixture(relative: string): Promise<string> {
 }
 
 describe("native Linux deployment", () => {
-  it("runs every production service without Docker", async () => {
-    const units = await Promise.all([
-      fixture("deploy/systemd/aubtown-restate.service"),
-      fixture("deploy/systemd/aubtown-control-plane.service"),
-      fixture("deploy/systemd/aubtown-host-edge.service"),
-      fixture("deploy/systemd/aubtown-checkpoint-edge.service"),
-      fixture("deploy/systemd/aubtown-register.service"),
-    ]);
-    expect(units.join("\n")).not.toMatch(/docker/i);
-    expect(units.join("\n")).not.toContain("0.0.0.0");
-    expect(units.join("\n")).toContain("AUBTOWN_BIND_HOST=127.0.0.1");
-    expect(units.join("\n")).toContain("AUBTOWN_ENABLE_INTEGRATION_HARNESS=false");
-  });
-
-  it("pins Restate and keeps its interfaces on loopback", async () => {
-    const unit = await fixture("deploy/systemd/aubtown-restate.service");
-    const config = await fixture("deploy/restate/restate.toml");
-    const installer = await fixture("scripts/install-restate-linux.sh");
-    expect(unit).toContain("/opt/aubtown/restate/1.7.3/restate-server");
+  it("runs one pinned Symphony coordinator without containers or Restate", async () => {
+    const unit = await fixture("deploy/systemd/aubtown-symphony.service");
     expect(unit).toContain(
-      "RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=",
+      "/opt/aubtown/symphony/8001b52e3062495a16e520e4ceaf8f9de868c4d0/symphony",
     );
-    expect(config).toContain('base-dir = "/var/lib/aubtown/restate"');
-    expect(config.match(/127\.0\.0\.1/g)?.length).toBeGreaterThanOrEqual(6);
-    expect(config).toContain('disable-web-ui = true');
-    expect(installer).toContain('version="1.7.3"');
-    expect(installer).toContain("7446cb12197a15e2c230cc9df050e40e4cc89499edaead1ff614b55cb9b4a140");
-    expect(installer).toContain("ff3ed6682ab3ee2f22431f5d491c18b24fc8f0474d7e492234cfe32cbd48017d");
+    expect(unit).toContain("/etc/aubtown/WORKFLOW.md");
+    expect(unit).toContain("--port 7080");
+    expect(unit).not.toMatch(/docker|compose|restate/iu);
   });
 
-  it("uses the Restate 1.7 request-identity setting in the optional harness", async () => {
-    const compose = await fixture("deploy/compose.production.yaml");
-    expect(compose).toContain(
-      "RESTATE_WORKER__INVOKER__REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=",
+  it("keeps coordinator and checkpoint credentials under distinct users", async () => {
+    const symphony = await fixture("deploy/systemd/aubtown-symphony.service");
+    const checkpoint = await fixture(
+      "deploy/systemd/aubtown-checkpoint-edge.service",
     );
-    expect(compose).not.toContain("RESTATE_REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=");
+    expect(symphony).toContain("User=aubtown-symphony");
+    expect(checkpoint).toContain("User=aubtown-checkpoint");
+    expect(symphony).not.toContain("CHECKPOINT_RECEIPT_PRIVATE_KEY");
+    expect(checkpoint).not.toContain("GITHUB_APP_PRIVATE_KEY");
   });
 
-  it("uses distinct users for state and secret boundaries", async () => {
-    const users = await Promise.all([
-      fixture("deploy/systemd/aubtown-restate.service"),
-      fixture("deploy/systemd/aubtown-control-plane.service"),
-      fixture("deploy/systemd/aubtown-host-edge.service"),
-      fixture("deploy/systemd/aubtown-checkpoint-edge.service"),
-    ]);
-    expect(users[0]).toContain("User=aubtown-restate");
-    expect(users[1]).toContain("User=aubtown-control");
-    expect(users[2]).toContain("User=aubtown-edge");
-    expect(users[3]).toContain("User=aubtown-checkpoint");
-    expect(new Set(users.map((unit) => unit.match(/^User=(.+)$/m)?.[1])).size).toBe(4);
+  it("keeps mutable state outside the immutable release tree", async () => {
+    const unit = await fixture("deploy/systemd/aubtown-symphony.service");
+    expect(unit).toContain("WorkingDirectory=/var/lib/aubtown/symphony");
+    expect(unit).toContain("StateDirectory=aubtown/symphony aubtown/workspaces");
+    expect(unit).toContain("ReadOnlyPaths=/etc/aubtown");
+    expect(unit).toContain("UMask=0077");
+    expect(unit).not.toContain("ReadWritePaths=/opt/aubtown");
   });
 
-  it("keeps private keys on their required side of the checkpoint boundary", async () => {
-    const control = await fixture("deploy/systemd/control-plane.env.example");
+  it("references GitHub App material by absolute host path", async () => {
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    expect(environment).toContain("AUBTOWN_GITHUB_INSTALLATION_ID=");
+    expect(environment).toContain("AUBTOWN_GITHUB_APP_ID=");
+    expect(environment).toContain(
+      "AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE=/etc/aubtown/keys/github-app-private.pem",
+    );
+    expect(environment).not.toMatch(/BEGIN (?:RSA |EC )?PRIVATE KEY/u);
+  });
+
+  it("keeps private checkpoint keys on the storage edge", async () => {
     const checkpoint = await fixture("deploy/systemd/checkpoint-edge.env.example");
-    expect(control).toContain("CHECKPOINT_GRANT_PRIVATE_KEY_FILE");
-    expect(control).toContain("CHECKPOINT_RECEIPT_PUBLIC_KEY_FILE");
-    expect(control).not.toContain("CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE");
     expect(checkpoint).toContain("CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE");
     expect(checkpoint).toContain("CHECKPOINT_GRANT_PUBLIC_KEY_FILE");
     expect(checkpoint).not.toContain("CHECKPOINT_GRANT_PRIVATE_KEY_FILE");
