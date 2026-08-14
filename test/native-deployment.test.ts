@@ -49,9 +49,15 @@ describe("native Linux deployment", () => {
       "src/cli/publish-symphony-candidate.ts",
     );
     expect(packageJson).toContain('"symphony:publish-candidate"');
+    expect(packageJson).toContain('"symphony:reconcile-candidate"');
     expect(publisher).toContain("AUBTOWN_PRELAUNCH_CANDIDATE_ROOT");
     expect(publisher).toContain("publishSymphonyAdmissionCandidateFile");
     expect(publisher).not.toContain("FreedAuthorityBridge");
+    const reconciler = await fixture(
+      "src/cli/reconcile-symphony-candidate.ts",
+    );
+    expect(reconciler).toContain("publishReconciledAdmissionCandidateFile");
+    expect(reconciler).not.toContain("FreedAuthorityBridge");
   });
 
   it("keeps coordinator and checkpoint credentials under distinct users", async () => {

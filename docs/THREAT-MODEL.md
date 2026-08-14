@@ -34,6 +34,8 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | A candidate file attempts to grant authority | Candidates contain no admission receipt; only an exactly matching existing envelope or a successful reviewed broker response can produce executable authority |
 | A changed candidate reuses stale authority | Envelope reuse requires an exact canonical match; any changed claim, host, task, quota observation, base, or binding goes back through the broker |
 | A stale candidate acquires authority before final denial | Prelaunch revalidates claim age, route, policy, and quota against the actual launch instant before invoking the broker |
+| A route changes between intended claim creation and candidate assembly | Deterministic assembly recomputes the route from fresh host and account state and rejects a claim naming another host |
+| A dead host remains marked online | Heartbeats older than 120 seconds or dated in the future are treated as offline before route selection |
 | Coordinator credential reaches Codex | GitHub App token remains host-side and is scrubbed from the child environment |
 | Installation token becomes long-lived | Broker refreshes a mode-restricted short-lived token; workflow contains no literal token |
 | Malicious issue text executes shell | Qualification data is parsed as data; validation uses reviewed no-shell argv; fixed policy remains outside issue prose |

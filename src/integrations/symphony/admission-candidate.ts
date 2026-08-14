@@ -1,14 +1,11 @@
-import { lstat, readFile, realpath } from "node:fs/promises";
-import path from "node:path";
 import { decideQuota } from "../../policy/quota.js";
 import { assertRuntimeNeutralPilotBinding } from "../../policy/pilot-binding.js";
+import { loadProtectedJsonFile } from "../../security/protected-json.js";
 import {
   SymphonyAdmissionCandidateStore,
   symphonyAdmissionCandidateSchema,
   type SymphonyAdmissionCandidate,
 } from "./admission-envelope.js";
-
-const MAX_CANDIDATE_INPUT_BYTES = 1024 * 1024;
 
 export function prepareSymphonyAdmissionCandidate(
   input: SymphonyAdmissionCandidate,
@@ -48,33 +45,17 @@ export function prepareSymphonyAdmissionCandidate(
   return candidate;
 }
 
-async function loadProtectedCandidateInput(
-  inputFile: string,
-): Promise<SymphonyAdmissionCandidate> {
-  if (!path.isAbsolute(inputFile) || (await realpath(inputFile)) !== inputFile) {
-    throw new Error("Admission candidate input must be one absolute physical file.");
-  }
-  const stats = await lstat(inputFile);
-  if (
-    !stats.isFile() ||
-    stats.isSymbolicLink() ||
-    stats.size < 1 ||
-    stats.size > MAX_CANDIDATE_INPUT_BYTES ||
-    (stats.mode & 0o022) !== 0
-  ) {
-    throw new Error("Admission candidate input must be a protected physical file.");
-  }
-  return symphonyAdmissionCandidateSchema.parse(
-    JSON.parse(await readFile(inputFile, "utf8")),
-  );
-}
-
 export async function publishSymphonyAdmissionCandidateFile(input: {
   readonly inputFile: string;
   readonly candidateRoot: string;
 }): Promise<{ readonly issueId: string; readonly file: string }> {
   const candidate = prepareSymphonyAdmissionCandidate(
-    await loadProtectedCandidateInput(input.inputFile),
+    symphonyAdmissionCandidateSchema.parse(
+      await loadProtectedJsonFile({
+        file: input.inputFile,
+        label: "Admission candidate input",
+      }),
+    ),
   );
   const issueId = candidate.binding.qualification.issue.number.toLocaleString(
     "en-US",

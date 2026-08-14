@@ -45,13 +45,13 @@ No service resolves a security-sensitive executable from an interactive shell co
 
 The Symphony service sets `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, `AUBTOWN_PRELAUNCH_ENVELOPE_ROOT`, and `AUBTOWN_PRELAUNCH_RECEIPT_ROOT` to those absolute admission directories. It also receives absolute reviewed paths for the Freed checkout, canonical state root, pinned Node executable, and claim broker. The coordinator may read candidates and envelopes and create receipts. Workers receive none of these paths. A candidate cannot grant authority. Missing, unsafe, or mismatched paths keep the writer closed.
 
-The trusted read-only reconciler publishes a candidate with the native command below after it has assembled one current qualified route in a mode-0600 JSON file:
+The trusted read-only reconciler first runs AubTown's deterministic assembly boundary over one coherent snapshot. Assembly rejects active-claim and lane count disagreement, pilot concurrency conflicts, stale host heartbeats, missing subscription telemetry, blocked quota, and an intended claim whose host no longer matches the selected route. It then publishes the resulting candidate with the native command below from a mode-0600 JSON file:
 
 ```sh
-/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/publish-symphony-candidate.js /var/lib/aubtown/reconciler/candidate-input.json
+/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reconcile-symphony-candidate.js /var/lib/aubtown/reconciler/dispatch-snapshot.json
 ```
 
-The command reads `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, rejects a symbolic, group-writable, world-writable, oversized, stale, ineligible, route-mismatched, or quota-blocked input, and writes no authority receipt. The source input is transient reconciler state and must be replaced atomically before invocation. The current repository ships this command, but the live reconciler invocation remains disabled until the Freed claim side is installed.
+The command reads `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, rejects a symbolic, group-writable, world-writable, oversized, stale, inconsistent, ineligible, route-mismatched, or quota-blocked snapshot, and writes no authority receipt. The source input is transient reconciler state and must be replaced atomically before invocation. The current repository ships this command, but live GitHub, Freed, host-gateway, and Git-head snapshot collection remains disabled until the Freed claim side is installed.
 
 ## GitHub authentication
 

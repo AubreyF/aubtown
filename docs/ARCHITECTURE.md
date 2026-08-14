@@ -39,14 +39,16 @@ The reviewed patch now supplies:
 
 That boundary begins with one protected host-side candidate. The candidate binds qualification, selected host, current rolling-week usage, daily baseline, intended Freed task and claim, custody epoch, account, driver, and base head. It is non-authoritative. If it exactly matches a protected envelope from the same dispatch, AubTown reuses that envelope. If it changed, AubTown must acquire the new exact claim through the reviewed Freed broker before publishing a replacement envelope. The final boundary recomputes quota at launch time and records the exact claim before returning an admission receipt. Missing, stale, mismatched, repeated, or malformed state denies launch.
 
-The native AubTown candidate publisher accepts one protected physical input file from the trusted reconciler. It applies the same runtime-neutral binding policy used by the Freed bridge, checks route identity and current quota, and publishes a mode-restricted candidate. Prelaunch checks the candidate against the actual launch instant before touching authority. A stale candidate therefore cannot acquire a claim and fail only afterward.
+The reconciler's native snapshot command accepts the qualified issue, matching Freed task, intended claim, active claims and lanes, enrolled host observations, account profiles, usage snapshots, exact base head, and target in one protected file. Its pure assembly boundary enforces pilot concurrency, ignores host heartbeats older than 120 seconds, selects the compatible account and host with current headroom, and rejects a stale intended claim when routing has changed. The same snapshot produces byte-identical candidate state. The command then atomically publishes the protected candidate.
+
+The native AubTown candidate publisher accepts that candidate as one protected physical input file. It applies the same runtime-neutral binding policy used by the Freed bridge, checks route identity and current quota, and publishes a mode-restricted candidate. Prelaunch checks the candidate against the actual launch instant before touching authority. A stale candidate therefore cannot acquire a claim and fail only afterward.
 
 The AubTown bridge caller constructs the exact canonical claim request, invokes one absolute reviewed broker without a shell or inherited credentials, verifies every returned identity, and retries one lost local response with the same operation ID. It publishes the envelope only after successful claim acquisition. If envelope publication fails, it requests release of that exact claim. The prelaunch hook resolves candidates through this bridge and reuses only byte-equivalent dispatch state. The Freed command and installed broker remain pending, so this code cannot yet grant live authority.
 
 The remaining integration work is:
 
 - connect the admission command to Freed's task-scoped claim operations
-- connect the read-only reconciler to the native candidate publisher
+- connect live read-only adapters to the reconciler assembly and native candidate publisher
 - stage and attest deterministic Freed worktrees through `scripts/worktree-add.sh`
 - full startup reconciliation around upstream's memory-only blocked and retry maps so a blocked exact claim can be released and replaced automatically when no worker launched
 
