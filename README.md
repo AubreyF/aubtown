@@ -32,9 +32,10 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - Fail-closed Symphony prelaunch admission and capability-aware host routing
 - Append-only exact-claim prelaunch receipts that survive coordinator restart
 - A no-shell Freed claim broker caller with exact response-loss retry and protected envelope handoff
+- Protected non-authoritative dispatch candidates with matching-envelope reuse
 - A Freed workflow that accepts only helper-prepared, policy-safe worktrees
 
-The checked-in Symphony prelaunch executable admits only a protected host-side envelope that binds a current Freed task and claim, safe fresh quota, the selected host, and the exact dispatch. It atomically records that claim before returning success, so a restart or concurrent process cannot admit it twice. The real writer remains disabled because no production component creates those envelopes until the Freed task-claim commands exist. Passing tests does not authorize a live issue or GitHub write.
+The checked-in Symphony prelaunch executable resolves a protected dispatch candidate before launch. A candidate is a request, not authority. An unchanged candidate may reuse its matching protected envelope. A changed candidate must acquire a new exact Freed claim through the reviewed host broker before AubTown publishes a replacement envelope. The final boundary then checks fresh quota and atomically records the exact claim, so a restart or concurrent process cannot admit it twice. The real writer remains disabled because the Freed task-claim commands and production candidate producer do not exist yet. Passing tests does not authorize a live issue or GitHub write.
 
 ## Development
 

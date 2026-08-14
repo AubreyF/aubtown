@@ -79,9 +79,10 @@ Immediately before Symphony launches a worker, the bridge must:
 2. Re-read the exact active Freed task.
 3. Verify issue number, URL, task revision, task state, provider authority, behavior flag, and execution ceiling.
 4. Check quota, host capability, branch, worktree, pull-request, and conflict state.
-5. Acquire or reconcile the exact task claim through the supported command.
-6. Return a redacted receipt that binds task revision, claim ID, custody epoch, host, worker, base commit, conflict digest, and expiry of the admission decision.
-7. Publish one protected per-issue admission envelope, then let the final Symphony boundary recompute quota and atomically record the exact claim before returning success.
+5. Publish one protected non-authoritative candidate that binds the exact dispatch state.
+6. Reuse an existing envelope only when it exactly matches that candidate. Otherwise acquire or reconcile the candidate's exact task claim through the supported command.
+7. Return a redacted receipt that binds task revision, claim ID, custody epoch, host, worker, base commit, conflict digest, and expiry of the admission decision.
+8. Publish one protected per-issue admission envelope, then let the final Symphony boundary recompute quota and atomically record the exact claim before returning success.
 
 Symphony may start work only when the receipt still matches a final prelaunch reread. A receipt is not transferable to another issue, host, branch, account, driver, or base commit.
 
@@ -108,4 +109,4 @@ It exposes no generic shell, file, lease, or task-mutation endpoint. The Mac is 
 
 ## Current implementation gate
 
-`FreedAuthorityBridge.inspect`, the broker caller, exact response validation, response-loss retry, exact release, protected envelope publication, and publication-failure release are implemented and tested in AubTown. The adapter remains fail-closed when the reviewed broker path is absent. Freed still needs the matching commands, transaction schema, events, coordinator actor, and installed Linux broker. No real AubTown writer may be enabled before both sides pass integration tests.
+`FreedAuthorityBridge.inspect`, the broker caller, exact response validation, response-loss retry, exact release, protected candidate loading, exact envelope reuse, protected envelope publication, and publication-failure release are implemented and tested in AubTown. The adapter remains fail-closed when the reviewed broker path is absent for a changed candidate. Freed still needs the matching commands, transaction schema, events, coordinator actor, installed Linux broker, and production candidate producer. No real AubTown writer may be enabled before both sides pass integration tests.

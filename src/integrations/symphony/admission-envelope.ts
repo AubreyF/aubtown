@@ -45,6 +45,17 @@ export interface SymphonyAdmissionEnvelope {
   readonly admission: ExecutionAdmission;
 }
 
+export interface SymphonyAdmissionCandidate {
+  readonly schemaVersion: 1;
+  readonly preparedAt: string;
+  readonly selectedHost: {
+    readonly id: string;
+    readonly lane: "linux" | "macos";
+  };
+  readonly usage: AccountUsageSnapshot;
+  readonly binding: ExecutionAdmissionBinding;
+}
+
 const hostIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
 export const symphonyAdmissionEnvelopeSchema: z.ZodType<SymphonyAdmissionEnvelope> =
@@ -58,6 +69,18 @@ export const symphonyAdmissionEnvelopeSchema: z.ZodType<SymphonyAdmissionEnvelop
     usage: accountUsageSnapshotSchema,
     binding: executionAdmissionBindingSchema,
     admission: executionAdmissionSchema,
+  }).strict();
+
+export const symphonyAdmissionCandidateSchema: z.ZodType<SymphonyAdmissionCandidate> =
+  z.object({
+    schemaVersion: z.literal(1),
+    preparedAt: z.iso.datetime(),
+    selectedHost: z.object({
+      id: z.string().regex(hostIdPattern),
+      lane: z.enum(["linux", "macos"]),
+    }),
+    usage: accountUsageSnapshotSchema,
+    binding: executionAdmissionBindingSchema,
   }).strict();
 
 export interface SymphonyPrelaunchReceipt {
@@ -160,6 +183,21 @@ export async function loadSymphonyAdmissionEnvelope(
   const stats = await lstat(file);
   assertProtectedFile(stats, "Symphony admission envelope");
   return symphonyAdmissionEnvelopeSchema.parse(
+    JSON.parse(await readFile(file, "utf8")),
+  );
+}
+
+export async function loadSymphonyAdmissionCandidate(
+  root: string,
+  issueId: string,
+): Promise<SymphonyAdmissionCandidate> {
+  const file = resolveSymphonyAdmissionEnvelopePath(root, issueId);
+  if ((await realpath(file)) !== file) {
+    throw new Error("Symphony admission candidate path cannot contain symbolic links.");
+  }
+  const stats = await lstat(file);
+  assertProtectedFile(stats, "Symphony admission candidate");
+  return symphonyAdmissionCandidateSchema.parse(
     JSON.parse(await readFile(file, "utf8")),
   );
 }
@@ -282,6 +320,61 @@ async function syncDirectory(directoryPath: string): Promise<void> {
   }
 }
 
+async function publishProtectedJson(input: {
+  readonly root: string;
+  readonly file: string;
+  readonly value: unknown;
+  readonly label: string;
+}): Promise<void> {
+  await admitPrivateDirectory(input.root, `${input.label} root`);
+  const staging = `${input.file}.staging-${randomUUID()}`;
+  const handle = await open(staging, "wx", 0o600);
+  try {
+    await handle.writeFile(`${JSON.stringify(input.value, null, 2)}\n`);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  try {
+    await rename(staging, input.file);
+    await syncDirectory(input.root);
+  } catch (error) {
+    await unlink(staging).catch((cleanupError: NodeJS.ErrnoException) => {
+      if (cleanupError.code !== "ENOENT") {
+        throw cleanupError;
+      }
+    });
+    throw error;
+  }
+}
+
+export class SymphonyAdmissionCandidateStore {
+  constructor(private readonly root: string) {}
+
+  async publish(candidate: SymphonyAdmissionCandidate): Promise<string> {
+    const parsed = symphonyAdmissionCandidateSchema.parse(candidate);
+    const issueId = parsed.binding.qualification.issue.number.toLocaleString(
+      "en-US",
+      { useGrouping: false },
+    );
+    if (!exactIssueBinding(parsed.binding)) {
+      throw new Error("Symphony admission candidate does not bind one exact issue.");
+    }
+    const file = resolveSymphonyAdmissionEnvelopePath(this.root, issueId);
+    await publishProtectedJson({
+      root: this.root,
+      file,
+      value: parsed,
+      label: "Symphony admission candidate",
+    });
+    const admitted = await loadSymphonyAdmissionCandidate(this.root, issueId);
+    if (!Buffer.from(canonicalJson(admitted)).equals(canonicalJson(parsed))) {
+      throw new Error("Symphony admission candidate readback changed after publication.");
+    }
+    return file;
+  }
+}
+
 export class SymphonyAdmissionEnvelopeStore {
   constructor(private readonly root: string) {}
 
@@ -294,30 +387,13 @@ export class SymphonyAdmissionEnvelopeStore {
     if (!exactIssueBinding(parsed.binding)) {
       throw new Error("Symphony admission envelope does not bind one exact issue.");
     }
-    await admitPrivateDirectory(
-      this.root,
-      "Symphony admission envelope root",
-    );
     const file = resolveSymphonyAdmissionEnvelopePath(this.root, issueId);
-    const staging = `${file}.staging-${randomUUID()}`;
-    const handle = await open(staging, "wx", 0o600);
-    try {
-      await handle.writeFile(`${JSON.stringify(parsed, null, 2)}\n`);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    try {
-      await rename(staging, file);
-      await syncDirectory(this.root);
-    } catch (error) {
-      await unlink(staging).catch((cleanupError: NodeJS.ErrnoException) => {
-        if (cleanupError.code !== "ENOENT") {
-          throw cleanupError;
-        }
-      });
-      throw error;
-    }
+    await publishProtectedJson({
+      root: this.root,
+      file,
+      value: parsed,
+      label: "Symphony admission envelope",
+    });
     const admitted = await loadSymphonyAdmissionEnvelope(this.root, issueId);
     if (!Buffer.from(canonicalJson(admitted)).equals(canonicalJson(parsed))) {
       throw new Error("Symphony admission envelope readback changed after publication.");

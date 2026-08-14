@@ -34,6 +34,7 @@ The future authority broker runs under its own service identity beside the canon
 - `/etc/aubtown/ssh/config`: root-owned worker aliases and host-key policy
 - `/etc/aubtown/keys`: service-specific private credentials
 - `/var/lib/aubtown/symphony`: coordinator state and `CODEX_HOME`
+- `/var/lib/aubtown/admission/candidates`: protected non-authoritative per-issue dispatch requests
 - `/var/lib/aubtown/admission/envelopes`: protected per-issue Freed authority and quota envelopes
 - `/var/lib/aubtown/admission/receipts`: append-only exact-claim prelaunch receipts
 - `/var/lib/aubtown/workspaces`: per-issue worktrees
@@ -42,7 +43,7 @@ The future authority broker runs under its own service identity beside the canon
 
 No service resolves a security-sensitive executable from an interactive shell configuration. Git, Codex, AubTown hooks, and the Symphony executable use reviewed absolute paths.
 
-The Symphony service sets `AUBTOWN_PRELAUNCH_ENVELOPE_ROOT` and `AUBTOWN_PRELAUNCH_RECEIPT_ROOT` to those absolute admission directories. The coordinator identity may read envelopes and create receipts. Workers receive neither directory. Missing or unsafe paths keep the writer closed.
+The Symphony service sets `AUBTOWN_PRELAUNCH_CANDIDATE_ROOT`, `AUBTOWN_PRELAUNCH_ENVELOPE_ROOT`, and `AUBTOWN_PRELAUNCH_RECEIPT_ROOT` to those absolute admission directories. It also receives absolute reviewed paths for the Freed checkout, canonical state root, pinned Node executable, and claim broker. The coordinator may read candidates and envelopes and create receipts. Workers receive none of these paths. A candidate cannot grant authority. Missing, unsafe, or mismatched paths keep the writer closed.
 
 ## GitHub authentication
 
@@ -90,7 +91,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
 9. Install the Symphony workflow and SSH configuration.
-10. Run the read-only upstream, host, quota, issue, task, branch, and workspace checks.
+10. Run the read-only upstream, host, quota, issue, task, branch, and workspace checks, then publish one protected non-authoritative candidate.
 11. Run the fake worker, exact-claim restart, concurrent prelaunch, rolling-week, daily ceiling, and Mac-offline Linux routing proofs.
 12. Keep the writer disabled until the Freed task-claim integration test passes.
 

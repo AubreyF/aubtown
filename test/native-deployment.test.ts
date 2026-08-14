@@ -76,10 +76,22 @@ describe("native Linux deployment", () => {
       "GITHUB_TOKEN_FILE=/var/lib/aubtown/symphony/secrets/github.token",
     );
     expect(environment).toContain(
+      "AUBTOWN_PRELAUNCH_CANDIDATE_ROOT=/var/lib/aubtown/admission/candidates",
+    );
+    expect(environment).toContain(
       "AUBTOWN_PRELAUNCH_ENVELOPE_ROOT=/var/lib/aubtown/admission/envelopes",
     );
     expect(environment).toContain(
       "AUBTOWN_PRELAUNCH_RECEIPT_ROOT=/var/lib/aubtown/admission/receipts",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_FREED_CLAIM_BROKER=/opt/freed/bin/factory-coordinator",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_FREED_REPOSITORY_ROOT=/srv/freed",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_FREED_STATE_ROOT=/var/lib/freed/automation",
     );
     expect(environment).not.toMatch(/BEGIN (?:RSA |EC )?PRIVATE KEY/u);
   });

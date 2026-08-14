@@ -257,6 +257,22 @@ describe("Freed adapter", () => {
     expect(runner.requests).toHaveLength(0);
   });
 
+  it("keeps claim acquisition closed when no reviewed broker is installed", async () => {
+    const runner = new HandlerRunner((request) => brokerResponse(request));
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+    });
+    await expect(
+      bridge.acquire({
+        binding: binding(),
+        now: "2026-08-13T18:00:00.000Z",
+      }),
+    ).rejects.toThrow("require the reviewed coordinator broker");
+    expect(runner.requests).toHaveLength(0);
+  });
+
   it("releases only the exact admitted claim and retains one retry identity", async () => {
     const runner = new HandlerRunner((request, attempt) => {
       if (attempt === 1) {

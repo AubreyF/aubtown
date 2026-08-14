@@ -21,13 +21,18 @@ import type {
 import type { HostRecord } from "../src/domain/types.js";
 import {
   authorizeSymphonyPrelaunch,
+  loadSymphonyAdmissionCandidate,
   loadSymphonyAdmissionEnvelope,
   resolveSymphonyAdmissionEnvelopePath,
+  SymphonyAdmissionCandidateStore,
   SymphonyAdmissionEnvelopeStore,
   SymphonyPrelaunchReceiptStore,
   type SymphonyAdmissionEnvelope,
 } from "../src/integrations/symphony/admission-envelope.js";
-import { SymphonyAdmissionPreparer } from "../src/integrations/symphony/prepare-admission.js";
+import {
+  SymphonyAdmissionPreparer,
+  symphonyEnvelopeMatchesCandidate,
+} from "../src/integrations/symphony/prepare-admission.js";
 import { parseSymphonyPrelaunchRequest } from "../src/integrations/symphony/prelaunch.js";
 import { planExecutionRouteFromState } from "../src/orchestration/route-planner.js";
 import { authorityTask, claim, report, usage } from "./helpers.js";
@@ -114,6 +119,13 @@ function envelope(
   };
 }
 
+function candidate(
+  overrides: Parameters<typeof envelope>[0] = {},
+): Omit<SymphonyAdmissionEnvelope, "admission"> {
+  const { admission: _admission, ...prepared } = envelope(overrides);
+  return prepared;
+}
+
 async function temporaryRoot(prefix: string): Promise<string> {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), prefix)));
   roots.push(root);
@@ -121,6 +133,79 @@ async function temporaryRoot(prefix: string): Promise<string> {
 }
 
 describe("Symphony final admission envelope", () => {
+  it("persists a protected non-authoritative candidate", async () => {
+    const root = await temporaryRoot("aubtown-candidate-");
+    const candidateRoot = path.join(root, "candidates");
+    const prepared = candidate();
+    const file = await new SymphonyAdmissionCandidateStore(candidateRoot).publish(
+      prepared,
+    );
+    expect(file).toBe(path.join(candidateRoot, "issue-1234.json"));
+    await expect(
+      loadSymphonyAdmissionCandidate(candidateRoot, "1234"),
+    ).resolves.toEqual(prepared);
+    await chmod(file, 0o666);
+    await expect(
+      loadSymphonyAdmissionCandidate(candidateRoot, "1234"),
+    ).rejects.toThrow("protected physical file");
+  });
+
+  it("reuses a matching envelope without reacquiring authority", async () => {
+    const root = await temporaryRoot("aubtown-envelope-reuse-");
+    const current = envelope();
+    let acquisitions = 0;
+    const authority: AuthorityBridge = {
+      id: "freed-authority-v1",
+      inspect: async () => ({ active: true, reason: "test" }),
+      acquire: async () => {
+        acquisitions += 1;
+        return current.admission;
+      },
+      release: async () => {},
+    };
+    const resolved = await new SymphonyAdmissionPreparer(
+      authority,
+      new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
+    ).resolve({ candidate: candidate(), currentEnvelope: current });
+    expect(resolved).toEqual(current);
+    expect(acquisitions).toBe(0);
+    expect(
+      symphonyEnvelopeMatchesCandidate({
+        envelope: current,
+        candidate: candidate(),
+      }),
+    ).toBe(true);
+  });
+
+  it("acquires a changed claim instead of reusing an old envelope", async () => {
+    const root = await temporaryRoot("aubtown-envelope-changed-");
+    const current = envelope({ claimId: "claim-1234-epoch-1" });
+    const next = envelope({ claimId: "claim-1234-epoch-2" });
+    let acquisitions = 0;
+    const authority: AuthorityBridge = {
+      id: "freed-authority-v1",
+      inspect: async () => ({ active: true, reason: "test" }),
+      acquire: async () => {
+        acquisitions += 1;
+        return next.admission;
+      },
+      release: async () => {},
+    };
+    const envelopeRoot = path.join(root, "envelopes");
+    const resolved = await new SymphonyAdmissionPreparer(
+      authority,
+      new SymphonyAdmissionEnvelopeStore(envelopeRoot),
+    ).resolve({
+      candidate: candidate({ claimId: "claim-1234-epoch-2" }),
+      currentEnvelope: current,
+    });
+    expect(resolved.admission.authorityClaimId).toBe("claim-1234-epoch-2");
+    expect(acquisitions).toBe(1);
+    await expect(
+      loadSymphonyAdmissionEnvelope(envelopeRoot, "1234"),
+    ).resolves.toEqual(resolved);
+  });
+
   it("publishes a protected envelope only after acquiring exact authority", async () => {
     const root = await temporaryRoot("aubtown-envelope-prepare-");
     const candidate = envelope();

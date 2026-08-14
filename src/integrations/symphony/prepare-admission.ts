@@ -4,9 +4,29 @@ import { accountUsageSnapshotSchema } from "../../domain/schemas.js";
 import type { AccountUsageSnapshot, HostLane } from "../../domain/types.js";
 import {
   SymphonyAdmissionEnvelopeStore,
+  symphonyAdmissionCandidateSchema,
   symphonyAdmissionEnvelopeSchema,
+  type SymphonyAdmissionCandidate,
   type SymphonyAdmissionEnvelope,
 } from "./admission-envelope.js";
+import { canonicalJson } from "../../security/canonical-json.js";
+
+export function symphonyEnvelopeMatchesCandidate(input: {
+  readonly envelope: SymphonyAdmissionEnvelope;
+  readonly candidate: SymphonyAdmissionCandidate;
+}): boolean {
+  const envelope = symphonyAdmissionEnvelopeSchema.parse(input.envelope);
+  const candidate = symphonyAdmissionCandidateSchema.parse(input.candidate);
+  return Buffer.from(
+    canonicalJson({
+      schemaVersion: envelope.schemaVersion,
+      preparedAt: envelope.preparedAt,
+      selectedHost: envelope.selectedHost,
+      usage: envelope.usage,
+      binding: envelope.binding,
+    }),
+  ).equals(canonicalJson(candidate));
+}
 
 export class SymphonyAdmissionPreparer {
   constructor(
@@ -64,5 +84,27 @@ export class SymphonyAdmissionPreparer {
       }
       throw publicationError;
     }
+  }
+
+  async resolve(input: {
+    readonly candidate: SymphonyAdmissionCandidate;
+    readonly currentEnvelope?: SymphonyAdmissionEnvelope;
+  }): Promise<SymphonyAdmissionEnvelope> {
+    const candidate = symphonyAdmissionCandidateSchema.parse(input.candidate);
+    if (
+      input.currentEnvelope !== undefined &&
+      symphonyEnvelopeMatchesCandidate({
+        envelope: input.currentEnvelope,
+        candidate,
+      })
+    ) {
+      return symphonyAdmissionEnvelopeSchema.parse(input.currentEnvelope);
+    }
+    return await this.prepare({
+      binding: candidate.binding,
+      selectedHost: candidate.selectedHost,
+      usage: candidate.usage,
+      now: candidate.preparedAt,
+    });
   }
 }

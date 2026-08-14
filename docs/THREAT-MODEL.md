@@ -31,6 +31,8 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 | A worker edits Freed authority files | Worker has no authority credential or canonical state-root access; bridge uses supported commands only |
 | Claim broker returns another task or claim | AubTown compares operation, task revision, claim, custody epoch, binding digest, conflict digest, and bridge identity before publishing an envelope |
 | Claim commits but broker response is lost | One local retry reuses byte-identical canonical JSON and the same operation ID; Freed must return the original idempotent receipt |
+| A candidate file attempts to grant authority | Candidates contain no admission receipt; only an exactly matching existing envelope or a successful reviewed broker response can produce executable authority |
+| A changed candidate reuses stale authority | Envelope reuse requires an exact canonical match; any changed claim, host, task, quota observation, base, or binding goes back through the broker |
 | Coordinator credential reaches Codex | GitHub App token remains host-side and is scrubbed from the child environment |
 | Installation token becomes long-lived | Broker refreshes a mode-restricted short-lived token; workflow contains no literal token |
 | Malicious issue text executes shell | Qualification data is parsed as data; validation uses reviewed no-shell argv; fixed policy remains outside issue prose |
@@ -58,6 +60,7 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 - One claim, one branch, one worktree, one worker owner.
 - No dispatch from `debt` alone.
 - No dispatch without `factory:ready`, complete qualification, fresh quota, and compatible host evidence.
+- No dispatch authority from a candidate file alone.
 - No direct mutation of Freed authority files.
 - No provider-visible or sensitive unattended execution.
 - No new dispatch when subscription telemetry is stale or protected capacity would be crossed.
@@ -71,4 +74,4 @@ Symphony may schedule only after AubTown admission. AubTown may admit only after
 
 ## Current gate
 
-The repository contains tested domain components and a reviewed Symphony patch, not an authorized live factory. The checked-in prelaunch executable now admits only a protected envelope carrying a valid current Freed claim, safe fresh quota, compatible host binding, and exact authority admission. It records the claim before returning success and blocks that claim after restart. No production component creates those envelopes yet. Cloud provisioning, GitHub App installation, the Freed claim extension, native service installation, full startup reconciliation, and the real Freed pilot remain pending.
+The repository contains tested domain components and a reviewed Symphony patch, not an authorized live factory. The checked-in prelaunch executable loads a protected non-authoritative candidate, reuses only an exact matching envelope, and sends any changed dispatch through the reviewed Freed broker. It admits only a protected envelope carrying a valid current Freed claim, safe fresh quota, compatible host binding, and exact authority admission. It records the claim before returning success and blocks that claim after restart. No production component creates candidates yet, and Freed cannot issue the required task claim. Cloud provisioning, GitHub App installation, the Freed claim extension, native service installation, full startup reconciliation, and the real Freed pilot remain pending.
