@@ -86,4 +86,16 @@ describe("qualifyIssue", () => {
       "release-risk-classified",
     ]);
   });
+
+  it("keeps host capability separate from an explicit runtime-neutral lane", () => {
+    const result = qualifyIssue({
+      repository: FREED_REPOSITORY,
+      issue: issue(),
+      evidence: evidence({ hostLane: "macos", lane: "runtime-neutral" }),
+      requireExecutionAuthority: false,
+    });
+    expect(result.hostLane).toBe("macos");
+    expect(result.workLane).toBe("runtime-neutral");
+    expect(result.conflictDomains).toContain("lane:macos");
+  });
 });

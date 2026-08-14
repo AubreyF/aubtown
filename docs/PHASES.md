@@ -43,6 +43,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Implement a native protected reconciler CLI for pilot conflict, host, account, route, quota, and claim state.
 - [x] Implement a native signed host gateway with durable heartbeat, quota, replay, and restart state.
 - [x] Implement the native read-only GitHub, Freed task, host, quota, ref, pull-request, and worktree planning snapshot.
+- [x] Derive one deterministic fail-closed dispatch intention with host-specific workspace custody.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
 - [ ] Execute one owner-selected low-risk runtime-neutral issue at concurrency one.

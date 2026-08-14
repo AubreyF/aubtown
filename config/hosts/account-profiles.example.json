@@ -1,0 +1,7 @@
+{
+  "codex-pro-1": {
+    "driverId": "codex-app-server-v1",
+    "enabled": true,
+    "hostIds": ["linux-control-1", "macos-executor-1"]
+  }
+}

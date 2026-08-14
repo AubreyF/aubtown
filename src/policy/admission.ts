@@ -42,9 +42,6 @@ export function deriveWorkLane(evidence: IssueEvidence): WorkLane {
   if (evidence.releaseOrMigrationRisk === true) {
     return "release";
   }
-  if (evidence.hostLane === "macos") {
-    return "macos";
-  }
   if (evidence.logicalLocks?.some((lock) => SENSITIVE_LOCKS.has(lock))) {
     return "sensitive";
   }
@@ -53,6 +50,9 @@ export function deriveWorkLane(evidence: IssueEvidence): WorkLane {
   }
   if (evidence.lane !== undefined) {
     return evidence.lane;
+  }
+  if (evidence.hostLane === "macos") {
+    return "macos";
   }
   return "runtime-neutral";
 }

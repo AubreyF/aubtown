@@ -1,0 +1,4 @@
+{
+  "linux-control-1": "/var/lib/aubtown/workspaces",
+  "macos-executor-1": "/Users/replace-with-worker-user/.aubtown/workspaces"
+}

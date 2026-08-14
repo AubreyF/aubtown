@@ -5,6 +5,8 @@ import { Octokit } from "@octokit/rest";
 import { ProcessCommandRunner } from "../adapters/command-runner.js";
 import { FreedAuthorityBridge } from "../adapters/freed/authority-bridge.js";
 import { GitHubLivePlanningReader } from "../adapters/github/planning-source.js";
+import { loadExecutionAccountProfiles } from "../config/account-profiles.js";
+import { loadHostWorkspaceRoots } from "../config/host-workspaces.js";
 import { readInstallationTokenFile } from "../credentials/token-file.js";
 import type { RepositoryRef } from "../domain/types.js";
 import { HostObservationJournal } from "../gateway/host-observation-journal.js";
@@ -13,6 +15,7 @@ import {
   GitLocalRepositoryPlanningReader,
   LivePlanningSnapshotCollector,
 } from "../orchestration/live-planning-snapshot.js";
+import { buildStableDispatchIntention } from "../orchestration/dispatch-intention.js";
 import { loadHostEnrollments } from "../security/host-enrollment.js";
 import { writeProtectedJsonFile } from "../security/protected-json.js";
 
@@ -54,6 +57,7 @@ function repository(): RepositoryRef {
 }
 
 const token = await readInstallationTokenFile(absolute("GITHUB_TOKEN_FILE"));
+const enrollments = await loadHostEnrollments(process.env);
 const runner = new ProcessCommandRunner();
 const freedRoot = absolute("AUBTOWN_FREED_REPOSITORY_ROOT");
 const authorityBridge = new FreedAuthorityBridge(runner, {
@@ -66,7 +70,7 @@ const collector = new LivePlanningSnapshotCollector(
   new BridgePlanningAuthorityReader(authorityBridge),
   new HostObservationJournal(
     absolute("AUBTOWN_HOST_OBSERVATION_JOURNAL_FILE"),
-    await loadHostEnrollments(process.env),
+    enrollments,
   ),
   new GitLocalRepositoryPlanningReader(
     runner,
@@ -79,11 +83,25 @@ const report = await collector.collect({
   repositoryRoot: freedRoot,
   now: new Date().toISOString(),
 });
+const dispatch = buildStableDispatchIntention({
+  snapshot: report,
+  accountProfiles: await loadExecutionAccountProfiles(process.env, enrollments),
+  hostWorkspaceRoots: await loadHostWorkspaceRoots(
+    absolute("AUBTOWN_HOST_WORKSPACE_ROOTS_FILE"),
+    enrollments,
+  ),
+});
 const outputFile = absolute("AUBTOWN_PLANNING_SNAPSHOT_FILE");
 await writeProtectedJsonFile({
   file: outputFile,
   label: "Live planning snapshot",
   value: report,
+});
+const dispatchFile = absolute("AUBTOWN_DISPATCH_INTENTION_FILE");
+await writeProtectedJsonFile({
+  file: dispatchFile,
+  label: "Stable dispatch intention",
+  value: dispatch,
 });
 process.stdout.write(
   `${JSON.stringify({
@@ -92,5 +110,7 @@ process.stdout.write(
     planningSafe: report.planningSafe,
     blockerCount: report.blockers.length,
     outputFile,
+    dispatchStatus: dispatch.status,
+    dispatchFile,
   })}\n`,
 );

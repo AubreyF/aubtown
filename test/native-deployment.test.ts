@@ -85,6 +85,15 @@ describe("native Linux deployment", () => {
     expect(environment).toContain(
       "AUBTOWN_PLANNING_SNAPSHOT_FILE=/var/lib/aubtown/coordinator/planning-snapshot.json",
     );
+    expect(environment).toContain(
+      "AUBTOWN_DISPATCH_INTENTION_FILE=/var/lib/aubtown/coordinator/dispatch-intention.json",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_ACCOUNT_PROFILES_FILE=/etc/aubtown/account-profiles.json",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_HOST_WORKSPACE_ROOTS_FILE=/etc/aubtown/host-workspaces.json",
+    );
     expect(environment).toContain("AUBTOWN_PILOT_ISSUE_NUMBER=");
     expect(`${service}\n${timer}`).not.toMatch(/docker|compose|restate/iu);
   });
