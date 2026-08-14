@@ -8,8 +8,9 @@
     "node": ">=24.14.1"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "check": "npm run typecheck && npm test",
+    "build": "tsc -p tsconfig.build.json && npm run build:broker",
+    "build:broker": "go build -trimpath -o dist/factory-coordinator ./cmd/factory-coordinator",
+    "check": "npm run typecheck && npm test && npm run test:broker",
     "check:symphony": "node scripts/check-symphony-upstream.mjs",
     "check:symphony:upstream": "node scripts/check-symphony-upstream.mjs --network",
     "github:refresh-token": "tsx src/cli/refresh-github-token.ts",
@@ -32,6 +33,7 @@
     "shadow": "tsx src/cli/shadow.ts",
     "shadow:github": "tsx src/cli/shadow-github.ts",
     "test": "vitest run",
+    "test:broker": "go test ./...",
     "test:native-deployment": "vitest run test/native-deployment.test.ts test/network-config.test.ts",
     "test:pilot-readiness": "vitest run test/pilot-readiness.test.ts",
     "test:watch": "vitest",

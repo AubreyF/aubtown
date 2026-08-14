@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profile": "freed-pilot",
+  "freedRepositoryRoot": "/opt/freed/control/replace-with-reviewed-commit",
+  "stateRoot": "/var/lib/freed/automation",
+  "nodeExecutable": "/opt/aubtown/node/bin/node",
+  "nodeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "automationActorsEntry": "/opt/freed/control/replace-with-reviewed-commit/scripts/automation-actors.mjs",
+  "automationActorsSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "automationControlEntry": "/opt/freed/control/replace-with-reviewed-commit/scripts/automation-control.mjs",
+  "automationControlSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "automationControlLibrary": "/opt/freed/control/replace-with-reviewed-commit/scripts/lib/automation-control.mjs",
+  "automationControlLibrarySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "actorReadinessLibrary": "/opt/freed/control/replace-with-reviewed-commit/scripts/lib/automation-actor-readiness.mjs",
+  "actorReadinessLibrarySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "kernelGuardLibrary": "/opt/freed/control/replace-with-reviewed-commit/scripts/lib/automation-kernel-guard-cutover.mjs",
+  "kernelGuardLibrarySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "actor": "freed-nightly-runner",
+  "leaseName": "nightly-writer"
+}

@@ -1,6 +1,6 @@
 # Freed authority bridge
 
-Status: AubTown broker caller, disposable conformance gate, and envelope handoff implemented; Freed commands and actor pending
+Status: Freed commands published for review; AubTown broker binary implemented but not installed
 
 ## Purpose
 
@@ -10,17 +10,15 @@ The bridge translates one admitted AubTown dispatch into a short Freed control-p
 
 ## Approved authority model
 
-Freed gains one checked-in `freed-factory-coordinator` actor. This actor is initially:
+The initial pilot reuses Freed's reviewed `freed-nightly-runner` actor and
+`nightly-writer` trusted-launcher lease. AubTown does not create another actor
+or give workers that lease. The host broker acquires it for one claim mutation,
+passes the token only to Freed's pinned control command, releases it with an
+exact retry identity, and exits.
 
-- `pr-only`
-- provider-forbidden
-- unable to create tasks
-- unable to transition task lifecycle state
-- authorized only for dedicated execution-claim operations
-
-The coordinator lease exists only while the broker performs a control-plane transaction. It is not a permanent worker lease and does not represent a long-running code writer.
-
-Each active task may hold one top-level `executionClaim`. It is separate from `details` so a claim operation cannot erase issue identity, acceptance criteria, or other task context.
+Active claims and the latest operation receipt for each task are top-level
+projections in Freed's existing `current-tasks.json`. They do not enter task
+`details`, alter the task revision, or create another authority file.
 
 The claim records:
 
@@ -95,10 +93,10 @@ The report binds the physical broker path and SHA-256 digest. `aubtown-pilot-rea
 
 The task transaction and event append remain one recoverable Freed operation. New events are:
 
-- `task_execution_claim_acquired`
-- `task_execution_claim_heartbeat`
-- `task_execution_claim_transferred`
-- `task_execution_claim_released`
+- `task_claim_acquire`
+- `task_claim_heartbeat`
+- `task_claim_transfer`
+- `task_claim_release`
 
 Claims begin at `claimed`. Once Symphony has a live thread and turn, its 30 second active guard moves the claim to `running` and sends an exact heartbeat. Missing or conflicting heartbeat authority interrupts the turn. A native reconciliation timer releases only stale `claimed` records after 120 seconds without a heartbeat and a five-minute initial launch grace. The same reconciler runs before Symphony starts. A stale `running` record remains authoritative custody for workspace recovery or the 24-hour checkpoint transfer path. Heartbeat age never silently discards unpublished work.
 
@@ -121,13 +119,20 @@ Symphony may start work only when the receipt still matches a final prelaunch re
 
 ## Nightly runner coexistence
 
-The existing nightly runner must use the same task-claim primitive before implementation. It skips a task claimed by AubTown or another runner. AubTown skips a task with a different current claim.
-
-The existing `nightly-writer` lease may continue to serialize the legacy nightly loop. AubTown does not acquire or overload it. The global behavioral slot, provider gates, owner review, installed identity, outcome evidence, and soak contracts remain independent.
+The existing nightly runner and AubTown share the same coordinator identity and
+task-claim primitive. The short-lived `nightly-writer` lease serializes only
+control-plane transactions. Task-scoped claims carry concurrent worker custody.
+The global behavioral slot, provider gates, owner review, installed identity,
+outcome evidence, and soak contracts remain independent.
 
 ## Linux authority broker
 
-Linux eventually owns the one canonical Freed authority state root. A root-owned coordinator broker invokes a pinned Freed control runtime locally and returns narrowly scoped receipts. Workers never receive its lease or filesystem access.
+Linux eventually owns the one canonical Freed authority state root. The
+root-owned `factory-coordinator` binary invokes a checksum-pinned Freed control
+runtime locally and returns narrowly scoped receipts. On Linux it reads
+root-owned profiles from `/etc/aubtown/freed-broker-profiles`. The initial Mac
+profile lives under `/Library/Application Support/AubTown/freed-broker-profiles`.
+Workers never receive the coordinator lease or filesystem access.
 
 The broker allowlist is limited to:
 
@@ -142,4 +147,15 @@ It exposes no generic shell, file, lease, or task-mutation endpoint. The Mac is 
 
 ## Current implementation gate
 
-`FreedAuthorityBridge.inspect`, the native protected reconciler and candidate publisher, one shared exact broker client, complete broker-backed claim listing, disposable lifecycle conformance, exact response validation, response-loss retry, exact release, prelaunch freshness check, exact envelope reuse, protected envelope publication, publication-failure release, live read-only planning collector, and deterministic dispatch-intention stage are implemented and tested in AubTown. The collector reads the matching task through the supported Freed command and every active claim through the reviewed broker, both with empty child environments. A missing or malformed claim list blocks planning. The adapter remains fail-closed when the reviewed broker path is absent. Freed still needs the matching claim commands, transaction schema, events, coordinator actor, and installed Linux broker. No real writer may be enabled before both sides pass integration tests and the installed broker passes the disposable gate.
+`FreedAuthorityBridge.inspect`, the protected reconciler and candidate
+publisher, shared exact broker client, complete claim listing, disposable
+lifecycle conformance, exact response validation, response-loss retry, exact
+release, prelaunch freshness, envelope publication, live planning collector,
+and deterministic dispatch intention are implemented and tested in AubTown.
+Freed draft PR #1491 supplies the matching claim commands, transaction
+projection, recovery, and event history. AubTown now builds the cross-platform
+`factory-coordinator` binary, which pins every Freed runtime file by checksum,
+scrubs child environments, keeps lease tokens out of arguments and output, and
+releases the coordinator lease after success or rejection. Review, installation,
+disposable conformance against the real Freed commands, and the owner-selected
+pilot remain pending. No real writer may be enabled before those gates pass.

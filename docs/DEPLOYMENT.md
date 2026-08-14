@@ -1,6 +1,6 @@
 # Deployment contract
 
-Status: native deployment skeleton, writer disabled
+Status: native deployment skeleton and authority broker source, writer disabled
 
 ## Pilot topology
 
@@ -39,7 +39,12 @@ The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every
 
 The optional checkpoint edge runs separately and owns storage credentials. Workers receive encrypted checkpoint bytes and short-lived grants, not bucket credentials.
 
-The future authority broker runs under its own service identity beside the canonical Freed state root. Symphony and workers receive scoped receipts, not authority tokens or direct state-root access.
+The `factory-coordinator` broker is a one-shot Go binary beside the canonical
+Freed state root. It is not a resident service. Read operations invoke the
+pinned Freed CLI without authority. Mutations acquire the installed trusted
+nightly coordinator lease, invoke one allowlisted claim command, release the
+lease with one exact bounded retry, and exit. Symphony and workers receive
+scoped receipts, not authority tokens or direct state-root access.
 
 ## Filesystem ownership
 
@@ -47,6 +52,7 @@ The future authority broker runs under its own service identity beside the canon
 - `/opt/aubtown/releases/<revision>`: immutable AubTown build and hooks
 - `/etc/aubtown/WORKFLOW.md`: root-owned reviewed workflow
 - `/etc/aubtown/symphony.env`: mode-restricted non-secret paths and secret references
+- `/etc/aubtown/freed-broker-profiles/freed-pilot.json`: root-owned Linux broker profile with exact runtime checksums
 - `/etc/aubtown/ssh/config`: root-owned worker aliases and host-key policy
 - `/etc/aubtown/ssh/worker_ed25519`: coordinator-to-executor private key, mode 0600
 - `/etc/aubtown/ssh/known_hosts`: explicit host-key aliases for the enrolled Linux and macOS hosts
@@ -70,6 +76,14 @@ The future authority broker runs under its own service identity beside the canon
 - `/var/lib/aubtown/executor/handoffs`: mode-0700 content-addressed executor custody manifests and active-workspace pointers
 - `/var/lib/aubtown/checkpoints`: encrypted unpublished-work objects
 - `/var/log/aubtown/symphony`: structured logs
+
+On the initial Mac, the equivalent root-owned profile is
+`/Library/Application Support/AubTown/freed-broker-profiles/freed-pilot.json`.
+Start from `config/repositories/freed-broker-profile.example.json` and replace
+every zero digest with the installed file's SHA-256. The profile contains paths
+and checksums only. It contains no token or credential. Point it at an immutable
+root-owned Freed control checkout, not the mutable executor checkout used to
+build product branches.
 
 No service resolves a security-sensitive executable from an interactive shell configuration. Git, Codex, AubTown hooks, and the Symphony executable use reviewed absolute paths.
 
@@ -130,7 +144,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 2. Create dedicated coordinator, checkpoint, and executor users. The MVP token refresher uses the restricted coordinator identity. A later broker split must preserve mode-0600 delivery without widening access.
 3. Install reviewed absolute Git, Node, Codex, SSH, and certificate paths.
 4. Install the pinned Symphony source or binary and verify its checksum.
-5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer, signed host observation gateway, read-only planning timer, and claim reconciliation timer.
+5. Install the reviewed AubTown build, `dist/factory-coordinator`, its root-owned broker profile, and native service units, including the GitHub token refresh timer, signed host observation gateway, read-only planning timer, and claim reconciliation timer.
 6. Install the same reviewed AubTown release on each executor, check out Freed, create its handoff root at mode 0700, write the protected worker and reviewer runtime configs, and verify `scripts/worktree-add.sh` at the configured physical path. Use `config/hosts/worker-runtime.example.json` and `config/hosts/reviewer-runtime.example.json` for Linux. Use `config/hosts/worker-runtime.macos.example.json` and `config/hosts/reviewer-runtime.macos.example.json` for macOS.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.

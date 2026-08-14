@@ -257,7 +257,7 @@ export class FreedAuthorityBridge implements AuthorityBridge {
         ? {}
         : { args: this.options.claimBrokerArgs }),
       cwd: this.options.repositoryRoot,
-      timeoutMs: this.options.claimCommandTimeoutMs ?? 30_000,
+      timeoutMs: this.options.claimCommandTimeoutMs ?? 120_000,
     });
   }
 }

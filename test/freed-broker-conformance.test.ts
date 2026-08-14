@@ -117,7 +117,7 @@ describe("Freed broker conformance", () => {
       "list-after-release",
     ]);
     expect(report.checks.every((check) => check.passed)).toBe(true);
-  });
+  }, 15_000);
 
   it("refuses a production-looking broker profile", async () => {
     const root = await realpath(

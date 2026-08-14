@@ -336,7 +336,7 @@ export class FreedClaimBrokerClient {
       ],
       cwd: this.options.cwd,
       env: {},
-      timeoutMs: this.options.timeoutMs ?? 30_000,
+      timeoutMs: this.options.timeoutMs ?? 120_000,
       maxBufferBytes: 1024 * 1024,
     } as const;
     try {

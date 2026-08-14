@@ -310,9 +310,7 @@ describe("HostExecutionSupervisor", () => {
     expect(reports).toEqual(["started"]);
     expect(await supervisor.activeClaimIds()).toEqual(["claim-1234"]);
     completion.resolve("completed");
-    for (let attempt = 0; attempt < 20 && reports.length < 2; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await supervisor.shutdown();
     expect(reports).toEqual(["started", "completed"]);
     expect(tracked).toEqual([
       "track:turn-1",
