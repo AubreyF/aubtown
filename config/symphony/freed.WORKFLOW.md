@@ -26,6 +26,13 @@ admission:
     - /opt/aubtown/node/bin/node
     - /opt/aubtown/current/dist/cli/symphony-prelaunch.js
   timeout_ms: 30000
+active_guard:
+  command:
+    - /opt/aubtown/node/bin/node
+    - /opt/aubtown/current/dist/cli/symphony-active-run-guard.js
+  interval_ms: 30000
+  timeout_ms: 5000
+  interrupt_grace_ms: 5000
 codex:
   command: /opt/aubtown/bin/codex-app-server
   approval_policy:

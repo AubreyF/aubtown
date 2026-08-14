@@ -30,6 +30,7 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - GitHub status projection and optional standby-coordinator comment election
 - A pinned Symphony production and upstream-tracking contract
 - Fail-closed Symphony prelaunch admission and capability-aware host routing
+- Fail-closed active-turn quota checks with exact thread and turn interruption
 - Append-only exact-claim prelaunch receipts that survive coordinator restart
 - A no-shell Freed claim broker caller with exact response-loss retry and protected envelope handoff
 - A native protected non-authoritative dispatch-candidate publisher with matching-envelope reuse
@@ -40,7 +41,7 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - A deterministic dispatch-intention builder that derives one host, account, branch, worktree, target, and initial claim without granting authority
 - A Freed workflow that accepts only helper-prepared, policy-safe worktrees
 
-The checked-in Symphony prelaunch executable resolves a protected dispatch candidate before launch. A candidate is a request, not authority. The native publisher rejects unsafe files, stale claims, incompatible routes, ineligible work, and blocked daily or rolling-week quota before writing the request. Prelaunch checks freshness again before any broker call. An unchanged candidate may reuse its matching protected envelope. A changed candidate must acquire a new exact Freed claim through the reviewed host broker before AubTown publishes a replacement envelope. The final boundary then checks fresh quota and atomically records the exact claim, so a restart or concurrent process cannot admit it twice. The live collector assembles read-only source evidence and a deterministic proposed dispatch, but it deliberately reports incomplete claim evidence. The real writer remains disabled because Freed's task-claim commands are not wired yet. Passing tests does not authorize a live issue or GitHub write.
+The checked-in Symphony prelaunch executable resolves a protected dispatch candidate before launch. A candidate is a request, not authority. The native publisher rejects unsafe files, stale claims, incompatible routes, ineligible work, and blocked daily or rolling-week quota before writing the request. Prelaunch checks freshness again before any broker call. An unchanged candidate may reuse its matching protected envelope. A changed candidate must acquire a new exact Freed claim through the reviewed host broker before AubTown publishes a replacement envelope. The final boundary then checks fresh quota and atomically records the exact claim, so a restart or concurrent process cannot admit it twice. While a turn is active, Symphony runs AubTown's guard every 30 seconds against the protected live host and account journal. A hard quota result interrupts the exact thread and turn, then closes the app-server transport if cancellation does not finish within five seconds. The live collector assembles read-only source evidence and a deterministic proposed dispatch, but it deliberately reports incomplete claim evidence. The real writer remains disabled because Freed's task-claim commands are not wired yet. Passing tests does not authorize a live issue or GitHub write.
 
 ## Development
 

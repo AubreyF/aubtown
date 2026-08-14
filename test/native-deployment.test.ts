@@ -26,6 +26,8 @@ describe("native Linux deployment", () => {
     expect(workflow).toContain('required_labels: [debt, "factory:ready"]');
     expect(workflow).toContain("max_concurrent_agents: 1");
     expect(workflow).toContain("symphony-prelaunch.js");
+    expect(workflow).toContain("symphony-active-run-guard.js");
+    expect(workflow).toContain("interrupt_grace_ms: 5000");
     expect(workflow).toContain("reject-unprepared-symphony-workspace.js");
     expect(workflow).toContain("verify-symphony-workspace.js");
     expect(workflow).not.toMatch(/docker|compose|restate/iu);

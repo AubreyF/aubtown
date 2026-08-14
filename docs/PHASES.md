@@ -31,10 +31,11 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Refresh compatible locked dependencies until the Hex audit has no current security advisories.
 - [x] Add the reviewed Symphony prelaunch admission boundary.
 - [x] Add the Freed-specific `WORKFLOW.md`, helper-only workspace preparation, and fail-closed workspace guards.
-- [x] Run the complete upstream Symphony suite against the pinned commit and patch, with 298 passing and 6 explicit skips.
+- [x] Run the complete upstream Symphony suite against the pinned commit and patch series, with 303 passing and 6 explicit skips.
 - [x] Prove a fake issue cannot dispatch twice across coordinator restart.
 - [x] Prove daily and rolling-week quota stops through the Symphony admission boundary.
 - [x] Prove Linux continues generic work while the Mac is offline.
+- [x] Add exact active-turn quota interruption and hard transport cutoff to the pinned Symphony runner.
 
 ## Phase 3: one Freed issue
 
@@ -47,7 +48,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Derive one deterministic fail-closed dispatch intention with host-specific workspace custody.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
-- [ ] Add hard-boundary active-turn interruption to the Symphony runner.
+- [x] Add hard-boundary active-turn interruption to the Symphony runner.
 - [ ] Execute one owner-selected low-risk runtime-neutral issue at concurrency one.
 - [ ] Use Freed's supported authority commands and `scripts/worktree-add.sh`.
 - [ ] Publish one draft pull request.

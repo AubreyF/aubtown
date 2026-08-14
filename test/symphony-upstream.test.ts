@@ -36,24 +36,35 @@ describe("Symphony upstream contract", () => {
     expect(lock.reviewedCapabilities).toContain(
       "fail-closed-prelaunch-admission-command",
     );
+    expect(lock.reviewedCapabilities).toContain(
+      "fail-closed-active-turn-guard",
+    );
     expect(lock.knownGaps).not.toContain(
       "worker-host-selection-is-load-based-not-lane-aware",
     );
-    expect(lock.patches).toHaveLength(1);
-    expect(lock.patches[0]?.verifiedAgainst).toBe(lock.production.commit);
-    const patchBytes = await readFile(path.join(root, lock.patches[0]!.path));
-    expect(createHash("sha256").update(patchBytes).digest("hex")).toBe(
-      lock.patches[0]?.sha256,
-    );
-    expect(patchBytes.toString("utf8")).toContain(
+    expect(lock.patches).toHaveLength(2);
+    for (const patch of lock.patches) {
+      expect(patch.verifiedAgainst).toBe(lock.production.commit);
+      const patchBytes = await readFile(path.join(root, patch.path));
+      expect(createHash("sha256").update(patchBytes).digest("hex")).toBe(
+        patch.sha256,
+      );
+    }
+    const runtimePatch = await readFile(path.join(root, lock.patches[0]!.path));
+    const activeGuardPatch = await readFile(path.join(root, lock.patches[1]!.path));
+    expect(runtimePatch.toString("utf8")).toContain(
       "select_worker_host_for_issue_for_test",
     );
-    expect(patchBytes.toString("utf8")).toContain(
+    expect(runtimePatch.toString("utf8")).toContain(
       "Prelaunch admission failed closed",
     );
-    expect(patchBytes.toString("utf8")).toContain("GITHUB_TOKEN_FILE");
-    expect(patchBytes.toString("utf8")).not.toContain(
+    expect(runtimePatch.toString("utf8")).toContain("GITHUB_TOKEN_FILE");
+    expect(runtimePatch.toString("utf8")).not.toContain(
       "No retired or security advisory packages found",
+    );
+    expect(activeGuardPatch.toString("utf8")).toContain("turn/interrupt");
+    expect(activeGuardPatch.toString("utf8")).toContain(
+      "active_guard_hard_stop",
     );
   });
 

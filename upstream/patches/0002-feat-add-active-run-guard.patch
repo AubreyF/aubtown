@@ -1,0 +1,1020 @@
+From 8c469688c9d46f10b170d3c3fb1db7419cc5b78b Mon Sep 17 00:00:00 2001
+From: AubTown Build <build@example.invalid>
+Date: Thu, 13 Aug 2026 21:09:48 -0700
+Subject: [PATCH] feat: add active run guard
+
+---
+ elixir/lib/symphony_elixir/active_guard.ex    | 219 ++++++++++++
+ .../lib/symphony_elixir/codex/app_server.ex   | 324 +++++++++++++++++-
+ elixir/lib/symphony_elixir/config/schema.ex   |  40 +++
+ elixir/test/support/test_support.exs          |  13 +
+ .../symphony_elixir/active_guard_test.exs     | 118 +++++++
+ .../test/symphony_elixir/app_server_test.exs  |  98 ++++++
+ 6 files changed, 795 insertions(+), 17 deletions(-)
+ create mode 100644 elixir/lib/symphony_elixir/active_guard.ex
+ create mode 100644 elixir/test/symphony_elixir/active_guard_test.exs
+
+diff --git a/elixir/lib/symphony_elixir/active_guard.ex b/elixir/lib/symphony_elixir/active_guard.ex
+new file mode 100644
+index 0000000..ffbb3ef
+--- /dev/null
++++ b/elixir/lib/symphony_elixir/active_guard.ex
+@@ -0,0 +1,219 @@
++defmodule SymphonyElixir.ActiveGuard do
++  @moduledoc """
++  Rechecks host-side policy while one Codex turn is active.
++
++  The command receives the exact issue, selected host, thread, and turn identities. A malformed,
++  mismatched, failed, timed-out, or crashed check requests interruption. The app-server owner sends
++  the protocol interrupt and closes the transport if the turn ignores the configured grace period.
++  """
++
++  alias SymphonyElixir.Config
++  alias SymphonyElixir.Tracker.Issue
++
++  @max_output_bytes 65_536
++  @reason_pattern ~r/^[a-z0-9][a-z0-9._:-]{0,127}$/
++
++  @type handle :: %{pid: pid(), monitor: reference(), ref: reference()}
++
++  @spec start(Issue.t(), String.t() | nil, String.t(), String.t(), pid()) ::
++          {:ok, handle()} | :disabled | {:error, term()}
++  def start(issue, worker_host, thread_id, turn_id, recipient) do
++    case Config.settings!().active_guard.command do
++      [] -> :disabled
++      command -> start_enabled(issue, worker_host, thread_id, turn_id, recipient, command)
++    end
++  end
++
++  defp start_enabled(
++         %Issue{id: issue_id, identifier: identifier},
++         worker_host,
++         thread_id,
++         turn_id,
++         recipient,
++         [executable | configured_args]
++       )
++       when is_binary(issue_id) and is_binary(identifier) and is_binary(thread_id) and
++              is_binary(turn_id) and is_pid(recipient) do
++    settings = Config.settings!()
++    host = worker_host || "local"
++    ref = make_ref()
++
++    pid =
++      spawn(fn ->
++        loop(%{
++          recipient: recipient,
++          ref: ref,
++          executable: executable,
++          args:
++            configured_args ++
++              [
++                "--schema-version",
++                "1",
++                "--issue-id",
++                issue_id,
++                "--issue-identifier",
++                identifier,
++                "--worker-host",
++                host,
++                "--thread-id",
++                thread_id,
++                "--turn-id",
++                turn_id
++              ],
++          issue_id: issue_id,
++          worker_host: host,
++          thread_id: thread_id,
++          turn_id: turn_id,
++          interval_ms: settings.active_guard.interval_ms,
++          timeout_ms: settings.active_guard.timeout_ms,
++          interrupt_grace_ms: settings.active_guard.interrupt_grace_ms
++        })
++      end)
++
++    {:ok, %{pid: pid, monitor: Process.monitor(pid), ref: ref}}
++  end
++
++  defp start_enabled(_issue, _worker_host, _thread_id, _turn_id, _recipient, _command),
++    do: {:error, :invalid_active_guard_binding}
++
++  @spec stop(handle() | :disabled) :: :ok
++  def stop(:disabled), do: :ok
++
++  def stop(%{pid: pid, monitor: monitor}) when is_pid(pid) and is_reference(monitor) do
++    send(pid, :stop)
++    Process.demonitor(monitor, [:flush])
++    :ok
++  end
++
++  defp loop(state) do
++    receive do
++      :stop ->
++        :ok
++    after
++      state.interval_ms ->
++        case run_check(state) do
++          {:continue, _reason} ->
++            loop(state)
++
++          {:interrupt, reason} ->
++            interrupt_and_wait(state, reason)
++
++          {:error, reason} ->
++            interrupt_and_wait(state, normalize_error(reason))
++        end
++    end
++  end
++
++  defp interrupt_and_wait(state, reason) do
++    send(state.recipient, {:active_guard_interrupt, state.ref, reason})
++
++    receive do
++      :stop ->
++        :ok
++    after
++      state.interrupt_grace_ms ->
++        send(state.recipient, {:active_guard_hard_stop, state.ref, reason})
++    end
++  end
++
++  defp run_check(state) do
++    task =
++      Task.async(fn ->
++        try do
++          {:ok,
++           System.cmd(state.executable, state.args,
++             env: secret_environment_scrub(),
++             stderr_to_stdout: true
++           )}
++        rescue
++          error in [ArgumentError, ErlangError] ->
++            {:error, {:active_guard_command_start_failed, Exception.message(error)}}
++        end
++      end)
++
++    case Task.yield(task, state.timeout_ms) do
++      {:ok, {:ok, {output, 0}}} ->
++        parse(output, state)
++
++      {:ok, {:ok, {output, status}}} ->
++        {:error, {:active_guard_command_failed, status, bounded_output(output)}}
++
++      {:ok, {:error, reason}} ->
++        {:error, reason}
++
++      {:exit, reason} ->
++        {:error, {:active_guard_command_crashed, reason}}
++
++      nil ->
++        Task.shutdown(task, :brutal_kill)
++        {:error, {:active_guard_command_timeout, state.timeout_ms}}
++    end
++  end
++
++  defp parse(output, state) when is_binary(output) do
++    issue_id = state.issue_id
++    worker_host = state.worker_host
++    thread_id = state.thread_id
++    turn_id = state.turn_id
++
++    with true <- byte_size(output) <= @max_output_bytes or {:error, :active_guard_output_too_large},
++         {:ok, payload} <- Jason.decode(String.trim(output)),
++         true <- is_map(payload) or {:error, :invalid_active_guard_response},
++         1 <- payload["schemaVersion"],
++         ^issue_id <- payload["issueId"],
++         ^worker_host <- payload["workerHost"],
++         ^thread_id <- payload["threadId"],
++         ^turn_id <- payload["turnId"],
++         reason when is_binary(reason) <- payload["reason"],
++         true <- Regex.match?(@reason_pattern, reason) or {:error, :invalid_active_guard_reason} do
++      case payload["decision"] do
++        "continue" -> {:continue, reason}
++        "interrupt" -> {:interrupt, reason}
++        _ -> {:error, :invalid_active_guard_decision}
++      end
++    else
++      {:error, reason} -> {:error, reason}
++      _ -> {:error, :active_guard_response_mismatch}
++    end
++  end
++
++  defp parse(_output, _state), do: {:error, :invalid_active_guard_response}
++
++  defp normalize_error(reason) do
++    case reason do
++      %Jason.DecodeError{} -> "active-guard-response-invalid"
++      :active_guard_output_too_large -> "active-guard-output-too-large"
++      :invalid_active_guard_response -> "active-guard-response-invalid"
++      :invalid_active_guard_reason -> "active-guard-reason-invalid"
++      :invalid_active_guard_decision -> "active-guard-decision-invalid"
++      :active_guard_response_mismatch -> "active-guard-response-mismatch"
++      {:active_guard_command_timeout, _timeout} -> "active-guard-command-timeout"
++      {:active_guard_command_failed, _status, _output} -> "active-guard-command-failed"
++      {:active_guard_command_start_failed, _message} -> "active-guard-command-start-failed"
++      {:active_guard_command_crashed, _reason} -> "active-guard-command-crashed"
++      _ -> "active-guard-failed"
++    end
++  end
++
++  defp secret_environment_scrub do
++    Config.settings!().tracker.secret_environment_names
++    |> Kernel.++([
++      "AUBTOWN_GITHUB_APP_PRIVATE_KEY_FILE",
++      "GITHUB_TOKEN",
++      "GITHUB_TOKEN_FILE",
++      "GH_TOKEN",
++      "GITHUB_ENTERPRISE_TOKEN",
++      "GH_ENTERPRISE_TOKEN"
++    ])
++    |> Enum.uniq()
++    |> Enum.map(&{&1, nil})
++  end
++
++  defp bounded_output(output) when is_binary(output) and byte_size(output) <= @max_output_bytes,
++    do: output
++
++  defp bounded_output(output) when is_binary(output),
++    do: binary_part(output, 0, @max_output_bytes)
++
++  defp bounded_output(_output), do: ""
++end
+diff --git a/elixir/lib/symphony_elixir/codex/app_server.ex b/elixir/lib/symphony_elixir/codex/app_server.ex
+index ae3db62..f3f922a 100644
+--- a/elixir/lib/symphony_elixir/codex/app_server.ex
++++ b/elixir/lib/symphony_elixir/codex/app_server.ex
+@@ -4,7 +4,7 @@ defmodule SymphonyElixir.Codex.AppServer do
+   """
+ 
+   require Logger
+-  alias SymphonyElixir.{Codex.DynamicTool, Config, PathSafety, SSH}
++  alias SymphonyElixir.{ActiveGuard, Codex.DynamicTool, Config, PathSafety, SSH}
+ 
+   @initialize_id 1
+   @thread_start_id 2
+@@ -78,6 +78,7 @@ defmodule SymphonyElixir.Codex.AppServer do
+           turn_sandbox_policy: turn_sandbox_policy,
+           thread_id: thread_id,
+           workspace: workspace,
++          worker_host: worker_host,
+           dynamic_tool_binding: dynamic_tool_binding
+         },
+         prompt,
+@@ -107,7 +108,16 @@ defmodule SymphonyElixir.Codex.AppServer do
+           metadata
+         )
+ 
+-        case await_turn_completion(port, on_message, tool_executor, auto_approve_requests) do
++        case await_guarded_turn_completion(
++               port,
++               on_message,
++               tool_executor,
++               auto_approve_requests,
++               issue,
++               worker_host,
++               thread_id,
++               turn_id
++             ) do
+           {:ok, result} ->
+             Logger.info("Codex session completed for #{issue_context(issue)} session_id=#{session_id}")
+ 
+@@ -365,22 +375,96 @@ defmodule SymphonyElixir.Codex.AppServer do
+     end
+   end
+ 
+-  defp await_turn_completion(port, on_message, tool_executor, auto_approve_requests) do
++  defp await_guarded_turn_completion(
++         port,
++         on_message,
++         tool_executor,
++         auto_approve_requests,
++         issue,
++         worker_host,
++         thread_id,
++         turn_id
++       ) do
++    case ActiveGuard.start(issue, worker_host, thread_id, turn_id, self()) do
++      {:ok, handle} ->
++        try do
++          await_turn_completion(
++            port,
++            on_message,
++            tool_executor,
++            auto_approve_requests,
++            %{handle: handle, interrupt_reason: nil},
++            thread_id,
++            turn_id
++          )
++        after
++          ActiveGuard.stop(handle)
++        end
++
++      :disabled ->
++        await_turn_completion(
++          port,
++          on_message,
++          tool_executor,
++          auto_approve_requests,
++          :disabled,
++          thread_id,
++          turn_id
++        )
++
++      {:error, reason} ->
++        {:error, {:active_guard_start_failed, reason}}
++    end
++  end
++
++  defp await_turn_completion(
++         port,
++         on_message,
++         tool_executor,
++         auto_approve_requests,
++         guard_state,
++         thread_id,
++         turn_id
++       ) do
+     receive_loop(
+       port,
+       on_message,
+       Config.settings!().codex.turn_timeout_ms,
+       "",
+       tool_executor,
+-      auto_approve_requests
++      auto_approve_requests,
++      guard_state,
++      thread_id,
++      turn_id
+     )
+   end
+ 
+-  defp receive_loop(port, on_message, timeout_ms, pending_line, tool_executor, auto_approve_requests) do
++  defp receive_loop(
++         port,
++         on_message,
++         timeout_ms,
++         pending_line,
++         tool_executor,
++         auto_approve_requests,
++         guard_state,
++         thread_id,
++         turn_id
++       ) do
+     receive do
+       {^port, {:data, {:eol, chunk}}} ->
+         complete_line = pending_line <> to_string(chunk)
+-        handle_incoming(port, on_message, complete_line, timeout_ms, tool_executor, auto_approve_requests)
++
++        handle_incoming(
++          port,
++          on_message,
++          complete_line,
++          timeout_ms,
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
++        )
+ 
+       {^port, {:data, {:noeol, chunk}}} ->
+         receive_loop(
+@@ -389,24 +473,95 @@ defmodule SymphonyElixir.Codex.AppServer do
+           timeout_ms,
+           pending_line <> to_string(chunk),
+           tool_executor,
+-          auto_approve_requests
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
+         )
+ 
+       {^port, {:exit_status, status}} ->
+-        {:error, {:port_exit, status}}
++        case active_guard_interrupt_reason(guard_state) do
++          nil -> {:error, {:port_exit, status}}
++          reason -> {:error, {:active_guard_interrupt, reason}}
++        end
++
++      {:active_guard_interrupt, ref, reason} ->
++        handle_active_guard_interrupt(
++          port,
++          on_message,
++          timeout_ms,
++          pending_line,
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id,
++          ref,
++          reason
++        )
++
++      {:active_guard_hard_stop, ref, reason} ->
++        case guard_state do
++          %{handle: %{ref: ^ref}} ->
++            stop_port(port)
++            {:error, {:active_guard_interrupt, reason}}
++
++          _ ->
++            receive_loop(
++              port,
++              on_message,
++              timeout_ms,
++              pending_line,
++              tool_executor,
++              auto_approve_requests,
++              guard_state,
++              thread_id,
++              turn_id
++            )
++        end
++
++      {:DOWN, monitor, :process, pid, reason} ->
++        handle_active_guard_down(
++          port,
++          on_message,
++          timeout_ms,
++          pending_line,
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id,
++          monitor,
++          pid,
++          reason
++        )
+     after
+       timeout_ms ->
+         {:error, :turn_timeout}
+     end
+   end
+ 
+-  defp handle_incoming(port, on_message, data, timeout_ms, tool_executor, auto_approve_requests) do
++  defp handle_incoming(
++         port,
++         on_message,
++         data,
++         timeout_ms,
++         tool_executor,
++         auto_approve_requests,
++         guard_state,
++         thread_id,
++         turn_id
++       ) do
+     payload_string = to_string(data)
+ 
+     case Jason.decode(payload_string) do
+       {:ok, %{"method" => "turn/completed"} = payload} ->
+         emit_turn_event(on_message, :turn_completed, payload, payload_string, port, payload)
+-        {:ok, :turn_completed}
++
++        case active_guard_interrupt_reason(guard_state) do
++          nil -> {:ok, :turn_completed}
++          reason -> {:error, {:active_guard_interrupt, reason}}
++        end
+ 
+       {:ok, %{"method" => "turn/failed", "params" => _} = payload} ->
+         emit_turn_event(
+@@ -430,7 +585,10 @@ defmodule SymphonyElixir.Codex.AppServer do
+           Map.get(payload, "params")
+         )
+ 
+-        {:error, {:turn_cancelled, Map.get(payload, "params")}}
++        case active_guard_interrupt_reason(guard_state) do
++          nil -> {:error, {:turn_cancelled, Map.get(payload, "params")}}
++          reason -> {:error, {:active_guard_interrupt, reason}}
++        end
+ 
+       {:ok, %{"method" => method} = payload}
+       when is_binary(method) ->
+@@ -442,7 +600,10 @@ defmodule SymphonyElixir.Codex.AppServer do
+           method,
+           timeout_ms,
+           tool_executor,
+-          auto_approve_requests
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
+         )
+ 
+       {:ok, payload} ->
+@@ -456,7 +617,17 @@ defmodule SymphonyElixir.Codex.AppServer do
+           metadata_from_message(port, payload)
+         )
+ 
+-        receive_loop(port, on_message, timeout_ms, "", tool_executor, auto_approve_requests)
++        receive_loop(
++          port,
++          on_message,
++          timeout_ms,
++          "",
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
++        )
+ 
+       {:error, _reason} ->
+         log_non_json_stream_line(payload_string, "turn stream")
+@@ -473,7 +644,17 @@ defmodule SymphonyElixir.Codex.AppServer do
+           )
+         end
+ 
+-        receive_loop(port, on_message, timeout_ms, "", tool_executor, auto_approve_requests)
++        receive_loop(
++          port,
++          on_message,
++          timeout_ms,
++          "",
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
++        )
+     end
+   end
+ 
+@@ -498,7 +679,10 @@ defmodule SymphonyElixir.Codex.AppServer do
+          method,
+          timeout_ms,
+          tool_executor,
+-         auto_approve_requests
++         auto_approve_requests,
++         guard_state,
++         thread_id,
++         turn_id
+        ) do
+     metadata = metadata_from_message(port, payload)
+ 
+@@ -523,7 +707,17 @@ defmodule SymphonyElixir.Codex.AppServer do
+         {:error, {:turn_input_required, payload}}
+ 
+       :approved ->
+-        receive_loop(port, on_message, timeout_ms, "", tool_executor, auto_approve_requests)
++        receive_loop(
++          port,
++          on_message,
++          timeout_ms,
++          "",
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
++        )
+ 
+       :approval_required ->
+         emit_message(
+@@ -557,11 +751,107 @@ defmodule SymphonyElixir.Codex.AppServer do
+           )
+ 
+           Logger.debug("Codex notification: #{inspect(method)}")
+-          receive_loop(port, on_message, timeout_ms, "", tool_executor, auto_approve_requests)
++
++          receive_loop(
++            port,
++            on_message,
++            timeout_ms,
++            "",
++            tool_executor,
++            auto_approve_requests,
++            guard_state,
++            thread_id,
++            turn_id
++          )
+         end
+     end
+   end
+ 
++  defp handle_active_guard_interrupt(
++         port,
++         on_message,
++         timeout_ms,
++         pending_line,
++         tool_executor,
++         auto_approve_requests,
++         guard_state,
++         thread_id,
++         turn_id,
++         ref,
++         reason
++       ) do
++    case guard_state do
++      %{handle: %{ref: ^ref}, interrupt_reason: nil} = active_state ->
++        send_message(port, %{
++          "method" => "turn/interrupt",
++          "id" => "aubtown-active-guard-#{System.unique_integer([:positive])}",
++          "params" => %{"threadId" => thread_id, "turnId" => turn_id}
++        })
++
++        receive_loop(
++          port,
++          on_message,
++          timeout_ms,
++          pending_line,
++          tool_executor,
++          auto_approve_requests,
++          %{active_state | interrupt_reason: reason},
++          thread_id,
++          turn_id
++        )
++
++      _ ->
++        receive_loop(
++          port,
++          on_message,
++          timeout_ms,
++          pending_line,
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
++        )
++    end
++  end
++
++  defp handle_active_guard_down(
++         port,
++         on_message,
++         timeout_ms,
++         pending_line,
++         tool_executor,
++         auto_approve_requests,
++         guard_state,
++         thread_id,
++         turn_id,
++         monitor,
++         pid,
++         reason
++       ) do
++    case guard_state do
++      %{handle: %{monitor: ^monitor, pid: ^pid}} ->
++        stop_port(port)
++        {:error, {:active_guard_process_down, reason}}
++
++      _ ->
++        receive_loop(
++          port,
++          on_message,
++          timeout_ms,
++          pending_line,
++          tool_executor,
++          auto_approve_requests,
++          guard_state,
++          thread_id,
++          turn_id
++        )
++    end
++  end
++
++  defp active_guard_interrupt_reason(%{interrupt_reason: reason}), do: reason
++  defp active_guard_interrupt_reason(_guard_state), do: nil
++
+   defp maybe_handle_approval_request(
+          port,
+          "item/commandExecution/requestApproval",
+diff --git a/elixir/lib/symphony_elixir/config/schema.ex b/elixir/lib/symphony_elixir/config/schema.ex
+index 5b7607e..c2ce38b 100644
+--- a/elixir/lib/symphony_elixir/config/schema.ex
++++ b/elixir/lib/symphony_elixir/config/schema.ex
+@@ -219,6 +219,44 @@ defmodule SymphonyElixir.Config.Schema do
+     end
+   end
+ 
++  defmodule ActiveGuard do
++    @moduledoc false
++    use Ecto.Schema
++    import Ecto.Changeset
++
++    @primary_key false
++    embedded_schema do
++      field(:command, {:array, :string}, default: [])
++      field(:interval_ms, :integer, default: 30_000)
++      field(:timeout_ms, :integer, default: 5_000)
++      field(:interrupt_grace_ms, :integer, default: 5_000)
++    end
++
++    @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
++    def changeset(schema, attrs) do
++      schema
++      |> cast(attrs, [:command, :interval_ms, :timeout_ms, :interrupt_grace_ms], empty_values: [])
++      |> validate_number(:interval_ms, greater_than: 0, less_than_or_equal_to: 60_000)
++      |> validate_number(:timeout_ms, greater_than: 0, less_than_or_equal_to: 60_000)
++      |> validate_number(:interrupt_grace_ms, greater_than: 0, less_than_or_equal_to: 60_000)
++      |> validate_change(:command, fn :command, command ->
++        cond do
++          command == [] ->
++            []
++
++          not Enum.all?(command, &(is_binary(&1) and String.trim(&1) != "")) ->
++            [command: "must contain only nonblank arguments"]
++
++          Path.type(List.first(command)) != :absolute ->
++            [command: "executable must use an absolute path"]
++
++          true ->
++            []
++        end
++      end)
++    end
++  end
++
+   defmodule Codex do
+     @moduledoc false
+     use Ecto.Schema
+@@ -344,6 +382,7 @@ defmodule SymphonyElixir.Config.Schema do
+     embeds_one(:worker, Worker, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:agent, Agent, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:admission, Admission, on_replace: :update, defaults_to_struct: true)
++    embeds_one(:active_guard, ActiveGuard, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:codex, Codex, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:hooks, Hooks, on_replace: :update, defaults_to_struct: true)
+     embeds_one(:observability, Observability, on_replace: :update, defaults_to_struct: true)
+@@ -439,6 +478,7 @@ defmodule SymphonyElixir.Config.Schema do
+     |> cast_embed(:worker, with: &Worker.changeset/2)
+     |> cast_embed(:agent, with: &Agent.changeset/2)
+     |> cast_embed(:admission, with: &Admission.changeset/2)
++    |> cast_embed(:active_guard, with: &ActiveGuard.changeset/2)
+     |> cast_embed(:codex, with: &Codex.changeset/2)
+     |> cast_embed(:hooks, with: &Hooks.changeset/2)
+     |> cast_embed(:observability, with: &Observability.changeset/2)
+diff --git a/elixir/test/support/test_support.exs b/elixir/test/support/test_support.exs
+index ddf514e..7d73c7f 100644
+--- a/elixir/test/support/test_support.exs
++++ b/elixir/test/support/test_support.exs
+@@ -109,6 +109,10 @@ defmodule SymphonyElixir.TestSupport do
+           max_concurrent_agents_by_state: %{},
+           admission_command: [],
+           admission_timeout_ms: 30_000,
++          active_guard_command: [],
++          active_guard_interval_ms: 30_000,
++          active_guard_timeout_ms: 5_000,
++          active_guard_interrupt_grace_ms: 5_000,
+           codex_command: "codex app-server",
+           codex_approval_policy: %{reject: %{sandbox_approval: true, rules: true, mcp_elicitations: true}},
+           codex_thread_sandbox: "workspace-write",
+@@ -150,6 +154,10 @@ defmodule SymphonyElixir.TestSupport do
+     max_concurrent_agents_by_state = Keyword.get(config, :max_concurrent_agents_by_state)
+     admission_command = Keyword.get(config, :admission_command)
+     admission_timeout_ms = Keyword.get(config, :admission_timeout_ms)
++    active_guard_command = Keyword.get(config, :active_guard_command)
++    active_guard_interval_ms = Keyword.get(config, :active_guard_interval_ms)
++    active_guard_timeout_ms = Keyword.get(config, :active_guard_timeout_ms)
++    active_guard_interrupt_grace_ms = Keyword.get(config, :active_guard_interrupt_grace_ms)
+     codex_command = Keyword.get(config, :codex_command)
+     codex_approval_policy = Keyword.get(config, :codex_approval_policy)
+     codex_thread_sandbox = Keyword.get(config, :codex_thread_sandbox)
+@@ -194,6 +202,11 @@ defmodule SymphonyElixir.TestSupport do
+         "admission:",
+         "  command: #{yaml_value(admission_command)}",
+         "  timeout_ms: #{yaml_value(admission_timeout_ms)}",
++        "active_guard:",
++        "  command: #{yaml_value(active_guard_command)}",
++        "  interval_ms: #{yaml_value(active_guard_interval_ms)}",
++        "  timeout_ms: #{yaml_value(active_guard_timeout_ms)}",
++        "  interrupt_grace_ms: #{yaml_value(active_guard_interrupt_grace_ms)}",
+         "codex:",
+         "  command: #{yaml_value(codex_command)}",
+         "  approval_policy: #{yaml_value(codex_approval_policy)}",
+diff --git a/elixir/test/symphony_elixir/active_guard_test.exs b/elixir/test/symphony_elixir/active_guard_test.exs
+new file mode 100644
+index 0000000..eaee3a6
+--- /dev/null
++++ b/elixir/test/symphony_elixir/active_guard_test.exs
+@@ -0,0 +1,118 @@
++defmodule SymphonyElixir.ActiveGuardTest do
++  use SymphonyElixir.TestSupport
++
++  alias SymphonyElixir.ActiveGuard
++  alias SymphonyElixir.Tracker.Issue
++
++  setup do
++    root = Path.join(System.tmp_dir!(), "symphony-active-guard-#{System.unique_integer([:positive])}")
++    File.mkdir_p!(root)
++    on_exit(fn -> File.rm_rf(root) end)
++    %{root: root}
++  end
++
++  test "continues after an exact continue response", %{root: root} do
++    script = decision_script!(root, "continue", "quota-headroom-available")
++
++    write_workflow_file!(Workflow.workflow_file_path(),
++      tracker_kind: "memory",
++      active_guard_command: [script],
++      active_guard_interval_ms: 10,
++      active_guard_timeout_ms: 500
++    )
++
++    assert {:ok, handle} =
++             ActiveGuard.start(issue(), "worker-linux", "thread-123", "turn-123", self())
++
++    refute_receive {:active_guard_interrupt, _, _}, 50
++    assert :ok = ActiveGuard.stop(handle)
++  end
++
++  test "requests a bound interrupt and then a hard stop", %{root: root} do
++    script = decision_script!(root, "interrupt", "quota-weekly-ceiling")
++
++    write_workflow_file!(Workflow.workflow_file_path(),
++      tracker_kind: "memory",
++      active_guard_command: [script],
++      active_guard_interval_ms: 10,
++      active_guard_timeout_ms: 500,
++      active_guard_interrupt_grace_ms: 20
++    )
++
++    assert {:ok, handle} =
++             ActiveGuard.start(issue(), "worker-linux", "thread-123", "turn-123", self())
++
++    assert_receive {:active_guard_interrupt, ref, "quota-weekly-ceiling"}, 500
++    assert ref == handle.ref
++    assert_receive {:active_guard_hard_stop, ^ref, "quota-weekly-ceiling"}, 500
++    assert :ok = ActiveGuard.stop(handle)
++  end
++
++  test "fails closed on malformed or failed checks", %{root: root} do
++    malformed = write_script!(root, "malformed", "#!/bin/sh\nprintf 'nope\\n'\n")
++
++    write_workflow_file!(Workflow.workflow_file_path(),
++      tracker_kind: "memory",
++      active_guard_command: [malformed],
++      active_guard_interval_ms: 10,
++      active_guard_timeout_ms: 500
++    )
++
++    assert {:ok, handle} =
++             ActiveGuard.start(issue(), "worker-linux", "thread-123", "turn-123", self())
++
++    assert_receive {:active_guard_interrupt, ref, "active-guard-response-invalid"}, 500
++    assert ref == handle.ref
++    assert :ok = ActiveGuard.stop(handle)
++  end
++
++  test "keeps upstream behavior when unconfigured and validates configuration" do
++    assert :disabled = ActiveGuard.start(issue(), nil, "thread-123", "turn-123", self())
++
++    write_workflow_file!(Workflow.workflow_file_path(), active_guard_command: ["relative"])
++    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
++    assert message =~ "active_guard.command"
++
++    write_workflow_file!(Workflow.workflow_file_path(), active_guard_interval_ms: 60_001)
++    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
++    assert message =~ "active_guard.interval_ms"
++  end
++
++  defp decision_script!(root, decision, reason) do
++    write_script!(root, decision, """
++    #!/bin/sh
++    issue_id=''
++    worker_host=''
++    thread_id=''
++    turn_id=''
++    while [ "$#" -gt 0 ]; do
++      case "$1" in
++        --issue-id) issue_id="$2"; shift 2 ;;
++        --worker-host) worker_host="$2"; shift 2 ;;
++        --thread-id) thread_id="$2"; shift 2 ;;
++        --turn-id) turn_id="$2"; shift 2 ;;
++        *) shift ;;
++      esac
++    done
++    printf '{"schemaVersion":1,"decision":"#{decision}","issueId":"%s","workerHost":"%s","threadId":"%s","turnId":"%s","reason":"#{reason}"}\n' "$issue_id" "$worker_host" "$thread_id" "$turn_id"
++    """)
++  end
++
++  defp issue do
++    %Issue{
++      id: "123",
++      identifier: "GH-123",
++      title: "Guard active turn",
++      state: "open",
++      labels: ["factory:running"],
++      dispatchable: true
++    }
++  end
++
++  defp write_script!(root, name, content) do
++    path = Path.join(root, name)
++    File.write!(path, content)
++    File.chmod!(path, 0o700)
++    path
++  end
++end
+diff --git a/elixir/test/symphony_elixir/app_server_test.exs b/elixir/test/symphony_elixir/app_server_test.exs
+index 4b23aed..1455482 100644
+--- a/elixir/test/symphony_elixir/app_server_test.exs
++++ b/elixir/test/symphony_elixir/app_server_test.exs
+@@ -1628,4 +1628,102 @@ defmodule SymphonyElixir.AppServerTest do
+       File.rm_rf(test_root)
+     end
+   end
++
++  test "active guard interrupts the exact running thread and turn" do
++    test_root =
++      Path.join(
++        System.tmp_dir!(),
++        "symphony-elixir-app-server-active-guard-#{System.unique_integer([:positive])}"
++      )
++
++    try do
++      workspace_root = Path.join(test_root, "workspaces")
++      workspace = Path.join(workspace_root, "GH-123")
++      codex_binary = Path.join(test_root, "fake-codex")
++      guard_binary = Path.join(test_root, "active-guard")
++      trace_file = Path.join(test_root, "codex.trace")
++      prior_trace = System.get_env("SYMP_TEST_CODEx_TRACE")
++
++      on_exit(fn -> restore_env("SYMP_TEST_CODEx_TRACE", prior_trace) end)
++      System.put_env("SYMP_TEST_CODEx_TRACE", trace_file)
++      File.mkdir_p!(workspace)
++
++      File.write!(codex_binary, """
++      #!/bin/sh
++      count=0
++      while IFS= read -r line; do
++        count=$((count + 1))
++        printf 'JSON:%s\n' "$line" >> "$SYMP_TEST_CODEx_TRACE"
++        case "$count" in
++          1) printf '%s\n' '{"id":1,"result":{}}' ;;
++          2) ;;
++          3) printf '%s\n' '{"id":2,"result":{"thread":{"id":"thread-123"}}}' ;;
++          4) printf '%s\n' '{"id":3,"result":{"turn":{"id":"turn-123"}}}' ;;
++          5) printf '%s\n' '{"method":"turn/cancelled","params":{"reason":"interrupted"}}'; exit 0 ;;
++        esac
++      done
++      """)
++
++      File.write!(guard_binary, """
++      #!/bin/sh
++      issue_id=''
++      worker_host=''
++      thread_id=''
++      turn_id=''
++      while [ "$#" -gt 0 ]; do
++        case "$1" in
++          --issue-id) issue_id="$2"; shift 2 ;;
++          --worker-host) worker_host="$2"; shift 2 ;;
++          --thread-id) thread_id="$2"; shift 2 ;;
++          --turn-id) turn_id="$2"; shift 2 ;;
++          *) shift ;;
++        esac
++      done
++      printf '{"schemaVersion":1,"decision":"interrupt","issueId":"%s","workerHost":"%s","threadId":"%s","turnId":"%s","reason":"quota-weekly-ceiling"}\n' "$issue_id" "$worker_host" "$thread_id" "$turn_id"
++      """)
++
++      File.chmod!(codex_binary, 0o755)
++      File.chmod!(guard_binary, 0o755)
++
++      write_workflow_file!(Workflow.workflow_file_path(),
++        tracker_kind: "memory",
++        workspace_root: workspace_root,
++        codex_command: "#{codex_binary} app-server",
++        active_guard_command: [guard_binary],
++        active_guard_interval_ms: 10,
++        active_guard_timeout_ms: 500,
++        active_guard_interrupt_grace_ms: 500
++      )
++
++      issue = %Issue{
++        id: "123",
++        identifier: "GH-123",
++        title: "Interrupt guarded run",
++        description: "Validate active quota interruption",
++        state: "open",
++        url: "https://example.org/issues/123",
++        labels: ["factory:running"]
++      }
++
++      assert {:error, {:active_guard_interrupt, "quota-weekly-ceiling"}} =
++               AppServer.run(workspace, "Guard this turn", issue)
++
++      assert trace_file
++             |> File.read!()
++             |> String.split("\n", trim: true)
++             |> Enum.any?(fn line ->
++               if String.starts_with?(line, "JSON:") do
++                 payload = line |> String.trim_leading("JSON:") |> Jason.decode!()
++
++                 payload["method"] == "turn/interrupt" &&
++                   get_in(payload, ["params", "threadId"]) == "thread-123" &&
++                   get_in(payload, ["params", "turnId"]) == "turn-123"
++               else
++                 false
++               end
++             end)
++    after
++      File.rm_rf(test_root)
++    end
++  end
+ end
+-- 
+2.55.0
+

@@ -19,6 +19,8 @@ Docker Desktop, Docker Engine, Compose, Restate, PostgreSQL, Redis, and a second
 
 `aubtown-symphony.service` runs the one scheduler and dashboard as `aubtown-symphony`. It binds the dashboard to `127.0.0.1:7080`. Tailscale may expose that loopback service privately. Never bind it to a public interface.
 
+The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every 30 seconds while a Codex turn is active. The guard reads the same protected admission envelope, host enrollment, heartbeat, and rolling-week account journal used by prelaunch. An exact hard-limit response sends `turn/interrupt` for that thread and turn. If cancellation does not finish within five seconds, Symphony closes the app-server transport.
+
 `aubtown-github-token.timer` refreshes the Coordinator GitHub App installation token every 35 minutes. The one-shot refresher runs before Symphony starts, reads the host-side private key, and atomically replaces a mode-0600 token file. The initial native deployment uses the same restricted OS identity for the refresher and coordinator because Symphony must read that file. The private key remains outside Symphony's workflow and worker environments.
 
 `aubtown-host-gateway.service` receives signed heartbeat and quota envelopes as `aubtown-symphony`. It binds to `127.0.0.1:8090`, persists `/var/lib/aubtown/coordinator/host-observations.json`, and reads only enrolled public keys from `/etc/aubtown/hosts.json`. A Mac reaches it through a private Tailscale HTTPS forward. Do not bind it publicly. Execution, workspace, restore, checkpoint, validation, and review commands remain closed until their coordinator state machines and the Freed claim path are enabled.

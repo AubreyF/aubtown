@@ -111,7 +111,7 @@ export function decideQuota(input: {
   }
   const weeklyUsedPercent = input.snapshot.primary.usedPercent;
   const dailyUsed = dailyUsagePercent(input.snapshot);
-  const ageSeconds = Math.max(0, (nowMs - observedAtMs) / 1_000);
+  const ageSeconds = (nowMs - observedAtMs) / 1_000;
 
   const decision = (
     action: QuotaAction,
@@ -124,7 +124,7 @@ export function decideQuota(input: {
     observedAt: input.snapshot.observedAt,
   });
 
-  if (ageSeconds > policy.telemetryMaxAgeSeconds) {
+  if (ageSeconds < 0 || ageSeconds > policy.telemetryMaxAgeSeconds) {
     return decision("interrupt", "telemetry-stale");
   }
   if (weeklyUsedPercent >= policy.autonomousWeeklyCeilingPercent) {

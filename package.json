@@ -13,6 +13,7 @@
     "check:symphony": "node scripts/check-symphony-upstream.mjs",
     "check:symphony:upstream": "node scripts/check-symphony-upstream.mjs --network",
     "github:refresh-token": "tsx src/cli/refresh-github-token.ts",
+    "symphony:active-guard": "tsx src/cli/symphony-active-run-guard.ts",
     "symphony:prelaunch": "tsx src/cli/symphony-prelaunch.ts",
     "symphony:publish-candidate": "tsx src/cli/publish-symphony-candidate.ts",
     "symphony:reconcile-candidate": "tsx src/cli/reconcile-symphony-candidate.ts",

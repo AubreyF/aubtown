@@ -30,6 +30,16 @@
         "fail-closed-prelaunch-admission-command",
         "security-advisory-free-compatible-dependency-lock"
       ]
+    },
+    {
+      "path": "upstream/patches/0002-feat-add-active-run-guard.patch",
+      "sha256": "687e7cf72b0bc54ca2bf4ed85e53d67a8113b90d58952b5568b6c62742b86238",
+      "verifiedAgainst": "8001b52e3062495a16e520e4ceaf8f9de868c4d0",
+      "purpose": [
+        "active-turn-quota-guard",
+        "exact-thread-and-turn-interruption",
+        "hard-stop-after-interrupt-grace"
+      ]
     }
   ],
   "reviewedCapabilities": [
@@ -46,13 +56,13 @@
     "refreshable-github-app-token-file",
     "capability-aware-ssh-worker-routing",
     "fail-closed-prelaunch-admission-command",
+    "fail-closed-active-turn-guard",
     "security-audited-compatible-dependencies"
   ],
   "knownGaps": [
     "blocked-and-retry-state-is-memory-only",
     "configured-ssh-workers-replace-local-execution-instead-of-forming-one-mixed-pool",
     "freed-worktree-admission-handshake-is-not-yet-wired",
-    "freed-authority-claim-commands-are-not-yet-implemented",
-    "rolling-week-subscription-governance-requires-aubtown-policy"
+    "freed-authority-claim-commands-are-not-yet-implemented"
   ]
 }

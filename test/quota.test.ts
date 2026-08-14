@@ -99,6 +99,14 @@ describe("quota governance", () => {
     expect(decision).toMatchObject({ action: "interrupt", reason: "telemetry-stale" });
   });
 
+  it("fails closed when telemetry is dated in the future", () => {
+    const decision = decideQuota({
+      snapshot: usage({ observedAt: "2026-08-13T08:01:01.000Z" }),
+      now: NOW,
+    });
+    expect(decision).toMatchObject({ action: "interrupt", reason: "telemetry-stale" });
+  });
+
   it("rejects telemetry that is not the exact rolling weekly window", () => {
     expect(() =>
       decideQuota({
