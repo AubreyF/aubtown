@@ -3,14 +3,23 @@ import { describe, expect, it } from "vitest";
 import { HostGatewayClient } from "../src/clients/host-gateway.js";
 import { CheckpointStorageReceiptIssuer } from "../src/checkpoints/receipt.js";
 import { createCheckpointManifest } from "../src/checkpoints/manifest.js";
-import { parseSignedHostEnvelope, verifyHostEnvelope } from "../src/security/host-envelope.js";
-import { claim } from "./helpers.js";
+import { qualificationReportSchema } from "../src/domain/schemas.js";
+import { createWorkspaceFinalizationNonce } from "../src/execution/workspace.js";
+import {
+  parseSignedHostEnvelope,
+  verifyHostEnvelope,
+} from "../src/security/host-envelope.js";
+import { claim, report } from "./helpers.js";
 
 function keyPair() {
   const pair = generateKeyPairSync("ed25519");
   return {
-    privateKey: pair.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
-    publicKey: pair.publicKey.export({ type: "spki", format: "pem" }).toString(),
+    privateKey: pair.privateKey
+      .export({ type: "pkcs8", format: "pem" })
+      .toString(),
+    publicKey: pair.publicKey
+      .export({ type: "spki", format: "pem" })
+      .toString(),
   };
 }
 
@@ -60,7 +69,9 @@ describe("HostGatewayClient", () => {
     ).resolves.toMatchObject({ action: "admit" });
     expect(requestedUrl).toContain("HostGateway/macos-executor-1/submit");
     const headers = new Headers(request?.headers);
-    expect(headers.get("idempotency-key")).toMatch(/^host-macos-executor-1-7-/u);
+    expect(headers.get("idempotency-key")).toMatch(
+      /^host-macos-executor-1-7-/u,
+    );
     const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
     expect(verifyHostEnvelope(envelope, keys.publicKey)).toBe(true);
   });
@@ -191,7 +202,9 @@ describe("HostGatewayClient", () => {
   it("submits an edge-signed checkpoint receipt through the host envelope", async () => {
     const hostKeys = keyPair();
     const receiptKeys = keyPair();
-    const receipt = new CheckpointStorageReceiptIssuer(receiptKeys.privateKey).issue({
+    const receipt = new CheckpointStorageReceiptIssuer(
+      receiptKeys.privateKey,
+    ).issue({
       schemaVersion: 1,
       reference: "d".repeat(64),
       contentLength: 1_024,
@@ -228,7 +241,9 @@ describe("HostGatewayClient", () => {
       () => new Date("2026-08-13T18:00:02.000Z"),
     );
 
-    await expect(client.submitCheckpointReceipt(receipt)).resolves.toMatchObject({
+    await expect(
+      client.submitCheckpointReceipt(receipt),
+    ).resolves.toMatchObject({
       kind: "checkpoint-receipt",
       reference: receipt.reference,
     });
@@ -329,6 +344,22 @@ describe("HostGatewayClient", () => {
     const keys = keyPair();
     const requests: RequestInit[] = [];
     let sequence = 12;
+    const qualification = qualificationReportSchema.parse(report());
+    const nonceInput = {
+      repository: qualification.repository,
+      issueNumber: 1_234,
+      claimId: "claim-1234",
+      custodyEpoch: 1 as const,
+      hostId: "linux-control-1",
+      workerId: "worker-linux-1",
+      worktree: "/srv/aubtown/worktrees/freed/1234",
+      branch: "fix/deterministic-validation",
+      authorityTaskId: "github-issue-1234",
+      authorityTaskRevision: 1,
+      accountId: "codex-pro-1",
+      driverId: "codex-app-server-v1",
+      baseHead: "a".repeat(40),
+    };
     const requirement = {
       schemaVersion: 1 as const,
       repository: {
@@ -343,10 +374,19 @@ describe("HostGatewayClient", () => {
       workerId: "worker-linux-1",
       worktree: "/srv/aubtown/worktrees/freed/1234",
       branch: "fix/deterministic-validation",
-      conflictDomains: ["logical:tooling-validation"],
+      conflictDomains: qualification.conflictDomains,
       claimedAt: "2026-08-13T18:00:00.000Z",
       baseHead: "a".repeat(40),
       target: "shared",
+      handoff: {
+        qualification,
+        authorityTaskId: nonceInput.authorityTaskId,
+        authorityTaskRevision: nonceInput.authorityTaskRevision,
+        accountId: nonceInput.accountId,
+        driverId: nonceInput.driverId,
+        publicationCeiling: "draft-pr" as const,
+        finalizationNonce: createWorkspaceFinalizationNonce(nonceInput),
+      },
       requiredAt: "2026-08-13T18:00:01.000Z",
     };
     const client = new HostGatewayClient(
@@ -537,10 +577,7 @@ describe("HostGatewayClient", () => {
     );
 
     await expect(
-      client.pollAdjudication(
-        "codex-pro-1",
-        "codex-app-server-review-v1",
-      ),
+      client.pollAdjudication("codex-pro-1", "codex-app-server-review-v1"),
     ).resolves.toMatchObject({ reason: "no-command" });
     const envelope = parseSignedHostEnvelope(JSON.parse(String(request?.body)));
     expect(envelope).toMatchObject({

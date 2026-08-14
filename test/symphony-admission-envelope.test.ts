@@ -35,7 +35,10 @@ import {
 } from "../src/integrations/symphony/prepare-admission.js";
 import { parseSymphonyPrelaunchRequest } from "../src/integrations/symphony/prelaunch.js";
 import { planExecutionRouteFromState } from "../src/orchestration/route-planner.js";
-import type { InitialWorkspacePreparer } from "../src/execution/workspace.js";
+import type {
+  InitialWorkspacePreparer,
+  InitialWorkspaceRequirement,
+} from "../src/execution/workspace.js";
 import { authorityTask, claim, report, usage } from "./helpers.js";
 
 const roots: string[] = [];
@@ -133,10 +136,14 @@ async function temporaryRoot(prefix: string): Promise<string> {
   return root;
 }
 
-function workspacePreparer(actions?: string[]): InitialWorkspacePreparer {
+function workspacePreparer(
+  actions?: string[],
+  requirements?: InitialWorkspaceRequirement[],
+): InitialWorkspacePreparer {
   return {
     prepare: async (requirement) => {
       actions?.push("workspace");
+      requirements?.push(requirement);
       return {
         schemaVersion: 1,
         claimId: requirement.claimId,
@@ -156,9 +163,9 @@ describe("Symphony final admission envelope", () => {
     const root = await temporaryRoot("aubtown-candidate-");
     const candidateRoot = path.join(root, "candidates");
     const prepared = candidate();
-    const file = await new SymphonyAdmissionCandidateStore(candidateRoot).publish(
-      prepared,
-    );
+    const file = await new SymphonyAdmissionCandidateStore(
+      candidateRoot,
+    ).publish(prepared);
     expect(file).toBe(path.join(candidateRoot, "issue-1234.json"));
     await expect(
       loadSymphonyAdmissionCandidate(candidateRoot, "1234"),
@@ -258,6 +265,7 @@ describe("Symphony final admission envelope", () => {
     const root = await temporaryRoot("aubtown-envelope-prepare-");
     const candidate = envelope();
     const actions: string[] = [];
+    const requirements: InitialWorkspaceRequirement[] = [];
     const authority: AuthorityBridge = {
       id: "freed-authority-v1",
       inspect: async () => ({ active: true, reason: "test" }),
@@ -272,7 +280,7 @@ describe("Symphony final admission envelope", () => {
     const preparer = new SymphonyAdmissionPreparer(
       authority,
       new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
-      workspacePreparer(actions),
+      workspacePreparer(actions, requirements),
     );
     await expect(
       preparer.prepare({
@@ -283,6 +291,18 @@ describe("Symphony final admission envelope", () => {
       }),
     ).resolves.toMatchObject({ admission: candidate.admission });
     expect(actions).toEqual(["acquire", "workspace"]);
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]?.handoff).toMatchObject({
+      qualification: candidate.binding.qualification,
+      authorityTaskId: candidate.binding.authorityTask.id,
+      authorityTaskRevision: candidate.binding.authorityTask.revision,
+      accountId: candidate.binding.accountId,
+      driverId: candidate.binding.driverId,
+      publicationCeiling: "draft-pr",
+      finalizationNonce: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+      ),
+    });
     await expect(
       loadSymphonyAdmissionEnvelope(path.join(root, "envelopes"), "1234"),
     ).resolves.toMatchObject({ admission: candidate.admission });
@@ -398,7 +418,9 @@ describe("Symphony final admission envelope", () => {
         now,
       }),
     ]);
-    expect(results.filter((result) => result.decision === "admit")).toHaveLength(1);
+    expect(
+      results.filter((result) => result.decision === "admit"),
+    ).toHaveLength(1);
     expect(results.filter((result) => result.decision === "deny")).toEqual([
       expect.objectContaining({ reason: "dispatch-already-admitted" }),
     ]);
@@ -442,7 +464,9 @@ describe("Symphony final admission envelope", () => {
         now,
       });
       expect(result).toMatchObject({ decision: "deny", reason });
-      await expect(readdir(receiptRoot)).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readdir(receiptRoot)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
     },
   );
 
@@ -511,7 +535,9 @@ describe("Symphony final admission envelope", () => {
     const root = await temporaryRoot("aubtown-envelope-");
     const file = resolveSymphonyAdmissionEnvelopePath(root, "1234");
     await writeFile(file, `${JSON.stringify(envelope())}\n`, { mode: 0o600 });
-    await expect(loadSymphonyAdmissionEnvelope(root, "1234")).resolves.toMatchObject({
+    await expect(
+      loadSymphonyAdmissionEnvelope(root, "1234"),
+    ).resolves.toMatchObject({
       schemaVersion: 1,
     });
     await chmod(file, 0o666);

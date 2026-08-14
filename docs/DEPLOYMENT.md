@@ -29,7 +29,7 @@ The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every
 
 `aubtown-planning-snapshot.timer` invokes a native one-shot collector once per minute. The collector reads GitHub, the supported Freed task command, signed host state, local Git refs, and local worktrees. It atomically replaces `/var/lib/aubtown/coordinator/planning-snapshot.json` and `/var/lib/aubtown/coordinator/dispatch-intention.json`. The second file contains either one deterministic proposed initial dispatch or explicit blockers. These files are read-only planning evidence. Neither is an execution claim, candidate, queue, or launch authority.
 
-`aubtown-pilot-readiness.service` is a manual, read-only launch gate. It runs only after a fresh planning collection. Its preflight probes the selected executor through the configured Symphony SSH alias and writes `/var/lib/aubtown/coordinator/executor-readiness.json`. The probe verifies the protected worker config, physical Freed checkout, writable workspace root, exact `origin/dev` head, pinned Node and Git runtimes, physical worktree helper, and immutable workspace preparer. The audit then verifies that fresh report against the selected host, repository, workspace root, and dispatch base head. It also verifies protected coordinator runtime files, the immutable Symphony executable path, every reviewed patch digest, the workflow policy, prelaunch and active-guard builds, the installed Freed claim broker, a planning snapshot no older than 90 seconds, and one coherent ready dispatch for the configured repository and issue. It writes `/var/lib/aubtown/coordinator/pilot-readiness.json` and exits nonzero when any check fails. A blocked report is evidence, not permission to weaken the check.
+`aubtown-pilot-readiness.service` is a manual, read-only launch gate. It runs only after a fresh planning collection. Its preflight probes the selected executor through the configured Symphony SSH alias and writes `/var/lib/aubtown/coordinator/executor-readiness.json`. The probe verifies the protected worker config, physical Freed checkout, writable workspace root, private handoff root, exact `origin/dev` head, pinned Node and Git runtimes, physical worktree helper, and immutable workspace preparer. The audit then verifies that fresh report against the selected host, repository, workspace root, and dispatch base head. It also verifies protected coordinator runtime files, the immutable Symphony executable path, every reviewed patch digest, the workflow policy, prelaunch and active-guard builds, the installed Freed claim broker, a planning snapshot no older than 90 seconds, and one coherent ready dispatch for the configured repository and issue. It writes `/var/lib/aubtown/coordinator/pilot-readiness.json` and exits nonzero when any check fails. A blocked report is evidence, not permission to weaken the check.
 
 `aubtown-claim-reconciliation.timer` runs the native claim reconciler every minute. The same command runs as Symphony's `ExecStartPre` with `--require-clear`. An active guard heartbeat no older than 120 seconds or a claim inside its initial five-minute grace keeps custody intact. Older unlaunched `claimed` records are released through the broker with the exact last heartbeat, task revision, claim, binding, and custody epoch. If a heartbeat races that release, the broker rejects it and Symphony remains stopped. Stale `running` records are never released by age. They remain fenced for workspace restart or checkpoint transfer. This service needs only the broker endpoint and its own report file. It does not read or edit Freed authority files.
 
@@ -63,6 +63,7 @@ The future authority broker runs under its own service identity beside the canon
 - `/var/lib/aubtown/admission/receipts`: append-only exact-claim prelaunch receipts
 - `/var/lib/aubtown/admission/claim-reconciliation.json`: latest stale-claim reconciliation result
 - `/var/lib/aubtown/workspaces`: per-issue worktrees
+- `/var/lib/aubtown/executor/handoffs`: mode-0700 content-addressed executor custody manifests and active-workspace pointers
 - `/var/lib/aubtown/checkpoints`: encrypted unpublished-work objects
 - `/var/log/aubtown/symphony`: structured logs
 
@@ -113,7 +114,7 @@ Symphony names workspaces by GitHub issue identifier. Before admitting launch, A
 - the qualified target
 - `--swarm` during deferred bootstrap
 
-Admission returns only after that command reports the exact claim, host, worktree, branch, and base head. Symphony then finds the prepared directory at its normal `GH-<issue>` path. Its `before_run` guard verifies that the directory is a clean worktree belonging to the enrolled Freed repository and that the branch obeys publication naming policy. No AubTown worker daemon or workspace polling loop is involved.
+After the worktree passes exact verification, the command writes an immutable custody manifest and an atomic active-workspace pointer under the configured `handoffRoot`. The handoff binds the exact qualification, task revision, claim, account, driver, branch, base head, owned paths, and draft-only publication ceiling. The request time is excluded from the content digest, so an exact retry remains idempotent. Admission returns only after that command reports the exact claim, host, worktree, branch, and base head. Symphony then finds the prepared directory at its normal `GH-<issue>` path. Its `before_run` guard verifies that the directory is a clean worktree belonging to the enrolled Freed repository and that the branch obeys publication naming policy. No AubTown worker daemon or workspace polling loop is involved.
 
 If Symphony ever creates an empty fallback directory, its `after_create` guard fails immediately and removes it. This turns a missing host preparation into a block instead of silently running Codex in an empty directory. Bare `git worktree add` in production and direct workspace copying are prohibited.
 
@@ -124,7 +125,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 3. Install reviewed absolute Git, Node, Codex, SSH, and certificate paths.
 4. Install the pinned Symphony source or binary and verify its checksum.
 5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer, signed host observation gateway, read-only planning timer, and claim reconciliation timer.
-6. Install the same reviewed AubTown release on each executor, check out Freed, write the protected worker runtime config, and verify `scripts/worktree-add.sh` at the configured physical path.
+6. Install the same reviewed AubTown release on each executor, check out Freed, create its handoff root at mode 0700, write the protected worker runtime config, and verify `scripts/worktree-add.sh` at the configured physical path. Use `config/hosts/worker-runtime.example.json` for Linux and `config/hosts/worker-runtime.macos.example.json` for macOS.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
 9. Install the Symphony workflow and the root-owned SSH configuration, identity, and independently verified known-host keys.
@@ -136,7 +137,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 
 ## macOS executor
 
-The Mac needs no coordinator and no Docker runtime. It provides SSH, Codex, the Freed checkout, `scripts/worktree-add.sh`, its private `CODEX_HOME`, native toolchains, and a host-owned workspace root.
+The Mac needs no coordinator and no Docker runtime. It provides SSH, Codex, the Freed checkout, `scripts/worktree-add.sh`, its private `CODEX_HOME`, native toolchains, a host-owned workspace root, and the private handoff root in `config/hosts/worker-runtime.macos.example.json`.
 
 When the Mac sleeps or disconnects, it stops receiving work. Linux continues. An unpublished Mac task remains claimed until it returns or the 24-hour checkpoint-backed transfer policy advances custody to a compatible host.
 

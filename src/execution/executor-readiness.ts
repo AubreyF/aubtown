@@ -22,6 +22,7 @@ export const executorReadinessReportSchema = z.object({
   ready: z.literal(true),
   repositoryRoot: z.string().startsWith("/"),
   worktreeRoot: z.string().startsWith("/"),
+  handoffRoot: z.string().startsWith("/"),
   baseHead: commit,
   git: z.object({
     executable: z.string().startsWith("/"),
@@ -53,6 +54,15 @@ async function physicalDirectory(file: string, label: string): Promise<string> {
   const physical = await realpath(file);
   if (!stats.isDirectory() || stats.isSymbolicLink() || physical !== file) {
     throw new Error(`${label} must be one physical directory.`);
+  }
+  return physical;
+}
+
+async function protectedDirectory(file: string, label: string): Promise<string> {
+  const physical = await physicalDirectory(file, label);
+  const stats = await lstat(physical);
+  if ((stats.mode & 0o077) !== 0) {
+    throw new Error(`${label} must not be accessible to another OS user.`);
   }
   return physical;
 }
@@ -99,6 +109,11 @@ export async function probeExecutorReadiness(input: {
     "AubTown worktree root",
   );
   await access(worktreeRoot, constants.R_OK | constants.W_OK | constants.X_OK);
+  const handoffRoot = await protectedDirectory(
+    input.runtime.handoffRoot,
+    "AubTown executor handoff root",
+  );
+  await access(handoffRoot, constants.R_OK | constants.W_OK | constants.X_OK);
   const helper = await physicalFile({
     file: input.runtime.worktreeHelper,
     label: "Freed worktree helper",
@@ -170,6 +185,7 @@ export async function probeExecutorReadiness(input: {
     ready: true,
     repositoryRoot,
     worktreeRoot,
+    handoffRoot,
     baseHead,
     git: { executable: git.path, version: gitVersion },
     node: { executable: node.path, version: runningVersion },

@@ -1,5 +1,6 @@
 import { ProcessCommandRunner } from "../adapters/command-runner.js";
 import { loadWorkerRuntimeConfig } from "../config/worker-runtime.js";
+import { ExecutorHandoffManifestStore } from "../execution/handoff-manifest.js";
 import { FreedWorkspaceManager } from "../execution/workspace-manager.js";
 import {
   initialWorkspaceReceiptSchema,
@@ -13,7 +14,11 @@ if (process.argv.length !== 4) {
 }
 const runtimeFile = process.argv[2];
 const encoded = process.argv[3];
-if (runtimeFile === undefined || encoded === undefined || encoded.length > 256 * 1024) {
+if (
+  runtimeFile === undefined ||
+  encoded === undefined ||
+  encoded.length > 256 * 1024
+) {
   throw new Error("Workspace preparation arguments are invalid.");
 }
 const runtime = await loadWorkerRuntimeConfig(runtimeFile);
@@ -26,7 +31,9 @@ if (
   requirement.repository.name !== runtime.repository.name ||
   requirement.repository.defaultBranch !== runtime.repository.defaultBranch
 ) {
-  throw new Error("Workspace requirement exceeds this executor's configured scope.");
+  throw new Error(
+    "Workspace requirement exceeds this executor's configured scope.",
+  );
 }
 await new FreedWorkspaceManager(
   runtime.repositoryRoot,
@@ -40,6 +47,11 @@ await new FreedWorkspaceManager(
   baseHead: requirement.baseHead,
   target: requirement.target,
 });
+const preparedAt = new Date().toISOString();
+await new ExecutorHandoffManifestStore(runtime.handoffRoot).publish({
+  requirement,
+  activatedAt: preparedAt,
+});
 const receipt = initialWorkspaceReceiptSchema.parse({
   schemaVersion: 1,
   claimId: requirement.claimId,
@@ -48,6 +60,6 @@ const receipt = initialWorkspaceReceiptSchema.parse({
   worktree: requirement.worktree,
   branch: requirement.branch,
   baseHead: requirement.baseHead,
-  preparedAt: new Date().toISOString(),
+  preparedAt,
 });
 process.stdout.write(`${JSON.stringify(receipt)}\n`);

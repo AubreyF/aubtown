@@ -34,10 +34,12 @@ async function fixture(): Promise<{
   roots.push(root);
   const repository = path.join(root, "freed");
   const worktreeRoot = path.join(root, "worktrees");
+  const handoffRoot = path.join(root, "handoffs");
   const helper = path.join(repository, "scripts", "worktree-add.sh");
   const preparer = path.join(root, "release", "prepare-symphony-workspace.js");
   await mkdir(path.dirname(helper), { recursive: true });
   await mkdir(worktreeRoot);
+  await mkdir(handoffRoot, { mode: 0o700 });
   await mkdir(path.dirname(preparer), { recursive: true });
   await runner.run({
     executable: gitExecutable,
@@ -55,14 +57,22 @@ async function fixture(): Promise<{
     cwd: repository,
   });
   await writeFile(path.join(repository, "README.md"), "test\n");
-  await runner.run({ executable: gitExecutable, args: ["add", "."], cwd: repository });
+  await runner.run({
+    executable: gitExecutable,
+    args: ["add", "."],
+    cwd: repository,
+  });
   await runner.run({
     executable: gitExecutable,
     args: ["commit", "-m", "test"],
     cwd: repository,
   });
   const baseHead = (
-    await runner.run({ executable: gitExecutable, args: ["rev-parse", "HEAD"], cwd: repository })
+    await runner.run({
+      executable: gitExecutable,
+      args: ["rev-parse", "HEAD"],
+      cwd: repository,
+    })
   ).stdout.trim();
   await runner.run({
     executable: gitExecutable,
@@ -86,6 +96,7 @@ async function fixture(): Promise<{
       },
       repositoryRoot: repository,
       worktreeRoot,
+      handoffRoot,
       worktreeHelper: helper,
       gitExecutable: await realpath(gitExecutable),
       nodeExecutable,
@@ -111,14 +122,33 @@ describe("executor readiness", () => {
       hostId: "linux-control-1",
       baseHead: prepared.baseHead,
       node: { version: process.version },
+      handoffRoot: prepared.runtime.handoffRoot,
       helper: { path: prepared.runtime.worktreeHelper },
       preparer: { path: prepared.preparer },
     });
   });
 
+  it("rejects an executor handoff root exposed to another OS user", async () => {
+    const prepared = await fixture();
+    await chmod(prepared.runtime.handoffRoot, 0o755);
+    await expect(
+      probeExecutorReadiness({
+        runtime: prepared.runtime,
+        preparerFile: prepared.preparer,
+        runner,
+        checkedAt: "2026-08-13T22:00:00.000Z",
+        runningNodeExecutable: prepared.runtime.nodeExecutable,
+        runningNodeVersion: prepared.runtime.nodeVersion,
+      }),
+    ).rejects.toThrow("must not be accessible to another OS user");
+  });
+
   it("rejects a helper outside the enrolled Freed checkout", async () => {
     const prepared = await fixture();
-    const foreign = path.join(path.dirname(prepared.preparer), "foreign-helper");
+    const foreign = path.join(
+      path.dirname(prepared.preparer),
+      "foreign-helper",
+    );
     await writeFile(foreign, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
     await chmod(foreign, 0o700);
     await expect(

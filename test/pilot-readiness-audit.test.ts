@@ -257,6 +257,7 @@ async function fixture(): Promise<{
       ready: true,
       repositoryRoot: "/srv/freed/repository",
       worktreeRoot: "/var/lib/aubtown/workspaces",
+      handoffRoot: "/var/lib/aubtown/executor/handoffs",
       baseHead: "a".repeat(40),
       git: { executable: "/usr/bin/git", version: "git version 2.50.1" },
       node: {

@@ -1,6 +1,9 @@
 import type { AuthorityBridge } from "../../adapters/authority.js";
 import type { ExecutionAdmissionBinding } from "../../adapters/execution-admission.js";
-import { accountUsageSnapshotSchema } from "../../domain/schemas.js";
+import {
+  accountUsageSnapshotSchema,
+  qualificationReportSchema,
+} from "../../domain/schemas.js";
 import type { AccountUsageSnapshot, HostLane } from "../../domain/types.js";
 import {
   SymphonyAdmissionEnvelopeStore,
@@ -12,6 +15,7 @@ import {
 import { canonicalJson } from "../../security/canonical-json.js";
 import { prepareSymphonyAdmissionCandidate } from "./admission-candidate.js";
 import {
+  createWorkspaceFinalizationNonce,
   workspaceRequirementFromBinding,
   type InitialWorkspacePreparer,
 } from "../../execution/workspace.js";
@@ -48,6 +52,21 @@ export class SymphonyAdmissionPreparer {
     if (binding.claim.custodyEpoch !== 1) {
       throw new Error("Initial Symphony workspace requires custody epoch one.");
     }
+    const nonceInput = {
+      repository: binding.qualification.repository,
+      issueNumber: binding.qualification.issue.number,
+      claimId: binding.claim.claimId,
+      custodyEpoch: 1 as const,
+      hostId: binding.claim.hostId,
+      workerId: binding.claim.workerId,
+      worktree: binding.claim.worktree,
+      branch: binding.claim.branch,
+      authorityTaskId: binding.authorityTask.id,
+      authorityTaskRevision: binding.authorityTask.revision,
+      accountId: binding.accountId,
+      driverId: binding.driverId,
+      baseHead: binding.baseHead,
+    };
     await this.workspaces.prepare(
       workspaceRequirementFromBinding({
         repository: binding.qualification.repository,
@@ -62,6 +81,15 @@ export class SymphonyAdmissionPreparer {
         claimedAt: binding.claim.claimedAt,
         baseHead: binding.baseHead,
         target: binding.target,
+        handoff: {
+          qualification: qualificationReportSchema.parse(binding.qualification),
+          authorityTaskId: binding.authorityTask.id,
+          authorityTaskRevision: binding.authorityTask.revision,
+          accountId: binding.accountId,
+          driverId: binding.driverId,
+          publicationCeiling: "draft-pr",
+          finalizationNonce: createWorkspaceFinalizationNonce(nonceInput),
+        },
         requiredAt: input.now,
       }),
     );
@@ -137,7 +165,10 @@ export class SymphonyAdmissionPreparer {
         candidate,
       })
     ) {
-      await this.#prepareWorkspace({ binding: candidate.binding, now: input.now });
+      await this.#prepareWorkspace({
+        binding: candidate.binding,
+        now: input.now,
+      });
       return symphonyAdmissionEnvelopeSchema.parse(input.currentEnvelope);
     }
     return await this.prepare({

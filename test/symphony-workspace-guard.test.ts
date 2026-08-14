@@ -25,7 +25,9 @@ afterEach(async () => {
 });
 
 async function git(cwd: string, args: readonly string[]): Promise<string> {
-  return (await runner.run({ executable: gitExecutable, args, cwd })).stdout.trim();
+  return (
+    await runner.run({ executable: gitExecutable, args, cwd })
+  ).stdout.trim();
 }
 
 describe("Symphony workspace guard", () => {
@@ -45,6 +47,7 @@ describe("Symphony workspace guard", () => {
       },
       repositoryRoot: "/srv/freed/repository",
       worktreeRoot: "/var/lib/aubtown/workspaces",
+      handoffRoot: "/var/lib/aubtown/executor/handoffs",
       worktreeHelper: "/srv/freed/repository/scripts/worktree-add.sh",
       gitExecutable: "/usr/bin/git",
       nodeExecutable: process.execPath,
@@ -60,11 +63,15 @@ describe("Symphony workspace guard", () => {
     await chmod(configFile, 0o600);
     const alias = path.join(root, "alias.json");
     await symlink(configFile, alias);
-    await expect(loadWorkerRuntimeConfig(alias)).rejects.toThrow("symbolic links");
+    await expect(loadWorkerRuntimeConfig(alias)).rejects.toThrow(
+      "symbolic links",
+    );
   });
 
   it("accepts only a clean Freed worktree with a policy-safe branch", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-symphony-workspace-"));
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "aubtown-symphony-workspace-"),
+    );
     roots.push(root);
     const repository = path.join(root, "freed");
     const worktreeRoot = path.join(root, "worktrees");
@@ -100,6 +107,7 @@ describe("Symphony workspace guard", () => {
         },
         repositoryRoot: repository,
         worktreeRoot,
+        handoffRoot: path.join(root, "handoffs"),
         worktreeHelper: path.join(repository, "scripts/worktree-add.sh"),
         gitExecutable,
         nodeExecutable: process.execPath,
@@ -124,6 +132,7 @@ describe("Symphony workspace guard", () => {
           },
           repositoryRoot: repository,
           worktreeRoot,
+          handoffRoot: path.join(root, "handoffs"),
           worktreeHelper: path.join(repository, "scripts/worktree-add.sh"),
           gitExecutable,
           nodeExecutable: process.execPath,
@@ -135,7 +144,9 @@ describe("Symphony workspace guard", () => {
   });
 
   it("rejects another repository and authorship-signaling branches", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "aubtown-symphony-foreign-"));
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "aubtown-symphony-foreign-"),
+    );
     roots.push(root);
     const enrolled = path.join(root, "freed");
     const foreign = path.join(root, "foreign");
@@ -175,6 +186,7 @@ describe("Symphony workspace guard", () => {
           },
           repositoryRoot: enrolled,
           worktreeRoot,
+          handoffRoot: path.join(root, "handoffs"),
           worktreeHelper: path.join(enrolled, "scripts/worktree-add.sh"),
           gitExecutable,
           nodeExecutable: process.execPath,

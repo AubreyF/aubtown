@@ -8,6 +8,7 @@
   },
   "repositoryRoot": "/srv/freed/repository",
   "worktreeRoot": "/var/lib/aubtown/workspaces",
+  "handoffRoot": "/var/lib/aubtown/executor/handoffs",
   "worktreeHelper": "/srv/freed/repository/scripts/worktree-add.sh",
   "gitExecutable": "/usr/bin/git",
   "nodeExecutable": "/opt/aubtown/node/bin/node",

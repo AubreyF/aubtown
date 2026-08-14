@@ -3,9 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ProcessCommandRunner } from "../src/adapters/command-runner.js";
+import { qualificationReportSchema } from "../src/domain/schemas.js";
 import { FreedWorkspaceManager } from "../src/execution/workspace-manager.js";
 import { HostWorkspaceSupervisor } from "../src/execution/workspace-supervisor.js";
-import type { InitialWorkspaceRequirement } from "../src/execution/workspace.js";
+import {
+  createWorkspaceFinalizationNonce,
+  type InitialWorkspaceRequirement,
+} from "../src/execution/workspace.js";
+import { report } from "./helpers.js";
 
 const roots: string[] = [];
 const runner = new ProcessCommandRunner();
@@ -46,13 +51,30 @@ describe("HostWorkspaceSupervisor", () => {
     await git(repository, ["add", "."]);
     await git(repository, ["commit", "-m", "base"]);
     const baseHead = await git(repository, ["rev-parse", "HEAD"]);
+    const qualification = report({ ownedPaths: ["tracked.txt"] });
+    const repositoryIdentity = {
+      owner: "freed-project",
+      name: "freed",
+      defaultBranch: "dev",
+    } as const;
+    const nonceInput = {
+      repository: repositoryIdentity,
+      issueNumber: 1_234,
+      claimId: "claim-1234",
+      custodyEpoch: 1 as const,
+      hostId: "linux-control-1",
+      workerId: "worker-linux-1",
+      worktree: destination,
+      branch: "fix/deterministic-validation",
+      authorityTaskId: "github-issue-1234",
+      authorityTaskRevision: 1,
+      accountId: "codex-pro-1",
+      driverId: "codex-app-server-v1",
+      baseHead,
+    };
     const requirement: InitialWorkspaceRequirement = {
       schemaVersion: 1,
-      repository: {
-        owner: "freed-project",
-        name: "freed",
-        defaultBranch: "dev",
-      },
+      repository: repositoryIdentity,
       issueNumber: 1_234,
       claimId: "claim-1234",
       custodyEpoch: 1,
@@ -60,10 +82,19 @@ describe("HostWorkspaceSupervisor", () => {
       workerId: "worker-linux-1",
       worktree: destination,
       branch: "fix/deterministic-validation",
-      conflictDomains: ["logical:tooling-validation"],
+      conflictDomains: [...qualification.conflictDomains],
       claimedAt: "2026-08-13T18:00:00.000Z",
       baseHead,
       target: "shared",
+      handoff: {
+        qualification: qualificationReportSchema.parse(qualification),
+        authorityTaskId: nonceInput.authorityTaskId,
+        authorityTaskRevision: nonceInput.authorityTaskRevision,
+        accountId: nonceInput.accountId,
+        driverId: nonceInput.driverId,
+        publicationCeiling: "draft-pr",
+        finalizationNonce: createWorkspaceFinalizationNonce(nonceInput),
+      },
       requiredAt: "2026-08-13T18:00:01.000Z",
     };
     const reports: unknown[] = [];
@@ -95,9 +126,9 @@ describe("HostWorkspaceSupervisor", () => {
     );
 
     await expect(supervisor.reconcile()).resolves.toBe("prepared");
-    await expect(readFile(path.join(destination, "tracked.txt"), "utf8")).resolves.toBe(
-      "base\n",
-    );
+    await expect(
+      readFile(path.join(destination, "tracked.txt"), "utf8"),
+    ).resolves.toBe("base\n");
     await expect(git(destination, ["branch", "--show-current"])).resolves.toBe(
       requirement.branch,
     );

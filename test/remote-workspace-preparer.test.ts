@@ -6,11 +6,29 @@ import type {
 } from "../src/adapters/command-runner.js";
 import { SshInitialWorkspacePreparer } from "../src/execution/remote-workspace-preparer.js";
 import {
+  createWorkspaceFinalizationNonce,
   initialWorkspaceRequirementSchema,
   type InitialWorkspaceReceipt,
 } from "../src/execution/workspace.js";
 import type { SshWorkerPolicyVerifier } from "../src/security/ssh-worker-policy.js";
+import { report } from "./helpers.js";
 
+const qualification = report();
+const nonceInput = {
+  repository: qualification.repository,
+  issueNumber: 1_234,
+  claimId: "claim-1234",
+  custodyEpoch: 1 as const,
+  hostId: "linux-control-1",
+  workerId: "worker-linux-control-1",
+  worktree: "/var/lib/aubtown/workspaces/GH-1234",
+  branch: "fix/issue-1234",
+  authorityTaskId: "github-issue-1234",
+  authorityTaskRevision: 1,
+  accountId: "codex-pro-1",
+  driverId: "codex-app-server-v1",
+  baseHead: "a".repeat(40),
+};
 const requirement = initialWorkspaceRequirementSchema.parse({
   schemaVersion: 1,
   repository: {
@@ -25,10 +43,19 @@ const requirement = initialWorkspaceRequirementSchema.parse({
   workerId: "worker-linux-control-1",
   worktree: "/var/lib/aubtown/workspaces/GH-1234",
   branch: "fix/issue-1234",
-  conflictDomains: ["runtime-neutral"],
+  conflictDomains: qualification.conflictDomains,
   claimedAt: "2026-08-13T18:00:00.000Z",
   baseHead: "a".repeat(40),
   target: "shared",
+  handoff: {
+    qualification,
+    authorityTaskId: nonceInput.authorityTaskId,
+    authorityTaskRevision: nonceInput.authorityTaskRevision,
+    accountId: nonceInput.accountId,
+    driverId: nonceInput.driverId,
+    publicationCeiling: "draft-pr",
+    finalizationNonce: createWorkspaceFinalizationNonce(nonceInput),
+  },
   requiredAt: "2026-08-13T18:00:01.000Z",
 });
 
@@ -72,24 +99,30 @@ function receipt(
 }
 
 function preparer(runner: CommandRunner): SshInitialWorkspacePreparer {
-  return new SshInitialWorkspacePreparer(runner, {
-    sshExecutable: "/usr/bin/ssh",
-    sshConfig: "/etc/aubtown/ssh/config",
-    commandCwd: "/var/lib/aubtown/symphony",
-    remoteNodeExecutable: "/opt/aubtown/node/bin/node",
-    remotePreparerExecutable:
-      "/opt/aubtown/current/dist/cli/prepare-symphony-workspace.js",
-    remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
-    expectedUser: "aubtown-executor",
-    expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
-    expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
-  }, policy);
+  return new SshInitialWorkspacePreparer(
+    runner,
+    {
+      sshExecutable: "/usr/bin/ssh",
+      sshConfig: "/etc/aubtown/ssh/config",
+      commandCwd: "/var/lib/aubtown/symphony",
+      remoteNodeExecutable: "/opt/aubtown/node/bin/node",
+      remotePreparerExecutable:
+        "/opt/aubtown/current/dist/cli/prepare-symphony-workspace.js",
+      remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
+      expectedUser: "aubtown-executor",
+      expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
+      expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
+    },
+    policy,
+  );
 }
 
 describe("remote initial workspace preparation", () => {
   it("sends one exact encoded requirement to the selected SSH host", async () => {
     const runner = new CapturingRunner(receipt());
-    await expect(preparer(runner).prepare(requirement)).resolves.toEqual(receipt());
+    await expect(preparer(runner).prepare(requirement)).resolves.toEqual(
+      receipt(),
+    );
     expect(runner.request).toMatchObject({
       executable: "/usr/bin/ssh",
       cwd: "/var/lib/aubtown/symphony",
@@ -123,17 +156,21 @@ describe("remote initial workspace preparation", () => {
   it("rejects remote command paths that require shell interpretation", () => {
     expect(
       () =>
-        new SshInitialWorkspacePreparer(new CapturingRunner(receipt()), {
-          sshExecutable: "/usr/bin/ssh",
-          sshConfig: "/etc/aubtown/ssh/config",
-          commandCwd: "/var/lib/aubtown/symphony",
-          remoteNodeExecutable: "/opt/aubtown/node;shutdown",
-          remotePreparerExecutable: "/opt/aubtown/preparer.js",
-          remoteRuntimeConfig: "/etc/aubtown/worker.json",
-          expectedUser: "aubtown-executor",
-          expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
-          expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
-        }, policy),
+        new SshInitialWorkspacePreparer(
+          new CapturingRunner(receipt()),
+          {
+            sshExecutable: "/usr/bin/ssh",
+            sshConfig: "/etc/aubtown/ssh/config",
+            commandCwd: "/var/lib/aubtown/symphony",
+            remoteNodeExecutable: "/opt/aubtown/node;shutdown",
+            remotePreparerExecutable: "/opt/aubtown/preparer.js",
+            remoteRuntimeConfig: "/etc/aubtown/worker.json",
+            expectedUser: "aubtown-executor",
+            expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
+            expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
+          },
+          policy,
+        ),
     ).toThrow("shell-safe absolute path");
   });
 });

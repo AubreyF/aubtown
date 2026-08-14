@@ -41,6 +41,9 @@ describe("native Linux deployment", () => {
     const runtime = JSON.parse(
       await fixture("config/hosts/worker-runtime.example.json"),
     ) as Record<string, unknown>;
+    const macRuntime = JSON.parse(
+      await fixture("config/hosts/worker-runtime.macos.example.json"),
+    ) as Record<string, unknown>;
     expect(environment).toContain("AUBTOWN_SSH_EXECUTABLE=/usr/bin/ssh");
     expect(environment).toContain("prepare-symphony-workspace.js");
     expect(environment).toContain("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG=");
@@ -51,7 +54,19 @@ describe("native Linux deployment", () => {
         name: "freed",
         defaultBranch: "dev",
       },
+      handoffRoot: "/var/lib/aubtown/executor/handoffs",
       worktreeHelper: "/srv/freed/repository/scripts/worktree-add.sh",
+    });
+    expect(macRuntime).toMatchObject({
+      hostId: "macos-executor-1",
+      repository: {
+        owner: "freed-project",
+        name: "freed",
+        defaultBranch: "dev",
+      },
+      handoffRoot:
+        "/Users/aubtown/Library/Application Support/AubTown/executor/handoffs",
+      worktreeHelper: "/Users/aubtown/freed/scripts/worktree-add.sh",
     });
   });
 
@@ -82,12 +97,16 @@ describe("native Linux deployment", () => {
   });
 
   it("refreshes the coordinator token natively before expiry", async () => {
-    const service = await fixture("deploy/systemd/aubtown-github-token.service");
+    const service = await fixture(
+      "deploy/systemd/aubtown-github-token.service",
+    );
     const timer = await fixture("deploy/systemd/aubtown-github-token.timer");
     expect(service).toContain("User=aubtown-symphony");
     expect(service).toContain("dist/cli/refresh-github-token.js");
     expect(service).toContain("UMask=0077");
-    expect(service).toContain("ReadWritePaths=/var/lib/aubtown/symphony/secrets");
+    expect(service).toContain(
+      "ReadWritePaths=/var/lib/aubtown/symphony/secrets",
+    );
     expect(timer).toContain("OnUnitActiveSec=35min");
     expect(timer).toContain("RandomizedDelaySec=2min");
     expect(service).not.toMatch(/docker|compose|restate/iu);
@@ -109,8 +128,12 @@ describe("native Linux deployment", () => {
     expect(environment).toContain(
       "AUBTOWN_HOST_OBSERVATION_JOURNAL_FILE=/var/lib/aubtown/coordinator/host-observations.json",
     );
-    expect(symphony).toContain("Requires=aubtown-github-token.service aubtown-host-gateway.service");
-    expect(`${service}\n${environment}`).not.toMatch(/docker|compose|restate/iu);
+    expect(symphony).toContain(
+      "Requires=aubtown-github-token.service aubtown-host-gateway.service",
+    );
+    expect(`${service}\n${environment}`).not.toMatch(
+      /docker|compose|restate/iu,
+    );
     const hostAgent = await fixture("deploy/systemd/host-agent.env.example");
     expect(hostAgent).toContain(
       "AUBTOWN_HOST_GATEWAY_URL=http://127.0.0.1:8090",
@@ -119,7 +142,9 @@ describe("native Linux deployment", () => {
     expect(hostAgent).not.toMatch(
       /EXECUTION_JOURNAL|ADJUDICATION_JOURNAL|CHECKPOINT|WORKTREE/iu,
     );
-    expect(hostAgent).not.toMatch(/replace-with-private-key|BEGIN PRIVATE KEY/iu);
+    expect(hostAgent).not.toMatch(
+      /replace-with-private-key|BEGIN PRIVATE KEY/iu,
+    );
   });
 
   it("deploys telemetry without a second worker scheduler", async () => {
@@ -146,7 +171,9 @@ describe("native Linux deployment", () => {
     const environment = await fixture("deploy/systemd/symphony.env.example");
     expect(service).toContain("User=aubtown-symphony");
     expect(service).toContain("dist/cli/collect-planning-snapshot.js");
-    expect(service).toContain("ReadOnlyPaths=/etc/aubtown /srv/freed /var/lib/freed/automation");
+    expect(service).toContain(
+      "ReadOnlyPaths=/etc/aubtown /srv/freed /var/lib/freed/automation",
+    );
     expect(service).toContain("ReadWritePaths=/var/lib/aubtown/coordinator");
     expect(timer).toContain("OnUnitActiveSec=1min");
     expect(environment).toContain(
@@ -200,10 +227,16 @@ describe("native Linux deployment", () => {
     expect(service).toContain("Type=oneshot");
     expect(service).toContain("dist/cli/audit-pilot-readiness.js");
     expect(service).toContain("dist/cli/probe-executor-readiness.js");
-    expect(service).toContain("Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service");
-    expect(service).toContain("ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed /var/lib/freed/automation");
+    expect(service).toContain(
+      "Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service",
+    );
+    expect(service).toContain(
+      "ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed /var/lib/freed/automation",
+    );
     expect(service).toContain("ReadWritePaths=/var/lib/aubtown/coordinator");
-    expect(service).toContain("RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6");
+    expect(service).toContain(
+      "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+    );
     expect(environment).toContain("AUBTOWN_PILOT_READINESS_FILE=");
     expect(environment).toContain("AUBTOWN_EXECUTOR_READINESS_FILE=");
     expect(environment).toContain("AUBTOWN_REMOTE_EXECUTOR_PROBE=");
@@ -211,7 +244,9 @@ describe("native Linux deployment", () => {
     expect(environment).toContain("AUBTOWN_SYMPHONY_EXECUTABLE=");
     expect(packageJson).toContain('"pilot:audit"');
     expect(packageJson).toContain('"pilot:probe-executor"');
-    expect(`${service}\n${environment}`).not.toMatch(/docker|compose|restate/iu);
+    expect(`${service}\n${environment}`).not.toMatch(
+      /docker|compose|restate/iu,
+    );
   });
 
   it("requires a disposable broker conformance proof before pilot readiness", async () => {
@@ -225,7 +260,9 @@ describe("native Linux deployment", () => {
     const packageJson = await fixture("package.json");
     expect(conformance).toContain("dist/cli/verify-freed-broker.js");
     expect(conformance).toContain("/etc/aubtown/freed-broker-conformance.json");
-    expect(conformance).toContain("ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/aubtown/conformance");
+    expect(conformance).toContain(
+      "ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/aubtown/conformance",
+    );
     expect(readiness).toContain("aubtown-freed-broker-conformance.service");
     expect(environment).toContain(
       "AUBTOWN_FREED_BROKER_CONFORMANCE_FILE=/var/lib/aubtown/coordinator/freed-broker-conformance.json",
@@ -236,17 +273,13 @@ describe("native Linux deployment", () => {
 
   it("ships a native non-authoritative admission candidate publisher", async () => {
     const packageJson = await fixture("package.json");
-    const publisher = await fixture(
-      "src/cli/publish-symphony-candidate.ts",
-    );
+    const publisher = await fixture("src/cli/publish-symphony-candidate.ts");
     expect(packageJson).toContain('"symphony:publish-candidate"');
     expect(packageJson).toContain('"symphony:reconcile-candidate"');
     expect(publisher).toContain("AUBTOWN_PRELAUNCH_CANDIDATE_ROOT");
     expect(publisher).toContain("publishSymphonyAdmissionCandidateFile");
     expect(publisher).not.toContain("FreedAuthorityBridge");
-    const reconciler = await fixture(
-      "src/cli/reconcile-symphony-candidate.ts",
-    );
+    const reconciler = await fixture("src/cli/reconcile-symphony-candidate.ts");
     expect(reconciler).toContain("publishReconciledAdmissionCandidateFile");
     expect(reconciler).not.toContain("FreedAuthorityBridge");
   });
@@ -307,9 +340,7 @@ describe("native Linux deployment", () => {
     expect(environment).toContain(
       "AUBTOWN_FREED_CLAIM_BROKER=/opt/freed/bin/factory-coordinator",
     );
-    expect(environment).toContain(
-      "AUBTOWN_FREED_REPOSITORY_ROOT=/srv/freed",
-    );
+    expect(environment).toContain("AUBTOWN_FREED_REPOSITORY_ROOT=/srv/freed");
     expect(environment).toContain(
       "AUBTOWN_FREED_STATE_ROOT=/var/lib/freed/automation",
     );
@@ -317,7 +348,9 @@ describe("native Linux deployment", () => {
   });
 
   it("keeps private checkpoint keys on the storage edge", async () => {
-    const checkpoint = await fixture("deploy/systemd/checkpoint-edge.env.example");
+    const checkpoint = await fixture(
+      "deploy/systemd/checkpoint-edge.env.example",
+    );
     expect(checkpoint).toContain("CHECKPOINT_RECEIPT_PRIVATE_KEY_FILE");
     expect(checkpoint).toContain("CHECKPOINT_GRANT_PUBLIC_KEY_FILE");
     expect(checkpoint).not.toContain("CHECKPOINT_GRANT_PRIVATE_KEY_FILE");

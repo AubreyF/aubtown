@@ -15,6 +15,7 @@ const report = {
   ready: true as const,
   repositoryRoot: "/srv/freed/repository",
   worktreeRoot: "/var/lib/aubtown/workspaces",
+  handoffRoot: "/var/lib/aubtown/executor/handoffs",
   baseHead: "a".repeat(40),
   git: { executable: "/usr/bin/git", version: "git version 2.50.1" },
   node: { executable: "/opt/aubtown/node/bin/node", version: "v24.14.1" },
@@ -51,18 +52,22 @@ class Runner implements CommandRunner {
 }
 
 function probe(runner: CommandRunner): SshExecutorReadinessProbe {
-  return new SshExecutorReadinessProbe(runner, {
-    sshExecutable: "/usr/bin/ssh",
-    sshConfig: "/etc/aubtown/ssh/config",
-    commandCwd: "/var/lib/aubtown/symphony",
-    remoteNodeExecutable: "/opt/aubtown/node/bin/node",
-    remoteProbeExecutable: "/opt/aubtown/releases/test/probe.js",
-    remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
-    remoteWorkspacePreparer: "/opt/aubtown/releases/test/preparer.js",
-    expectedUser: "aubtown-executor",
-    expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
-    expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
-  }, policy);
+  return new SshExecutorReadinessProbe(
+    runner,
+    {
+      sshExecutable: "/usr/bin/ssh",
+      sshConfig: "/etc/aubtown/ssh/config",
+      commandCwd: "/var/lib/aubtown/symphony",
+      remoteNodeExecutable: "/opt/aubtown/node/bin/node",
+      remoteProbeExecutable: "/opt/aubtown/releases/test/probe.js",
+      remoteRuntimeConfig: "/etc/aubtown/worker-runtime.json",
+      remoteWorkspacePreparer: "/opt/aubtown/releases/test/preparer.js",
+      expectedUser: "aubtown-executor",
+      expectedIdentityFile: "/etc/aubtown/ssh/worker_ed25519",
+      expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
+    },
+    policy,
+  );
 }
 
 describe("remote executor readiness", () => {

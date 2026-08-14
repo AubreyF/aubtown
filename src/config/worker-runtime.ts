@@ -12,6 +12,7 @@ export interface WorkerRuntimeConfig {
   };
   readonly repositoryRoot: string;
   readonly worktreeRoot: string;
+  readonly handoffRoot: string;
   readonly worktreeHelper: string;
   readonly gitExecutable: string;
   readonly nodeExecutable: string;
@@ -32,6 +33,7 @@ const configSchema: z.ZodType<WorkerRuntimeConfig> = z.object({
   }),
   repositoryRoot: absolutePath,
   worktreeRoot: absolutePath,
+  handoffRoot: absolutePath,
   worktreeHelper: absolutePath,
   gitExecutable: absolutePath,
   nodeExecutable: absolutePath,
@@ -45,7 +47,9 @@ export async function loadWorkerRuntimeConfig(
     throw new Error("Worker runtime config path must be absolute.");
   }
   if ((await realpath(file)) !== file) {
-    throw new Error("Worker runtime config path cannot contain symbolic links.");
+    throw new Error(
+      "Worker runtime config path cannot contain symbolic links.",
+    );
   }
   const stats = await lstat(file);
   if (
