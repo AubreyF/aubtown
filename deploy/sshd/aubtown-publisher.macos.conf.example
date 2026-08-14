@@ -1,0 +1,10 @@
+Match User aubtown-publisher
+    AuthenticationMethods publickey
+    AuthorizedKeysFile "/Library/Application Support/AubTown/ssh/publisher_authorized_keys"
+    ForceCommand /opt/aubtown/node/bin/node /opt/aubtown/releases/replace-with-revision/dist/cli/publisher-ssh-gateway.js '/Library/Application Support/AubTown/publisher-runtime.json' /opt/aubtown/releases/replace-with-revision/dist/cli/publish-draft-local.js '/Library/Application Support/AubTown/ssh/publisher_authorized_keys'
+    DisableForwarding yes
+    PermitTTY no
+    X11Forwarding no
+    PermitUserRC no
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no

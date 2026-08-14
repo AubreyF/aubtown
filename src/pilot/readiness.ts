@@ -229,6 +229,7 @@ export async function auditPilotReadiness(input: {
   let workspaceCompletionReaderSha256: string | undefined;
   let workspaceAdjudicatorSha256: string | undefined;
   let draftPublisherSha256: string | undefined;
+  let publisherGatewaySha256: string | undefined;
   let expectedNodeVersion: string | undefined;
   let planningSource: unknown;
   let dispatchSource: unknown;
@@ -419,6 +420,19 @@ export async function auditPilotReadiness(input: {
       draftPublisherSha256 = sha256(await readFile(file));
       return draftPublisherSha256;
     }),
+    check("runtime:publisher-ssh-gateway-executable", async () => {
+      const file = await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/publisher-ssh-gateway.js",
+        ),
+        label: "AubTown publisher SSH gateway",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      });
+      publisherGatewaySha256 = sha256(await readFile(file));
+      return publisherGatewaySha256;
+    }),
     check("runtime:node-version-contract", async () => {
       const file = await physicalFile({
         file: path.join(input.paths.releaseRoot, ".nvmrc"),
@@ -462,17 +476,6 @@ export async function auditPilotReadiness(input: {
           "dist/cli/probe-publisher-readiness.js",
         ),
         label: "AubTown publisher probe client",
-        executable: false,
-        maxBytes: 2 * 1_024 * 1_024,
-      }),
-    ),
-    check("runtime:publisher-probe-host-executable", async () =>
-      await physicalFile({
-        file: path.join(
-          input.paths.releaseRoot,
-          "dist/cli/probe-publisher-readiness-local.js",
-        ),
-        label: "AubTown host-local publisher probe",
         executable: false,
         maxBytes: 2 * 1_024 * 1_024,
       }),
@@ -649,6 +652,7 @@ export async function auditPilotReadiness(input: {
         executorReadiness === undefined ||
         publisherReadiness === undefined ||
         draftPublisherSha256 === undefined ||
+        publisherGatewaySha256 === undefined ||
         expectedNodeVersion === undefined
       ) {
         throw new Error("Dispatch, executor, and publisher readiness are not all available.");
@@ -659,6 +663,7 @@ export async function auditPilotReadiness(input: {
         executorReadiness.hostId !== hostId ||
         publisherReadiness.transport.hostId !== `${hostId}-publisher` ||
         publisherReadiness.transport.user !== "aubtown-publisher" ||
+        publisherReadiness.gateway.sha256 !== publisherGatewaySha256 ||
         publisherReadiness.publisher.sha256 !== draftPublisherSha256 ||
         publisherReadiness.node.version !== expectedNodeVersion ||
         !publisherReadiness.selectedRepositories.includes(input.repository) ||
@@ -667,10 +672,10 @@ export async function auditPilotReadiness(input: {
         )
       ) {
         throw new Error(
-          "Publisher readiness disagrees with the selected host, dedicated SSH identity, repository, workspace root, entrypoint, or Node version.",
+          "Publisher readiness disagrees with the selected host, forced SSH gateway, dedicated identity, repository, workspace root, entrypoint, or Node version.",
         );
       }
-      return `${publisherReadiness.hostId}:${publisherReadiness.runtime.sha256}:${publisherReadiness.publisher.sha256}`;
+      return `${publisherReadiness.hostId}:${publisherReadiness.runtime.sha256}:${publisherReadiness.gateway.sha256}:${publisherReadiness.publisher.sha256}`;
     }),
   );
 

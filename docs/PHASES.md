@@ -68,6 +68,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Persist publication, projection, and exact claim-release stages as restart-safe immutable transactions.
 - [x] Project blocked adjudication and release its exact running claim without publishing a draft.
 - [x] Require fresh dedicated publisher-account readiness evidence in the pilot launch audit.
+- [x] Restrict the publisher SSH identity to a root-owned two-operation forced-command gateway.
 - [ ] Review and merge the Freed task-claim commands from draft PR #1491.
 - [x] Build the host-neutral `factory-coordinator` broker with pinned runtime verification and bounded lease cleanup.
 - [ ] Install the native Linux authority broker.

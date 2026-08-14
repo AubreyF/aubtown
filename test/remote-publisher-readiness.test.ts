@@ -15,6 +15,14 @@ const report = {
     path: "/etc/aubtown/publisher-runtime.json",
     sha256: "1".repeat(64),
   },
+  authorizedKeys: {
+    path: "/etc/aubtown/ssh/publisher_authorized_keys",
+    sha256: "6".repeat(64),
+  },
+  gateway: {
+    path: "/opt/aubtown/current/dist/cli/publisher-ssh-gateway.js",
+    sha256: "5".repeat(64),
+  },
   publisher: {
     path: "/opt/aubtown/current/dist/cli/publish-draft-local.js",
     sha256: "2".repeat(64),
@@ -56,12 +64,6 @@ describe("remote publisher readiness", () => {
         sshExecutable: "/usr/bin/ssh",
         sshConfig: "/etc/aubtown/ssh/config",
         commandCwd: "/var/lib/aubtown/symphony",
-        remoteNodeExecutable: "/opt/aubtown/node/bin/node",
-        remoteProbeExecutable:
-          "/opt/aubtown/current/dist/cli/probe-publisher-readiness-local.js",
-        remoteRuntimeConfig: "/etc/aubtown/publisher-runtime.json",
-        remotePublisherExecutable:
-          "/opt/aubtown/current/dist/cli/publish-draft-local.js",
         expectedUser: "aubtown-publisher",
         expectedIdentityFile: "/etc/aubtown/ssh/publisher_ed25519",
         expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
@@ -73,6 +75,7 @@ describe("remote publisher readiness", () => {
       user: "aubtown-publisher",
     });
     expect(calls[0]?.args).toContain("macos-executor-1-publisher");
+    expect(calls[0]?.args.at(-1)).toBe("probe");
     expect(calls[0]?.args).not.toContain("macos-executor-1");
   });
 });

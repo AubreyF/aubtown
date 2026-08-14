@@ -62,9 +62,8 @@ describe("native Linux deployment", () => {
     expect(environment).toContain("complete-symphony-workspace.js");
     expect(environment).toContain("read-symphony-completion.js");
     expect(environment).toContain("adjudicate-symphony-completion.js");
-    expect(environment).toContain("publish-draft-local.js");
     expect(environment).toContain("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG=");
-    expect(environment).toContain("AUBTOWN_REMOTE_PUBLISHER_RUNTIME_CONFIG=");
+    expect(environment).not.toContain("AUBTOWN_REMOTE_PUBLISHER_RUNTIME_CONFIG=");
     expect(runtime).toMatchObject({
       hostId: "linux-control-1",
       repository: {
@@ -112,6 +111,9 @@ describe("native Linux deployment", () => {
     });
     expect(await fixture("package.json")).toContain(
       '"symphony:publish-draft-local"',
+    );
+    expect(await fixture("package.json")).toContain(
+      '"publisher:ssh-gateway"',
     );
   });
 
@@ -166,6 +168,18 @@ describe("native Linux deployment", () => {
 
   it("ships a noninteractive pinned-host SSH worker profile", async () => {
     const config = await fixture("config/hosts/ssh_config.example");
+    const linuxPublisherKey = await fixture(
+      "config/hosts/publisher_authorized_keys.example",
+    );
+    const macPublisherKey = await fixture(
+      "config/hosts/publisher_authorized_keys.macos.example",
+    );
+    const linuxSshd = await fixture(
+      "deploy/sshd/aubtown-publisher.conf.example",
+    );
+    const macSshd = await fixture(
+      "deploy/sshd/aubtown-publisher.macos.conf.example",
+    );
     for (const required of [
       "Host linux-control-1 macos-executor-1",
       "User aubtown-executor",
@@ -185,6 +199,28 @@ describe("native Linux deployment", () => {
       "UpdateHostKeys no",
     ]) {
       expect(config).toContain(required);
+    }
+    for (const authorizedKey of [linuxPublisherKey, macPublisherKey]) {
+      expect(authorizedKey).toContain("restrict,command=");
+      expect(authorizedKey).toContain("publisher-ssh-gateway.js");
+      expect(authorizedKey).toContain("publish-draft-local.js");
+      expect(authorizedKey).toContain("publisher_authorized_keys");
+      expect(authorizedKey).toContain("ssh-ed25519");
+      expect(authorizedKey).not.toMatch(/\b(?:bash|sh|zsh)\b/u);
+    }
+    expect(linuxPublisherKey).toContain("/etc/aubtown/publisher-runtime.json");
+    expect(macPublisherKey).toContain(
+      "'/Library/Application Support/AubTown/publisher-runtime.json'",
+    );
+    for (const sshd of [linuxSshd, macSshd]) {
+      expect(sshd).toContain("Match User aubtown-publisher");
+      expect(sshd).toContain("AuthenticationMethods publickey");
+      expect(sshd).toContain("ForceCommand");
+      expect(sshd).toContain("publisher-ssh-gateway.js");
+      expect(sshd).toContain("DisableForwarding yes");
+      expect(sshd).toContain("PermitTTY no");
+      expect(sshd).toContain("PasswordAuthentication no");
+      expect(sshd).toContain("KbdInteractiveAuthentication no");
     }
     expect(config).toContain("HostKeyAlias linux-control-1");
     expect(config).toContain("HostKeyAlias macos-executor-1");
@@ -345,12 +381,13 @@ describe("native Linux deployment", () => {
     expect(environment).toContain("AUBTOWN_EXECUTOR_READINESS_FILE=");
     expect(environment).toContain("AUBTOWN_PUBLISHER_READINESS_FILE=");
     expect(environment).toContain("AUBTOWN_REMOTE_EXECUTOR_PROBE=");
-    expect(environment).toContain("AUBTOWN_REMOTE_PUBLISHER_PROBE=");
+    expect(environment).not.toContain("AUBTOWN_REMOTE_PUBLISHER_PROBE=");
     expect(environment).toContain("AUBTOWN_SYMPHONY_LOCK_FILE=");
     expect(environment).toContain("AUBTOWN_SYMPHONY_EXECUTABLE=");
     expect(packageJson).toContain('"pilot:audit"');
     expect(packageJson).toContain('"pilot:probe-executor"');
     expect(packageJson).toContain('"pilot:probe-publisher"');
+    expect(packageJson).toContain('"publisher:ssh-gateway"');
     expect(`${service}\n${environment}`).not.toMatch(
       /docker|compose|restate/iu,
     );

@@ -1,0 +1,1 @@
+restrict,command="'/opt/aubtown/node/bin/node' '/opt/aubtown/releases/replace-with-revision/dist/cli/publisher-ssh-gateway.js' '/etc/aubtown/publisher-runtime.json' '/opt/aubtown/releases/replace-with-revision/dist/cli/publish-draft-local.js' '/etc/aubtown/ssh/publisher_authorized_keys'" ssh-ed25519 replace-with-coordinator-publisher-public-key aubtown-coordinator-publisher

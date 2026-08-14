@@ -50,7 +50,8 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - Coordinator reconciliation that binds the completion receipt to fresh GitHub, Freed task, claim, quota, and implementation-turn evidence
 - Exact validation and fresh read-only independent review on the custody host, with active rolling-week quota interruption and restart-safe receipts
 - A fresh selected-executor probe for the pinned Node and Git runtimes, Freed checkout, helper, workspace root, private handoff root, preparer, completion, reader, and adjudicator digests, and admitted base ref
-- A fresh dedicated-publisher probe for its OS identity, private key mode, pinned runtime, worktree roots, repository enrollment, and draft publisher digest
+- A forced-command publisher SSH account that admits only readiness probes and exact draft publication payloads
+- A fresh dedicated-publisher probe for its OS identity, private key mode, pinned runtime, gateway, worktree roots, repository enrollment, and draft publisher digest
 - Machine-checked OpenSSH worker aliases with pinned host keys, one identity, no password fallback, and no forwarding
 - A Freed workflow that accepts only helper-prepared, policy-safe worktrees
 

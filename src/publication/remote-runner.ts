@@ -24,20 +24,10 @@ export interface SshDraftPublisherConfig {
   readonly sshConfig: string;
   readonly commandCwd: string;
   readonly remoteHostAlias: string;
-  readonly remoteNodeExecutable: string;
-  readonly remotePublisherExecutable: string;
-  readonly remotePublisherRuntime: string;
   readonly expectedUser: string;
   readonly expectedIdentityFile: string;
   readonly expectedKnownHostsFile: string;
   readonly requiredConfigUid?: number;
-}
-
-function commandPath(value: string, label: string): string {
-  if (!path.isAbsolute(value) || !/^[A-Za-z0-9_./-]+$/u.test(value)) {
-    throw new Error(`${label} must be one shell-safe absolute path.`);
-  }
-  return value;
 }
 
 export class SshDraftPublisher implements RemoteDraftPublisher {
@@ -56,21 +46,7 @@ export class SshDraftPublisher implements RemoteDraftPublisher {
     ) {
       throw new Error("SSH draft publication paths must be absolute.");
     }
-    this.#config = {
-      ...config,
-      remoteNodeExecutable: commandPath(
-        config.remoteNodeExecutable,
-        "Remote Node executable",
-      ),
-      remotePublisherExecutable: commandPath(
-        config.remotePublisherExecutable,
-        "Remote publisher executable",
-      ),
-      remotePublisherRuntime: commandPath(
-        config.remotePublisherRuntime,
-        "Remote publisher runtime",
-      ),
-    };
+    this.#config = config;
   }
 
   async publish(rawPlan: PublicationPlan): Promise<DraftPublicationReceipt> {
@@ -107,9 +83,7 @@ export class SshDraftPublisher implements RemoteDraftPublisher {
         this.#config.sshConfig,
         "--",
         publisherAlias,
-        this.#config.remoteNodeExecutable,
-        this.#config.remotePublisherExecutable,
-        this.#config.remotePublisherRuntime,
+        "publish",
         payload,
       ],
       cwd: this.#config.commandCwd,

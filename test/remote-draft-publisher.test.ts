@@ -87,10 +87,6 @@ describe("remote draft publication", () => {
         sshConfig: "/etc/aubtown/ssh/config",
         commandCwd: "/var/lib/aubtown/symphony",
         remoteHostAlias: "macos-executor-1-publisher",
-        remoteNodeExecutable: "/opt/aubtown/node/bin/node",
-        remotePublisherExecutable:
-          "/opt/aubtown/current/dist/cli/publish-draft-local.js",
-        remotePublisherRuntime: "/etc/aubtown/publisher-runtime.json",
         expectedUser: "aubtown-publisher",
         expectedIdentityFile: "/etc/aubtown/ssh/publisher_ed25519",
         expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",
@@ -102,12 +98,13 @@ describe("remote draft publication", () => {
     await expect(publisher.publish(plan)).resolves.toEqual(receipt);
     expect(policyHosts).toEqual(["macos-executor-1-publisher"]);
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.args.slice(0, 5)).toEqual([
+    expect(calls[0]?.args.slice(0, 6)).toEqual([
       "-F",
       "/etc/aubtown/ssh/config",
       "--",
       "macos-executor-1-publisher",
-      "/opt/aubtown/node/bin/node",
+      "publish",
+      calls[0]?.args.at(-1),
     ]);
     expect(calls[0]?.args.join(" ")).not.toContain("token");
     const payload = calls[0]?.args.at(-1);
@@ -131,10 +128,6 @@ describe("remote draft publication", () => {
         sshConfig: "/etc/aubtown/ssh/config",
         commandCwd: "/var/lib/aubtown/symphony",
         remoteHostAlias: "macos-executor-1-publisher",
-        remoteNodeExecutable: "/opt/aubtown/node/bin/node",
-        remotePublisherExecutable:
-          "/opt/aubtown/current/dist/cli/publish-draft-local.js",
-        remotePublisherRuntime: "/etc/aubtown/publisher-runtime.json",
         expectedUser: "aubtown-publisher",
         expectedIdentityFile: "/etc/aubtown/ssh/publisher_ed25519",
         expectedKnownHostsFile: "/etc/aubtown/ssh/known_hosts",

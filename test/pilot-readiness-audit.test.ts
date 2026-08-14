@@ -166,6 +166,10 @@ async function fixture(): Promise<{
     "export {};\n",
   );
   await protectedFile(
+    path.join(releaseRoot, "dist/cli/publisher-ssh-gateway.js"),
+    "export {};\n",
+  );
+  await protectedFile(
     path.join(releaseRoot, "dist/cli/probe-publisher-readiness.js"),
     "export {};\n",
   );
@@ -348,6 +352,14 @@ async function fixture(): Promise<{
       runtime: {
         path: "/etc/aubtown/publisher-runtime.json",
         sha256: "1".repeat(64),
+      },
+      authorizedKeys: {
+        path: "/etc/aubtown/ssh/publisher_authorized_keys",
+        sha256: "0".repeat(64),
+      },
+      gateway: {
+        path: "/opt/aubtown/releases/test/dist/cli/publisher-ssh-gateway.js",
+        sha256: createHash("sha256").update("export {};\n").digest("hex"),
       },
       publisher: {
         path: "/opt/aubtown/releases/test/dist/cli/publish-draft-local.js",

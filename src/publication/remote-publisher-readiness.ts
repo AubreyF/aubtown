@@ -14,21 +14,10 @@ export interface SshPublisherReadinessConfig {
   readonly sshExecutable: string;
   readonly sshConfig: string;
   readonly commandCwd: string;
-  readonly remoteNodeExecutable: string;
-  readonly remoteProbeExecutable: string;
-  readonly remoteRuntimeConfig: string;
-  readonly remotePublisherExecutable: string;
   readonly expectedUser: string;
   readonly expectedIdentityFile: string;
   readonly expectedKnownHostsFile: string;
   readonly requiredConfigUid?: number;
-}
-
-function remoteToken(value: string, label: string): string {
-  if (!path.isAbsolute(value) || !/^[A-Za-z0-9_./-]+$/u.test(value)) {
-    throw new Error(`${label} must be one shell-safe absolute path.`);
-  }
-  return value;
 }
 
 export class SshPublisherReadinessProbe {
@@ -47,25 +36,7 @@ export class SshPublisherReadinessProbe {
     ) {
       throw new Error("SSH publisher readiness paths must be absolute.");
     }
-    this.#config = {
-      ...config,
-      remoteNodeExecutable: remoteToken(
-        config.remoteNodeExecutable,
-        "Remote Node executable",
-      ),
-      remoteProbeExecutable: remoteToken(
-        config.remoteProbeExecutable,
-        "Remote publisher probe",
-      ),
-      remoteRuntimeConfig: remoteToken(
-        config.remoteRuntimeConfig,
-        "Remote publisher runtime config",
-      ),
-      remotePublisherExecutable: remoteToken(
-        config.remotePublisherExecutable,
-        "Remote publisher executable",
-      ),
-    };
+    this.#config = config;
   }
 
   async probe(hostId: string): Promise<SelectedPublisherReadinessReport> {
@@ -92,10 +63,7 @@ export class SshPublisherReadinessProbe {
         this.#config.sshConfig,
         "--",
         alias,
-        this.#config.remoteNodeExecutable,
-        this.#config.remoteProbeExecutable,
-        this.#config.remoteRuntimeConfig,
-        this.#config.remotePublisherExecutable,
+        "probe",
       ],
       cwd: this.#config.commandCwd,
       timeoutMs: 20_000,

@@ -384,11 +384,6 @@ if (result === null) {
         sshConfig: absolute("AUBTOWN_SYMPHONY_SSH_CONFIG"),
         commandCwd: absolute("AUBTOWN_SSH_COMMAND_CWD"),
         remoteHostAlias: `${workProduct.hostId}-publisher`,
-        remoteNodeExecutable: absolute("AUBTOWN_REMOTE_NODE_EXECUTABLE"),
-        remotePublisherExecutable: absolute("AUBTOWN_REMOTE_DRAFT_PUBLISHER"),
-        remotePublisherRuntime: absolute(
-          "AUBTOWN_REMOTE_PUBLISHER_RUNTIME_CONFIG",
-        ),
         expectedUser: required("AUBTOWN_SSH_PUBLISHER_USER"),
         expectedIdentityFile: absolute("AUBTOWN_SSH_PUBLISHER_IDENTITY_FILE"),
         expectedKnownHostsFile: absolute("AUBTOWN_SSH_KNOWN_HOSTS_FILE"),
