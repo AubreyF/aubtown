@@ -116,6 +116,10 @@ async function fixture(): Promise<{
     path.join(releaseRoot, "dist/cli/symphony-active-run-guard.js"),
     "export {};\n",
   );
+  await protectedFile(
+    path.join(releaseRoot, "dist/cli/prepare-symphony-workspace.js"),
+    "export {};\n",
+  );
 
   const accountProfiles: ExecutionAccountProfiles = {
     "codex-pro-1": {

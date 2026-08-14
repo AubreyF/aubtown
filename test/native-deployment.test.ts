@@ -26,11 +26,33 @@ describe("native Linux deployment", () => {
     expect(workflow).toContain('required_labels: [debt, "factory:ready"]');
     expect(workflow).toContain("max_concurrent_agents: 1");
     expect(workflow).toContain("symphony-prelaunch.js");
+    expect(workflow).toContain("timeout_ms: 60000");
     expect(workflow).toContain("symphony-active-run-guard.js");
     expect(workflow).toContain("interrupt_grace_ms: 5000");
     expect(workflow).toContain("reject-unprepared-symphony-workspace.js");
     expect(workflow).toContain("verify-symphony-workspace.js");
+    expect(workflow).toContain("linux-control-1");
+    expect(workflow).toContain("macos-executor-1");
     expect(workflow).not.toMatch(/docker|compose|restate/iu);
+  });
+
+  it("prepares exact Freed worktrees over the existing Symphony SSH lane", async () => {
+    const environment = await fixture("deploy/systemd/symphony.env.example");
+    const runtime = JSON.parse(
+      await fixture("config/hosts/worker-runtime.example.json"),
+    ) as Record<string, unknown>;
+    expect(environment).toContain("AUBTOWN_SSH_EXECUTABLE=/usr/bin/ssh");
+    expect(environment).toContain("prepare-symphony-workspace.js");
+    expect(environment).toContain("AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG=");
+    expect(runtime).toMatchObject({
+      hostId: "linux-control-1",
+      repository: {
+        owner: "freed-project",
+        name: "freed",
+        defaultBranch: "dev",
+      },
+      worktreeHelper: "/srv/freed/repository/scripts/worktree-add.sh",
+    });
   });
 
   it("refreshes the coordinator token natively before expiry", async () => {

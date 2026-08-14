@@ -18,6 +18,7 @@ import {
   parseSymphonyPrelaunchRequest,
   type SymphonyPrelaunchResponse,
 } from "../integrations/symphony/prelaunch.js";
+import { SshInitialWorkspacePreparer } from "../execution/remote-workspace-preparer.js";
 
 const request = parseSymphonyPrelaunchRequest(process.argv.slice(2));
 
@@ -83,6 +84,20 @@ async function resolveEnvelope(now: string): Promise<SymphonyAdmissionEnvelope> 
   return await new SymphonyAdmissionPreparer(
     bridge,
     new SymphonyAdmissionEnvelopeStore(envelopeRoot),
+    new SshInitialWorkspacePreparer(new ProcessCommandRunner(), {
+      sshExecutable: requiredAbsoluteEnvironment("AUBTOWN_SSH_EXECUTABLE"),
+      sshConfig: requiredAbsoluteEnvironment("AUBTOWN_SYMPHONY_SSH_CONFIG"),
+      commandCwd: requiredAbsoluteEnvironment("AUBTOWN_SSH_COMMAND_CWD"),
+      remoteNodeExecutable: requiredAbsoluteEnvironment(
+        "AUBTOWN_REMOTE_NODE_EXECUTABLE",
+      ),
+      remotePreparerExecutable: requiredAbsoluteEnvironment(
+        "AUBTOWN_REMOTE_WORKSPACE_PREPARER",
+      ),
+      remoteRuntimeConfig: requiredAbsoluteEnvironment(
+        "AUBTOWN_REMOTE_WORKER_RUNTIME_CONFIG",
+      ),
+    }),
   ).resolve({
     candidate,
     now,

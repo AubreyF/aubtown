@@ -47,3 +47,31 @@ export interface InitialWorkspaceState {
   readonly stage: "pending" | "prepared";
   readonly receipt?: InitialWorkspaceReceipt;
 }
+
+export interface InitialWorkspacePreparer {
+  prepare(
+    requirement: InitialWorkspaceRequirement,
+  ): Promise<InitialWorkspaceReceipt>;
+}
+
+export function workspaceRequirementFromBinding(input: {
+  readonly repository: InitialWorkspaceRequirement["repository"];
+  readonly issueNumber: number;
+  readonly claimId: string;
+  readonly custodyEpoch: 1;
+  readonly hostId: string;
+  readonly workerId: string;
+  readonly worktree: string;
+  readonly branch: string;
+  readonly conflictDomains: readonly string[];
+  readonly claimedAt: string;
+  readonly baseHead: string;
+  readonly target: InitialWorkspaceRequirement["target"];
+  readonly requiredAt: string;
+}): InitialWorkspaceRequirement {
+  return initialWorkspaceRequirementSchema.parse({
+    schemaVersion: 1,
+    ...input,
+    conflictDomains: [...input.conflictDomains],
+  });
+}

@@ -123,7 +123,7 @@ describe("stable dispatch intention", () => {
             custodyEpoch: 1,
             hostId: "linux-control-1",
             branch: "fix/issue-1234",
-            worktree: "/var/lib/aubtown/workspaces/freed-issue-1234",
+            worktree: "/var/lib/aubtown/workspaces/GH-1234",
           },
           baseHead,
           target: "shared",
@@ -229,7 +229,7 @@ describe("stable dispatch intention", () => {
         candidateInput: {
           intendedClaim: {
             hostId: "macos-executor-1",
-            worktree: "/Users/worker/.aubtown/workspaces/freed-issue-1234",
+            worktree: "/Users/worker/.aubtown/workspaces/GH-1234",
           },
         },
       },

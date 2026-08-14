@@ -12,11 +12,11 @@ polling:
 workspace:
   root: $AUBTOWN_SYMPHONY_WORKSPACES
 worker:
-  ssh_hosts: [aubtown-linux, aubtown-macos]
+  ssh_hosts: [linux-control-1, macos-executor-1]
   max_concurrent_agents_per_host: 1
   capabilities_by_host:
-    aubtown-linux: [linux, runtime-neutral]
-    aubtown-macos: [linux, macos, runtime-neutral]
+    linux-control-1: [linux, runtime-neutral]
+    macos-executor-1: [linux, macos, runtime-neutral]
 agent:
   max_concurrent_agents: 1
   max_turns: 1
@@ -25,7 +25,7 @@ admission:
   command:
     - /opt/aubtown/node/bin/node
     - /opt/aubtown/current/dist/cli/symphony-prelaunch.js
-  timeout_ms: 30000
+  timeout_ms: 60000
 active_guard:
   command:
     - /opt/aubtown/node/bin/node

@@ -302,6 +302,17 @@ export async function auditPilotReadiness(input: {
         maxBytes: 2 * 1024 * 1024,
       }),
     ),
+    check("runtime:workspace-preparer-executable", async () =>
+      await physicalFile({
+        file: path.join(
+          input.paths.releaseRoot,
+          "dist/cli/prepare-symphony-workspace.js",
+        ),
+        label: "AubTown remote workspace preparer",
+        executable: false,
+        maxBytes: 2 * 1_024 * 1_024,
+      }),
+    ),
     check("authority:claim-broker", async () =>
       await physicalFile({
         file: input.paths.claimBrokerExecutable,

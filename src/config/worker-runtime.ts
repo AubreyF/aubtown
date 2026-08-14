@@ -5,8 +5,14 @@ import { z } from "zod";
 export interface WorkerRuntimeConfig {
   readonly schemaVersion: 1;
   readonly hostId: string;
+  readonly repository: {
+    readonly owner: string;
+    readonly name: string;
+    readonly defaultBranch: string;
+  };
   readonly repositoryRoot: string;
   readonly worktreeRoot: string;
+  readonly worktreeHelper: string;
   readonly gitExecutable: string;
 }
 
@@ -17,8 +23,14 @@ const absolutePath = z.string().refine((value) => path.isAbsolute(value), {
 const configSchema: z.ZodType<WorkerRuntimeConfig> = z.object({
   schemaVersion: z.literal(1),
   hostId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u),
+  repository: z.object({
+    owner: z.string().min(1),
+    name: z.string().min(1),
+    defaultBranch: z.string().min(1),
+  }),
   repositoryRoot: absolutePath,
   worktreeRoot: absolutePath,
+  worktreeHelper: absolutePath,
   gitExecutable: absolutePath,
 });
 

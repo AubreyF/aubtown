@@ -51,6 +51,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Add a disposable broker conformance gate for replay, restart, transfer fencing, and release semantics.
 - [x] Add complete broker-backed active-claim and work-lane reconciliation for conflict planning.
 - [x] Add active-turn claim stages, heartbeats, and race-safe unlaunched-claim recovery before startup and every minute.
+- [x] Prepare the exact claim-bound Freed worktree on the selected SSH executor before Symphony launches a worker.
 - [ ] Implement and review the Freed task-claim commands and coordinator actor.
 - [ ] Install the native Linux authority broker.
 - [x] Add hard-boundary active-turn interruption to the Symphony runner.

@@ -11,6 +11,10 @@ import {
 } from "./admission-envelope.js";
 import { canonicalJson } from "../../security/canonical-json.js";
 import { prepareSymphonyAdmissionCandidate } from "./admission-candidate.js";
+import {
+  workspaceRequirementFromBinding,
+  type InitialWorkspacePreparer,
+} from "../../execution/workspace.js";
 
 export function symphonyEnvelopeMatchesCandidate(input: {
   readonly envelope: SymphonyAdmissionEnvelope;
@@ -33,7 +37,35 @@ export class SymphonyAdmissionPreparer {
   constructor(
     private readonly authority: AuthorityBridge,
     private readonly envelopes: SymphonyAdmissionEnvelopeStore,
+    private readonly workspaces: InitialWorkspacePreparer,
   ) {}
+
+  async #prepareWorkspace(input: {
+    readonly binding: ExecutionAdmissionBinding;
+    readonly now: string;
+  }): Promise<void> {
+    const binding = input.binding;
+    if (binding.claim.custodyEpoch !== 1) {
+      throw new Error("Initial Symphony workspace requires custody epoch one.");
+    }
+    await this.workspaces.prepare(
+      workspaceRequirementFromBinding({
+        repository: binding.qualification.repository,
+        issueNumber: binding.qualification.issue.number,
+        claimId: binding.claim.claimId,
+        custodyEpoch: 1,
+        hostId: binding.claim.hostId,
+        workerId: binding.claim.workerId,
+        worktree: binding.claim.worktree,
+        branch: binding.claim.branch,
+        conflictDomains: binding.claim.conflictDomains,
+        claimedAt: binding.claim.claimedAt,
+        baseHead: binding.baseHead,
+        target: binding.target,
+        requiredAt: input.now,
+      }),
+    );
+  }
 
   async prepare(input: {
     readonly binding: ExecutionAdmissionBinding;
@@ -61,6 +93,7 @@ export class SymphonyAdmissionPreparer {
       now: input.now,
     });
     try {
+      await this.#prepareWorkspace({ binding: input.binding, now: input.now });
       const envelope = symphonyAdmissionEnvelopeSchema.parse({
         schemaVersion: 1,
         preparedAt: input.preparedAt ?? input.now,
@@ -104,6 +137,7 @@ export class SymphonyAdmissionPreparer {
         candidate,
       })
     ) {
+      await this.#prepareWorkspace({ binding: candidate.binding, now: input.now });
       return symphonyAdmissionEnvelopeSchema.parse(input.currentEnvelope);
     }
     return await this.prepare({

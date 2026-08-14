@@ -216,7 +216,7 @@ export function buildStableDispatchIntention(input: {
   const branch = `fix/issue-${suffix}`;
   const worktree = path.join(
     workspaceRoot,
-    `${snapshot.repository.name}-issue-${suffix}`,
+    `GH-${suffix}`,
   );
   const collision =
     github.openPullRequests.some((pull) => pull.branch === branch) ||

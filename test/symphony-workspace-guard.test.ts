@@ -38,8 +38,14 @@ describe("Symphony workspace guard", () => {
     const value = {
       schemaVersion: 1,
       hostId: "linux-control-1",
+      repository: {
+        owner: "freed-project",
+        name: "freed",
+        defaultBranch: "dev",
+      },
       repositoryRoot: "/srv/freed/repository",
       worktreeRoot: "/var/lib/aubtown/workspaces",
+      worktreeHelper: "/srv/freed/repository/scripts/worktree-add.sh",
       gitExecutable: "/usr/bin/git",
     } as const;
     await writeFile(configFile, JSON.stringify(value), { mode: 0o600 });
@@ -85,8 +91,14 @@ describe("Symphony workspace guard", () => {
       config: {
         schemaVersion: 1,
         hostId: "linux-control-1",
+        repository: {
+          owner: "freed-project",
+          name: "freed",
+          defaultBranch: "dev",
+        },
         repositoryRoot: repository,
         worktreeRoot,
+        worktreeHelper: path.join(repository, "scripts/worktree-add.sh"),
         gitExecutable,
       },
       runner,
@@ -101,8 +113,14 @@ describe("Symphony workspace guard", () => {
         config: {
           schemaVersion: 1,
           hostId: "linux-control-1",
+          repository: {
+            owner: "freed-project",
+            name: "freed",
+            defaultBranch: "dev",
+          },
           repositoryRoot: repository,
           worktreeRoot,
+          worktreeHelper: path.join(repository, "scripts/worktree-add.sh"),
           gitExecutable,
         },
         runner,
@@ -144,8 +162,14 @@ describe("Symphony workspace guard", () => {
         config: {
           schemaVersion: 1,
           hostId: "linux-control-1",
+          repository: {
+            owner: "freed-project",
+            name: "freed",
+            defaultBranch: "dev",
+          },
           repositoryRoot: enrolled,
           worktreeRoot,
+          worktreeHelper: path.join(enrolled, "scripts/worktree-add.sh"),
           gitExecutable,
         },
         runner,

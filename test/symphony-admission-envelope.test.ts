@@ -35,6 +35,7 @@ import {
 } from "../src/integrations/symphony/prepare-admission.js";
 import { parseSymphonyPrelaunchRequest } from "../src/integrations/symphony/prelaunch.js";
 import { planExecutionRouteFromState } from "../src/orchestration/route-planner.js";
+import type { InitialWorkspacePreparer } from "../src/execution/workspace.js";
 import { authorityTask, claim, report, usage } from "./helpers.js";
 
 const roots: string[] = [];
@@ -132,6 +133,24 @@ async function temporaryRoot(prefix: string): Promise<string> {
   return root;
 }
 
+function workspacePreparer(actions?: string[]): InitialWorkspacePreparer {
+  return {
+    prepare: async (requirement) => {
+      actions?.push("workspace");
+      return {
+        schemaVersion: 1,
+        claimId: requirement.claimId,
+        custodyEpoch: requirement.custodyEpoch,
+        hostId: requirement.hostId,
+        worktree: requirement.worktree,
+        branch: requirement.branch,
+        baseHead: requirement.baseHead,
+        preparedAt: requirement.requiredAt,
+      };
+    },
+  };
+}
+
 describe("Symphony final admission envelope", () => {
   it("persists a protected non-authoritative candidate", async () => {
     const root = await temporaryRoot("aubtown-candidate-");
@@ -166,6 +185,7 @@ describe("Symphony final admission envelope", () => {
     const resolved = await new SymphonyAdmissionPreparer(
       authority,
       new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
+      workspacePreparer(),
     ).resolve({ candidate: candidate(), currentEnvelope: current, now });
     expect(resolved).toEqual(current);
     expect(acquisitions).toBe(0);
@@ -195,6 +215,7 @@ describe("Symphony final admission envelope", () => {
     const resolved = await new SymphonyAdmissionPreparer(
       authority,
       new SymphonyAdmissionEnvelopeStore(envelopeRoot),
+      workspacePreparer(),
     ).resolve({
       candidate: candidate({ claimId: "claim-1234-epoch-2" }),
       currentEnvelope: current,
@@ -224,6 +245,7 @@ describe("Symphony final admission envelope", () => {
       new SymphonyAdmissionPreparer(
         authority,
         new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
+        workspacePreparer(),
       ).resolve({
         candidate: candidate(),
         now: "2026-08-13T18:03:00.001Z",
@@ -250,6 +272,7 @@ describe("Symphony final admission envelope", () => {
     const preparer = new SymphonyAdmissionPreparer(
       authority,
       new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
+      workspacePreparer(actions),
     );
     await expect(
       preparer.prepare({
@@ -259,7 +282,7 @@ describe("Symphony final admission envelope", () => {
         now: candidate.preparedAt,
       }),
     ).resolves.toMatchObject({ admission: candidate.admission });
-    expect(actions).toEqual(["acquire"]);
+    expect(actions).toEqual(["acquire", "workspace"]);
     await expect(
       loadSymphonyAdmissionEnvelope(path.join(root, "envelopes"), "1234"),
     ).resolves.toMatchObject({ admission: candidate.admission });
@@ -288,6 +311,7 @@ describe("Symphony final admission envelope", () => {
     const preparer = new SymphonyAdmissionPreparer(
       authority,
       new SymphonyAdmissionEnvelopeStore(publicRoot),
+      workspacePreparer(),
     );
     await expect(
       preparer.prepare({
@@ -300,6 +324,37 @@ describe("Symphony final admission envelope", () => {
     expect(releases).toEqual([
       { reason: "prelaunch-denied", claimId: "claim-1234-epoch-1" },
     ]);
+  });
+
+  it("releases the exact claim when remote workspace preparation fails", async () => {
+    const root = await temporaryRoot("aubtown-workspace-release-");
+    const candidate = envelope();
+    const releases: string[] = [];
+    const authority: AuthorityBridge = {
+      id: "freed-authority-v1",
+      inspect: async () => ({ active: true, reason: "test" }),
+      acquire: async () => candidate.admission,
+      release: async (input) => {
+        releases.push(input.admission.authorityClaimId);
+      },
+    };
+    await expect(
+      new SymphonyAdmissionPreparer(
+        authority,
+        new SymphonyAdmissionEnvelopeStore(path.join(root, "envelopes")),
+        {
+          prepare: async () => {
+            throw new Error("executor-offline");
+          },
+        },
+      ).prepare({
+        binding: candidate.binding,
+        selectedHost: candidate.selectedHost,
+        usage: candidate.usage,
+        now: candidate.preparedAt,
+      }),
+    ).rejects.toThrow("executor-offline");
+    expect(releases).toEqual(["claim-1234-epoch-1"]);
   });
 
   it("admits one exact claim and blocks it after a coordinator restart", async () => {

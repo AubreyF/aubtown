@@ -83,7 +83,7 @@ Installation tokens are short-lived. The native refresher writes `/var/lib/aubto
 
 ## SSH workers
 
-Symphony uses `/etc/aubtown/ssh/config`. The Linux executor is also represented as an SSH alias because current upstream Symphony switches to an SSH-only worker pool whenever any SSH host is configured.
+Symphony and AubTown workspace preparation use `/etc/aubtown/ssh/config`. The Linux executor is also represented as an SSH alias because current upstream Symphony switches to an SSH-only worker pool whenever any SSH host is configured. SSH alias names must exactly match the enrolled AubTown host IDs, including `linux-control-1` and `macos-executor-1` in the initial topology.
 
 Each alias must pin:
 
@@ -98,7 +98,7 @@ The reviewed AubTown patch maps each alias to capabilities. A task labeled or qu
 
 ## Workspace creation
 
-Symphony names workspaces by GitHub issue identifier. Before admitting launch, AubTown gives the selected host one claim-bound initial-workspace requirement. The host workspace supervisor invokes Freed's physical `scripts/worktree-add.sh` with:
+Symphony names workspaces by GitHub issue identifier. Before admitting launch, AubTown encodes one claim-bound initial-workspace requirement and sends it through the selected Symphony SSH alias to a fixed remote command. The command reads a protected host-local `/etc/aubtown/worker-runtime.json`, verifies the host ID and repository identity, and invokes Freed's physical `scripts/worktree-add.sh` with:
 
 - a deterministic host-local path
 - a hygienic branch name with no authorship giveaway
@@ -106,7 +106,7 @@ Symphony names workspaces by GitHub issue identifier. Before admitting launch, A
 - the qualified target
 - `--swarm` during deferred bootstrap
 
-Admission returns only after the host reports the exact clean branch and base head. Symphony then finds the prepared directory. Its `before_run` guard verifies that the directory is a clean worktree belonging to the enrolled Freed repository and that the branch obeys publication naming policy.
+Admission returns only after that command reports the exact claim, host, worktree, branch, and base head. Symphony then finds the prepared directory at its normal `GH-<issue>` path. Its `before_run` guard verifies that the directory is a clean worktree belonging to the enrolled Freed repository and that the branch obeys publication naming policy. No AubTown worker daemon or workspace polling loop is involved.
 
 If Symphony ever creates an empty fallback directory, its `after_create` guard fails immediately and removes it. This turns a missing host preparation into a block instead of silently running Codex in an empty directory. Bare `git worktree add` in production and direct workspace copying are prohibited.
 
@@ -117,7 +117,7 @@ If Symphony ever creates an empty fallback directory, its `after_create` guard f
 3. Install reviewed absolute Git, Node, Codex, SSH, and certificate paths.
 4. Install the pinned Symphony source or binary and verify its checksum.
 5. Install the reviewed AubTown build and native service units, including the GitHub token refresh timer, signed host observation gateway, read-only planning timer, and claim reconciliation timer.
-6. Check out Freed and verify `scripts/worktree-add.sh` at the expected path.
+6. Install the same reviewed AubTown release on each executor, check out Freed, write the protected worker runtime config, and verify `scripts/worktree-add.sh` at the configured physical path.
 7. Authenticate the dedicated Codex account into the coordinator's private `CODEX_HOME`.
 8. Install the GitHub Apps on Freed and provision their private keys to the appropriate brokers.
 9. Install the Symphony workflow and SSH configuration.
