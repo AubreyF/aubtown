@@ -1,6 +1,6 @@
 # AubTown
 
-AubTown is a Freed-first software factory. GitHub Issues are its canonical queue, Freed remains the execution authority, and a reviewed OpenAI Symphony build runs the scheduling and Codex sessions.
+AubTown is the reusable software-factory platform. FreedTown is its first concrete deployment for Freed. GitHub Issues are the canonical queue, Freed remains the execution authority, and a reviewed OpenAI Symphony build runs the scheduling and Codex sessions.
 
 ## Pilot contract
 

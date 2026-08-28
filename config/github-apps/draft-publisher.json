@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "name": "AubTown Draft Publisher",
-  "description": "(AI Generated).\n\nPublishes only admitted AubTown draft pull requests from custody hosts.",
+  "name": "FreedTown Draft Publisher",
+  "description": "(AI Generated).\n\nPublishes only admitted FreedTown draft pull requests from custody hosts.",
   "homepageUrl": "https://github.com/AubreyF/aubtown",
   "repositorySelection": "selected",
   "permissions": {

@@ -1,5 +1,5 @@
 [Unit]
-Description=AubTown signed host observation gateway
+Description=FreedTown signed host observation gateway
 Wants=network-online.target
 After=network-online.target
 

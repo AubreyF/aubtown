@@ -23,6 +23,7 @@ describe("GitHub App registration policy", () => {
 
     expect(rendered).toMatchObject({
       role: "coordinator",
+      name: "FreedTown Coordinator",
       repositorySelection: "selected",
       initialRepositories: ["freed-project/freed"],
       webhookActive: false,
@@ -72,7 +73,7 @@ describe("GitHub App registration policy", () => {
   it("rejects permission, webhook, OAuth, and publication-ceiling drift", () => {
     const base = {
       schemaVersion: 1,
-      name: "AubTown Draft Publisher",
+      name: "FreedTown Draft Publisher",
       description: "test",
       homepageUrl: "https://github.com/AubreyF/aubtown",
       repositorySelection: "selected",

@@ -15,7 +15,7 @@ const common = {
 
 const coordinatorPolicySchema = z.object({
   ...common,
-  name: z.literal("AubTown Coordinator"),
+  name: z.literal("FreedTown Coordinator"),
   permissions: z.object({
     metadata: z.literal("read"),
     contents: z.literal("read"),
@@ -36,7 +36,7 @@ const coordinatorPolicySchema = z.object({
 
 const draftPublisherPolicySchema = z.object({
   ...common,
-  name: z.literal("AubTown Draft Publisher"),
+  name: z.literal("FreedTown Draft Publisher"),
   permissions: z.object({
     metadata: z.literal("read"),
     contents: z.literal("write"),
@@ -105,7 +105,7 @@ export function renderGitHubAppRegistration(policy: GitHubAppPolicy): {
   }
   parameters.sort();
   const role: "coordinator" | "draft-publisher" =
-    policy.name === "AubTown Coordinator" ? "coordinator" : "draft-publisher";
+    policy.name === "FreedTown Coordinator" ? "coordinator" : "draft-publisher";
   const registration = {
     role,
     name: policy.name,

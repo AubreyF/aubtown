@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh the AubTown Coordinator GitHub App token periodically
+Description=Refresh the FreedTown Coordinator GitHub App token periodically
 
 [Timer]
 OnBootSec=35min

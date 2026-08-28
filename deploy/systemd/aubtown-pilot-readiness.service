@@ -1,5 +1,5 @@
 [Unit]
-Description=Audit AubTown Freed pilot readiness
+Description=Audit FreedTown pilot readiness
 Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service aubtown-freed-broker-conformance.service
 After=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service aubtown-freed-broker-conformance.service
 

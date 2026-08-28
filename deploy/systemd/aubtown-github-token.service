@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh the AubTown Coordinator GitHub App token
+Description=Refresh the FreedTown Coordinator GitHub App token
 Wants=network-online.target
 After=network-online.target
 Before=aubtown-symphony.service

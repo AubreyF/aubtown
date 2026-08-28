@@ -1,5 +1,5 @@
 [Unit]
-Description=AubTown trusted Symphony completion reconciliation
+Description=FreedTown trusted completion reconciliation
 Requires=aubtown-github-token.service
 After=aubtown-github-token.service network-online.target
 Wants=network-online.target
