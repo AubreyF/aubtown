@@ -31,6 +31,7 @@ Symphony is pinned by immutable commit and source checksum in `upstream/symphony
 - Host-signed receipts and replay protection
 - GitHub status projection and optional standby-coordinator comment election
 - A pinned Symphony production and upstream-tracking contract
+- Pinned read-only GitHub validation on Ubuntu and macOS for every change
 - Fail-closed Symphony prelaunch admission and capability-aware host routing
 - Fail-closed active-turn quota checks with exact thread and turn interruption
 - Append-only exact-claim prelaunch receipts that survive coordinator restart

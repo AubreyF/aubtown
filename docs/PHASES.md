@@ -9,6 +9,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Keep worker, tracker, authority, storage, subscription, and hosting integrations replaceable.
 - [x] Approve one Linux coordinator with Linux and intermittent macOS workers.
 - [x] Remove Restate, Docker, Compose, and CAR from the v1 scheduling core.
+- [x] Require pinned read-only Linux and macOS validation for every pull request and `main` push.
 
 ## Phase 1: shadow qualification
 

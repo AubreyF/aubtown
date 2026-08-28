@@ -9,6 +9,22 @@ async function fixture(relative: string): Promise<string> {
 }
 
 describe("native Linux deployment", () => {
+  it("validates every change on Linux and macOS without write authority", async () => {
+    const workflow = await fixture(".github/workflows/validation.yml");
+    expect(workflow).toContain("contents: read");
+    expect(workflow).toContain("ubuntu-24.04");
+    expect(workflow).toContain("macos-15");
+    expect(workflow).toContain("node-version-file: .nvmrc");
+    expect(workflow).toContain("go-version-file: go.mod");
+    expect(workflow).toContain("npm ci --ignore-scripts");
+    expect(workflow).toContain("npm run check");
+    expect(workflow).toContain("npm run check:symphony");
+    expect(workflow).toMatch(/uses: actions\/checkout@[0-9a-f]{40}/u);
+    expect(workflow).toMatch(/uses: actions\/setup-node@[0-9a-f]{40}/u);
+    expect(workflow).toMatch(/uses: actions\/setup-go@[0-9a-f]{40}/u);
+    expect(workflow).not.toMatch(/secrets\.|contents: write|pull-requests: write/u);
+  });
+
   it("builds one clean manifest-bound host release", async () => {
     const packageJson = await fixture("package.json");
     const cleaner = await fixture("scripts/clean-dist.mjs");
