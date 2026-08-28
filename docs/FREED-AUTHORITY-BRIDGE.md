@@ -153,7 +153,7 @@ publisher, shared exact broker client, complete claim listing, disposable
 lifecycle conformance, exact response validation, response-loss retry, exact
 release, prelaunch freshness, envelope publication, live planning collector,
 and deterministic dispatch intention are implemented and tested in AubTown.
-Freed draft PR #1491 supplies the matching claim commands, transaction
+Merged Freed PR #1491 supplies the matching claim commands, transaction
 projection, recovery, and event history. AubTown now builds the cross-platform
 `factory-coordinator` binary, which pins every Freed runtime file by checksum,
 scrubs child environments, keeps lease tokens out of arguments and output, and

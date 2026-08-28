@@ -15,6 +15,8 @@ describe("native Linux deployment", () => {
     const release = await fixture("src/deployment/release-manifest.ts");
     const builder = await fixture("src/cli/build-release-bundle.ts");
     const verifier = await fixture("src/cli/verify-release-install.ts");
+    const installer = await fixture("src/deployment/linux-host-installer.ts");
+    const installerCli = await fixture("src/cli/install-linux-host.ts");
     const readiness = await fixture("src/pilot/readiness.ts");
 
     expect(packageJson).toContain(
@@ -29,10 +31,14 @@ describe("native Linux deployment", () => {
     expect(release).toContain("Release file differs from its manifest");
     expect(builder).toContain("buildReleaseBundle");
     expect(verifier).toContain("requiredUid: 0");
+    expect(installer).toContain("verifyInstalledRelease");
+    expect(installer).toContain("servicesEnabled: false");
+    expect(installer).toContain("servicesStarted: false");
+    expect(installerCli).toContain('value === "--plan" || value === "--apply"');
+    expect(installerCli).not.toMatch(/\benable\b|\bstart\b/u);
     expect(readiness).toContain('check("runtime:release-manifest"');
     expect(readiness).toContain("verifyInstalledRelease");
-  });
-
+});
   it("runs one pinned Symphony coordinator without containers or Restate", async () => {
     const unit = await fixture("deploy/systemd/aubtown-symphony.service");
     expect(unit).toContain(
@@ -40,6 +46,8 @@ describe("native Linux deployment", () => {
     );
     expect(unit).toContain("/etc/aubtown/WORKFLOW.md");
     expect(unit).toContain("--port 7080");
+    expect(unit).toContain("--logs-root /var/lib/aubtown/logs/symphony");
+    expect(unit).not.toContain("/var/log/aubtown");
     expect(unit).toContain("Requires=aubtown-github-token.service");
     expect(unit).not.toMatch(/docker|compose|restate/iu);
   });
