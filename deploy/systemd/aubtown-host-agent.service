@@ -1,5 +1,5 @@
 [Unit]
-Description=AubTown signed host and quota monitor
+Description=FreedTown signed host and quota monitor
 Wants=network-online.target
 After=network-online.target
 

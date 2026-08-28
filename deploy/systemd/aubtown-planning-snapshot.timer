@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh AubTown read-only planning state every minute
+Description=Refresh FreedTown read-only planning state every minute
 
 [Timer]
 OnBootSec=30s

@@ -1,5 +1,5 @@
 [Unit]
-Description=AubTown stale Freed claim reconciliation
+Description=FreedTown stale claim reconciliation
 After=network-online.target
 Wants=network-online.target
 
