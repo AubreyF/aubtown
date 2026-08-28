@@ -120,6 +120,8 @@ describe("native Linux deployment", () => {
     expect(reviewerRuntime).toMatchObject({
       hostId: "linux-control-1",
       accountId: "codex-pro-1",
+      codexHome: "/var/lib/aubtown/executor/reviewer/codex",
+      homeDirectory: "/var/lib/aubtown/executor/reviewer",
       quotaSampleIntervalMs: 30_000,
     });
     expect(macReviewerRuntime).toMatchObject({
