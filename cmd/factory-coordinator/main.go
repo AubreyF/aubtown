@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	brokerSchemaVersion = 1
-	childTimeout        = 90 * time.Second
-	maxChildOutput      = 1 * 1024 * 1024
-	maxRequestBytes     = 1 * 1024 * 1024
+	brokerSchemaVersion     = 1
+	childTimeout            = 90 * time.Second
+	maxChildOutput          = 1 * 1024 * 1024
+	maxRequestBytes         = 1 * 1024 * 1024
+	maxNodeExecutableBytes  = 256 * 1024 * 1024
+	maxControlArtifactBytes = 16 * 1024 * 1024
 )
 
 var (
@@ -287,16 +289,17 @@ func verifyBrokerRuntime(config brokerConfig, requiredUID int) error {
 		path       string
 		digest     string
 		executable bool
+		maxBytes   int64
 	}{
-		{config.NodeExecutable, config.NodeSHA256, true},
-		{config.AutomationActorsEntry, config.AutomationActorsSHA256, false},
-		{config.AutomationControlEntry, config.AutomationControlSHA256, false},
-		{config.AutomationControlLibrary, config.AutomationControlLibrarySHA256, false},
-		{config.ActorReadinessLibrary, config.ActorReadinessLibrarySHA256, false},
-		{config.KernelGuardLibrary, config.KernelGuardLibrarySHA256, false},
+		{config.NodeExecutable, config.NodeSHA256, true, maxNodeExecutableBytes},
+		{config.AutomationActorsEntry, config.AutomationActorsSHA256, false, maxControlArtifactBytes},
+		{config.AutomationControlEntry, config.AutomationControlSHA256, false, maxControlArtifactBytes},
+		{config.AutomationControlLibrary, config.AutomationControlLibrarySHA256, false, maxControlArtifactBytes},
+		{config.ActorReadinessLibrary, config.ActorReadinessLibrarySHA256, false, maxControlArtifactBytes},
+		{config.KernelGuardLibrary, config.KernelGuardLibrarySHA256, false, maxControlArtifactBytes},
 	}
 	for _, artifact := range artifacts {
-		content, err := readProtectedFile(artifact.path, 16*1024*1024, requiredUID, artifact.executable)
+		content, err := readProtectedFile(artifact.path, artifact.maxBytes, requiredUID, artifact.executable)
 		if err != nil {
 			return fmt.Errorf("runtime artifact %s is unsafe: %w", filepath.Base(artifact.path), err)
 		}

@@ -247,10 +247,25 @@ func TestProtectedProfilePinsEveryRuntimeArtifact(t *testing.T) {
 		digest := sha256.Sum256(content)
 		return file, hex.EncodeToString(digest[:])
 	}
+	writeLargeArtifact := func(name string, mode os.FileMode, size int) (string, string) {
+		t.Helper()
+		file := filepath.Join(root, name)
+		content := make([]byte, size)
+		content[0] = 1
+		if err := os.WriteFile(file, content, mode); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(content)
+		return file, hex.EncodeToString(digest[:])
+	}
 	config := testConfig()
 	config.FreedRepositoryRoot = freedRoot
 	config.StateRoot = stateRoot
-	config.NodeExecutable, config.NodeSHA256 = writeArtifact("node", 0o700)
+	config.NodeExecutable, config.NodeSHA256 = writeLargeArtifact(
+		"node",
+		0o700,
+		maxControlArtifactBytes+1,
+	)
 	config.AutomationActorsEntry, config.AutomationActorsSHA256 = writeArtifact("actors.mjs", 0o600)
 	config.AutomationControlEntry, config.AutomationControlSHA256 = writeArtifact("control.mjs", 0o600)
 	config.AutomationControlLibrary, config.AutomationControlLibrarySHA256 = writeArtifact("control-library.mjs", 0o600)
