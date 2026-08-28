@@ -50,6 +50,15 @@
         "completion-before-best-effort-cleanup",
         "remote-executor-finalization"
       ]
+    },
+    {
+      "path": "upstream/patches/0004-fix-update-bandit-security-lock.patch",
+      "sha256": "99f09f4d4c44fa6d80ac01fa742928bdaadd05f945a88edb22e9a51d8f0a2342",
+      "verifiedAgainst": "8001b52e3062495a16e520e4ceaf8f9de868c4d0",
+      "purpose": [
+        "bandit-http2-security-advisory-remediation",
+        "security-advisory-free-compatible-dependency-lock"
+      ]
     }
   ],
   "reviewedCapabilities": [

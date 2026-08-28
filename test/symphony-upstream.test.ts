@@ -45,7 +45,7 @@ describe("Symphony upstream contract", () => {
     expect(lock.knownGaps).not.toContain(
       "worker-host-selection-is-load-based-not-lane-aware",
     );
-    expect(lock.patches).toHaveLength(3);
+    expect(lock.patches).toHaveLength(4);
     for (const patch of lock.patches) {
       expect(patch.verifiedAgainst).toBe(lock.production.commit);
       const patchBytes = await readFile(path.join(root, patch.path));
@@ -56,6 +56,7 @@ describe("Symphony upstream contract", () => {
     const runtimePatch = await readFile(path.join(root, lock.patches[0]!.path));
     const activeGuardPatch = await readFile(path.join(root, lock.patches[1]!.path));
     const completionPatch = await readFile(path.join(root, lock.patches[2]!.path));
+    const dependencyPatch = await readFile(path.join(root, lock.patches[3]!.path));
     expect(runtimePatch.toString("utf8")).toContain(
       "select_worker_host_for_issue_for_test",
     );
@@ -75,6 +76,12 @@ describe("Symphony upstream contract", () => {
     );
     expect(completionPatch.toString("utf8")).toContain(
       "trusted completion hook propagates failure",
+    );
+    expect(dependencyPatch.toString("utf8")).toContain(
+      '+  "bandit": {:hex, :bandit, "1.12.5"',
+    );
+    expect(dependencyPatch.toString("utf8")).not.toContain(
+      '+  "bandit": {:hex, :bandit, "1.12.4"',
     );
   });
 
