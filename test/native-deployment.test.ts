@@ -359,7 +359,9 @@ describe("native Linux deployment", () => {
     expect(service).toContain(
       "ReadOnlyPaths=/etc/aubtown /srv/freed /var/lib/freed/automation",
     );
-    expect(service).toContain("ReadWritePaths=/var/lib/aubtown/coordinator");
+    expect(service).toContain(
+      "ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock",
+    );
     expect(timer).toContain("OnUnitActiveSec=1min");
     expect(environment).toContain(
       "AUBTOWN_PLANNING_SNAPSHOT_FILE=/var/lib/aubtown/coordinator/planning-snapshot.json",

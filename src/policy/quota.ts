@@ -58,12 +58,15 @@ export function mergeUsageObservation(input: {
   const sameDay =
     previous !== undefined &&
     previous.dailyConsumption.day === observationDay;
-  const sameWindow =
-    previous !== undefined &&
-    previous.primary.resetsAt === input.observation.primary.resetsAt;
   const dailyBaseline =
-    sameDay && sameWindow
-      ? previous.dailyBaseline
+    sameDay
+      ? {
+          ...previous.dailyBaseline,
+          // A rolling-window reset estimate can move between app-server
+          // sessions without representing new usage. Keep the day's baseline
+          // while binding it to the current meter metadata.
+          resetsAt: input.observation.primary.resetsAt,
+        }
       : {
           observedAt: input.observation.observedAt,
           usedPercent: input.observation.primary.usedPercent,
@@ -79,17 +82,10 @@ export function mergeUsageObservation(input: {
   const positiveWindowDelta =
     previous === undefined
       ? 0
-      : sameWindow
-        ? Math.max(
-            0,
-            input.observation.primary.usedPercent - previous.primary.usedPercent,
-          )
-        : input.observation.primary.usedPercent;
-  const tokenDelta =
-    previous === undefined
-      ? 0
-      : input.observation.lifetimeTokens -
-        previous.dailyConsumption.observedLifetimeTokens;
+      : Math.max(
+          0,
+          input.observation.primary.usedPercent - previous.primary.usedPercent,
+        );
   const priorGross = sameDay
     ? (previous?.dailyConsumption.grossUsedPercent ?? 0)
     : 0;
@@ -104,13 +100,10 @@ export function mergeUsageObservation(input: {
           input.observation.lifetimeTokens),
     observedLifetimeTokens: input.observation.lifetimeTokens,
     grossUsedPercent: priorGross + positiveWindowDelta,
-    meterState:
-      priorDiverged ||
-      (tokenDelta > 0 &&
-        sameWindow &&
-        input.observation.primary.usedPercent < previous.primary.usedPercent)
-        ? ("diverged" as const)
-        : ("coherent" as const),
+    // A rolling seven-day percentage may retreat while cumulative activity
+    // rises because older use left the window. That is not meter divergence.
+    // Backward cumulative activity remains a hard error above.
+    meterState: priorDiverged ? ("diverged" as const) : ("coherent" as const),
   };
   return { ...input.observation, dailyBaseline, dailyConsumption };
 }
