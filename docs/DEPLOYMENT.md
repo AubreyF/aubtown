@@ -61,7 +61,7 @@ An exact retry is idempotent. A changed unit or a different active release fails
 
 ## Service graph
 
-`aubtown-symphony.service` runs the one FreedTown scheduler and dashboard as `aubtown-symphony`. It binds the dashboard to `127.0.0.1:7080`. Tailscale may expose that loopback service privately. Never bind it to a public interface. The service sandbox keeps Freed authority state read-only except for the existing task and event kernel lock files that supported advisory reads must open. Those lock exceptions grant no direct task, claim, lease, event, or outcome mutation.
+`aubtown-symphony.service` runs the one FreedTown scheduler and dashboard as `aubtown-symphony`. It binds the dashboard to `127.0.0.1:7080`. Tailscale may expose that loopback service privately. Never bind it to a public interface. The service sandbox keeps Freed authority state read-only except for the existing task and event kernel lock files that supported advisory reads must open. Those lock exceptions grant no direct task, claim, lease, event, or outcome mutation. Symphony does not own or receive local write access to the executor workspace root. Workspace creation and mutation occur through the pinned SSH executor identity, preserving host custody and the installer-owned executor permissions.
 
 The pinned Symphony runner invokes `dist/cli/symphony-active-run-guard.js` every 30 seconds while a Codex turn is active. The guard reads the same protected admission envelope, host enrollment, heartbeat, and rolling-week account journal used by prelaunch. An exact hard-limit response sends `turn/interrupt` for that thread and turn. If cancellation does not finish within five seconds, Symphony closes the app-server transport.
 
