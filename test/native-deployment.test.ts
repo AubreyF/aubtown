@@ -360,7 +360,7 @@ describe("native Linux deployment", () => {
       "ReadOnlyPaths=/etc/aubtown /srv/freed /var/lib/freed/automation",
     );
     expect(service).toContain(
-      "ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock",
+      "ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock /var/lib/freed/automation/control/.guards/events.lock/kernel.lock",
     );
     expect(timer).toContain("OnUnitActiveSec=1min");
     expect(environment).toContain(

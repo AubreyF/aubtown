@@ -48,7 +48,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Deploy lightweight host telemetry without enabling a second execution scheduler.
 - [x] Implement the native read-only GitHub, Freed task, host, quota, ref, pull-request, and worktree planning snapshot.
 - [x] Keep historical Freed tasks readable when they predate factory metadata, while requiring the complete contract on the exact candidate task.
-- [x] Permit the read-only planning service to open only Freed's advisory task-lock file while keeping every authority ledger path read-only.
+- [x] Permit the read-only planning service to open only Freed's advisory task and event lock files while keeping every authority ledger path read-only.
 - [x] Derive one deterministic fail-closed dispatch intention with host-specific workspace custody.
 - [x] Add a protected native pilot-readiness audit that proves runtime, pin, authority-broker, planning, and dispatch gates.
 - [x] Add a disposable broker conformance gate for replay, restart, transfer fencing, and release semantics.
