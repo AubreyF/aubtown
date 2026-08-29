@@ -7,3 +7,13 @@ coverage/
 .DS_Store
 *.log
 .aubtown/
+
+# Credentials and host-local identities
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+auth.json
+credentials.json

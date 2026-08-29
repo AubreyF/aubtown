@@ -130,7 +130,7 @@ func TestReadOperationUsesNoLeaseOrCredential(t *testing.T) {
 }
 
 func TestMutationKeepsLeaseTokenOutOfArgumentsAndOutput(t *testing.T) {
-	token := "coordinator-secret-0123456789abcdef"
+	token := "test-lease-token-test-lease-token-00"
 	operationOutput := []byte(`{"action":"task.claim-acquire","result":{"schemaVersion":1}}`)
 	runner := &queuedRunner{
 		testing: t,
@@ -177,7 +177,7 @@ func TestMutationKeepsLeaseTokenOutOfArgumentsAndOutput(t *testing.T) {
 }
 
 func TestRejectedMutationStillReleasesLease(t *testing.T) {
-	token := "coordinator-secret-0123456789abcdef"
+	token := "test-lease-token-test-lease-token-00"
 	runner := &queuedRunner{
 		testing: t,
 		results: []commandResult{
@@ -198,7 +198,7 @@ func TestRejectedMutationStillReleasesLease(t *testing.T) {
 }
 
 func TestReleaseFailureMasksSuccessfulMutation(t *testing.T) {
-	token := "coordinator-secret-0123456789abcdef"
+	token := "test-lease-token-test-lease-token-00"
 	runner := &queuedRunner{
 		testing: t,
 		results: []commandResult{
