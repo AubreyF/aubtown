@@ -153,6 +153,7 @@ export async function runFreedBrokerConformance(input: {
   readonly runner: CommandRunner;
   readonly config: FreedBrokerConformanceInput;
   readonly checkedAt: string;
+  readonly completedAt?: () => Date;
   readonly now?: () => Date;
 }): Promise<FreedBrokerConformanceReport> {
   const config = parseFreedBrokerConformanceInput(input.config);
@@ -190,6 +191,13 @@ export async function runFreedBrokerConformance(input: {
   const pass = (id: string, detail: string): void => {
     checks.push({ id, passed: true, detail });
   };
+  const completionTimestamp = (): string => {
+    const value = (input.completedAt?.() ?? new Date()).toISOString();
+    if (!Number.isFinite(Date.parse(value))) {
+      throw new Error("Freed broker conformance completion timestamp is invalid.");
+    }
+    return value;
+  };
   const fail = (id: string, detail: string): FreedBrokerConformanceReport => {
     checks.push({ id, passed: false, detail });
     return {
@@ -197,7 +205,7 @@ export async function runFreedBrokerConformance(input: {
       profile: config.broker.profile,
       brokerExecutable: config.broker.executable,
       brokerSha256,
-      checkedAt: input.checkedAt,
+      checkedAt: completionTimestamp(),
       passed: false,
       checks,
       blockers: [`${id}:${detail}`],
@@ -511,7 +519,7 @@ export async function runFreedBrokerConformance(input: {
     profile: config.broker.profile,
     brokerExecutable: config.broker.executable,
     brokerSha256,
-    checkedAt: input.checkedAt,
+    checkedAt: completionTimestamp(),
     passed: true,
     checks,
     blockers: [],

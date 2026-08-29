@@ -51,7 +51,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Permit the read-only planning service to open only Freed's advisory task and event lock files while keeping every authority ledger path read-only.
 - [x] Derive one deterministic fail-closed dispatch intention with host-specific workspace custody.
 - [x] Add a protected native pilot-readiness audit that proves runtime, pin, authority-broker, planning, and dispatch gates.
-- [x] Add a disposable broker conformance gate for replay, restart, transfer fencing, and release semantics.
+- [x] Add a disposable broker conformance gate for replay, restart, transfer fencing, release semantics, and completion-time freshness.
 - [x] Isolate disposable and production actor bindings with a service-private read-only launcher mount.
 - [x] Add complete broker-backed active-claim and work-lane reconciliation for conflict planning.
 - [x] Add active-turn claim stages, heartbeats, and race-safe unlaunched-claim recovery before startup and every minute.

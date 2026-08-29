@@ -94,9 +94,11 @@ describe("Freed broker conformance", () => {
       runner: new ProcessCommandRunner(),
       config: config(executable),
       checkedAt: "2026-08-13T20:04:00.000Z",
+      completedAt: () => new Date("2026-08-13T20:24:00.000Z"),
     });
 
     expect(report.passed, JSON.stringify(report)).toBe(true);
+    expect(report.checkedAt).toBe("2026-08-13T20:24:00.000Z");
     expect(report.blockers).toEqual([]);
     expect(report.checks.map((check) => check.id)).toEqual([
       "broker-integrity",
@@ -170,9 +172,11 @@ describe("Freed broker conformance", () => {
         broker: { ...candidate.broker, executable: "/missing/factory-coordinator" },
       },
       checkedAt: "2026-08-13T20:04:00.000Z",
+      completedAt: () => new Date("2026-08-13T20:04:01.000Z"),
     });
 
     expect(report.passed).toBe(false);
+    expect(report.checkedAt).toBe("2026-08-13T20:04:01.000Z");
     expect(report.blockers[0]).toMatch(/^broker-integrity:/u);
   });
 });
