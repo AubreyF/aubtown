@@ -362,6 +362,9 @@ describe("native Linux deployment", () => {
     expect(service).toContain(
       "ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock /var/lib/freed/automation/control/.guards/events.lock/kernel.lock",
     );
+    expect(service).toContain(
+      "After=aubtown-github-token.service aubtown-host-gateway.service aubtown-freed-broker-conformance.service",
+    );
     expect(timer).toContain("OnUnitActiveSec=1min");
     expect(environment).toContain(
       "AUBTOWN_PLANNING_SNAPSHOT_FILE=/var/lib/aubtown/coordinator/planning-snapshot.json",
@@ -509,6 +512,9 @@ describe("native Linux deployment", () => {
       "StateDirectory=aubtown/symphony aubtown/workspaces aubtown/admission",
     );
     expect(unit).toContain("ReadOnlyPaths=/etc/aubtown");
+    expect(unit).toContain(
+      "/var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock /var/lib/freed/automation/control/.guards/events.lock/kernel.lock",
+    );
     expect(unit).toContain("UMask=0077");
     expect(unit).not.toContain("ReadWritePaths=/opt/aubtown");
   });
