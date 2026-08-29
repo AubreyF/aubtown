@@ -322,10 +322,22 @@ describe("native Linux deployment", () => {
 
   it("deploys telemetry without a second worker scheduler", async () => {
     const service = await fixture("deploy/systemd/aubtown-host-agent.service");
+    const environment = await fixture(
+      "deploy/systemd/host-agent.env.example",
+    );
     const monitor = await fixture("src/host-monitor.ts");
     const launchd = await fixture("deploy/launchd/aubtown.host-agent.plist");
+    expect(service).toContain("User=aubtown-symphony");
+    expect(service).toContain("Group=aubtown-symphony");
     expect(service).toContain("dist/host-monitor.js");
     expect(service).not.toContain("dist/host-agent.js");
+    expect(environment).toContain(
+      "CODEX_HOME=/var/lib/aubtown/symphony/codex",
+    );
+    expect(environment).toContain(
+      "AUBTOWN_HOST_SEQUENCE_FILE=/var/lib/aubtown/symphony/host-envelope.sequence",
+    );
+    expect(environment).not.toContain("/var/lib/aubtown/executor/codex");
     expect(launchd).toContain("dist/host-monitor.js");
     expect(monitor).toContain("CodexQuotaSource");
     expect(monitor).toContain("host-telemetry-sampled");

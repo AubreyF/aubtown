@@ -5,8 +5,8 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=aubtown-executor
-Group=aubtown-executor
+User=aubtown-symphony
+Group=aubtown-symphony
 WorkingDirectory=/opt/aubtown/current
 EnvironmentFile=/etc/aubtown/host-agent.env
 ExecStart=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/host-monitor.js
