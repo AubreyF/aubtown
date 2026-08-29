@@ -35,6 +35,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Prove a fake issue cannot dispatch twice across coordinator restart.
 - [x] Prove daily and rolling-week quota stops through the Symphony admission boundary.
 - [x] Preserve gross daily quota consumption across weekly-window resets and cross-check it against cumulative token activity.
+- [x] Keep rolling-window reset-estimate drift from fabricating same-day quota consumption after app-server restart.
 - [x] Prove Linux continues generic work while the Mac is offline.
 - [x] Add exact active-turn quota interruption and hard transport cutoff to the pinned Symphony runner.
 
@@ -46,6 +47,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Implement a native signed host gateway with durable heartbeat, quota, replay, and restart state.
 - [x] Deploy lightweight host telemetry without enabling a second execution scheduler.
 - [x] Implement the native read-only GitHub, Freed task, host, quota, ref, pull-request, and worktree planning snapshot.
+- [x] Permit the read-only planning service to open only Freed's advisory task-lock file while keeping every authority ledger path read-only.
 - [x] Derive one deterministic fail-closed dispatch intention with host-specific workspace custody.
 - [x] Add a protected native pilot-readiness audit that proves runtime, pin, authority-broker, planning, and dispatch gates.
 - [x] Add a disposable broker conformance gate for replay, restart, transfer fencing, and release semantics.

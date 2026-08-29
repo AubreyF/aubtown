@@ -15,7 +15,7 @@ describe("quota governance", () => {
     expect(dailyUsagePercent(usage())).toBe(5);
   });
 
-  it("keeps prior daily consumption when the weekly window resets", () => {
+  it("does not count a changed rolling-window reset estimate as new use", () => {
     const previous = usage();
     const merged = mergeUsageObservation({
       previous,
@@ -23,7 +23,7 @@ describe("quota governance", () => {
         accountId: previous.accountId,
         observedAt: "2026-08-13T20:00:00.000Z",
         primary: {
-          usedPercent: 3,
+          usedPercent: previous.primary.usedPercent,
           windowDurationMinutes: 10_080,
           resetsAt: "2026-08-25T08:00:00.000Z",
         },
@@ -31,7 +31,11 @@ describe("quota governance", () => {
         activeTurnIds: [],
       },
     });
-    expect(dailyUsagePercent(merged)).toBe(8);
+    expect(dailyUsagePercent(merged)).toBe(5);
+    expect(merged.dailyBaseline).toEqual({
+      ...previous.dailyBaseline,
+      resetsAt: "2026-08-25T08:00:00.000Z",
+    });
   });
 
   it("keeps the same baseline within one Los Angeles day", () => {
@@ -124,7 +128,7 @@ describe("quota governance", () => {
     expect(decision).toMatchObject({ action: "interrupt", reason: "telemetry-stale" });
   });
 
-  it("interrupts when the quota meter retreats while cumulative tokens rise", () => {
+  it("accepts rolling-window retreat while cumulative tokens rise", () => {
     const previous = usage();
     const merged = mergeUsageObservation({
       previous,
@@ -138,10 +142,10 @@ describe("quota governance", () => {
     });
     expect(merged.dailyConsumption).toMatchObject({
       grossUsedPercent: 5,
-      meterState: "diverged",
+      meterState: "coherent",
     });
     expect(decideQuota({ snapshot: merged, now: "2026-08-13T08:01:00.000Z" }))
-      .toMatchObject({ action: "interrupt", reason: "daily-meter-diverged" });
+      .toMatchObject({ action: "admit", reason: "headroom-available" });
   });
 
   it("allows token activity below the percentage meter resolution", () => {
