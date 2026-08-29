@@ -4,7 +4,12 @@ Status: approved target, implementation in progress
 
 ## Control flow
 
-GitHub Issues are the only backlog. A single Linux Symphony coordinator polls the selected repository. AubTown supplies the policy that decides whether an issue may enter execution, which host can run it, and what the resulting worker may publish. Freed remains authoritative for task execution.
+GitHub Issues are the only backlog. One active authority coordinator polls the
+selected repository and grants task-scoped custody to eligible workers. The
+coordinator may run on Linux while Linux, macOS, and later enrolled worker
+hosts execute tickets concurrently. AubTown supplies the policy that decides
+whether an issue may enter execution, which host can run it, and what the
+resulting worker may publish. Freed remains authoritative for task execution.
 
 The normal path is:
 
@@ -24,6 +29,13 @@ GitHub is the shared coordination ledger and complete operator-visible queue. Fr
 AubTown keeps small host-local journals for idempotency, quota observations, candidate finalization, validation, review, publication, and checkpoint transfer. These files answer whether a host already performed an operation after a crash. They are not a queue and cannot create work. The Symphony boundary writes one append-only receipt for each exact Freed claim before it admits launch. Exclusive publication lets only one concurrent process admit that claim. A later reconciled claim receives a different receipt without deleting history. Each executor also keeps immutable content-addressed handoff manifests and one atomic pointer per workspace. The pointer identifies which exact claim currently owns that workspace. It cannot create a claim or replace a Freed authority receipt.
 
 One issue has one current claim, custody epoch, branch, worktree, and worker owner. A claim is released or transferred by an exact supported transaction. Heartbeat age is evidence for reconciliation, not an automatic authority expiry.
+
+The singular authority coordinator is not a singular execution host. Any
+eligible enrolled worker can become the custody host for one admitted ticket.
+The coordinator owns admission, routing, and stale-claim fencing. The selected
+worker owns only that ticket's worktree and execution session until the claim
+is released or transferred. A worker cannot grant itself another ticket or
+override another worker's claim.
 
 ## Symphony boundary
 
