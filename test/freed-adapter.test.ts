@@ -146,6 +146,88 @@ describe("Freed adapter", () => {
     });
   });
 
+  it("ignores unrelated legacy tasks that predate factory fields", async () => {
+    const runner = new RecordingRunner({
+      stderr: "",
+      stdout: JSON.stringify({
+        action: "task.list",
+        result: {
+          schemaVersion: 1,
+          revision: 4,
+          tasks: [
+            {
+              taskId: "legacy-task",
+              state: "triaged",
+              revision: 1,
+              observerAuthority: "plan-only",
+              providerAuthority: "forbidden",
+              details: { behavioral: false },
+            },
+            {
+              taskId: "github-issue-1234",
+              state: "triaged",
+              revision: 2,
+              observerAuthority: "merge-safe",
+              providerAuthority: "forbidden",
+              details: {
+                behavioral: false,
+                estimatedMinutes: 20,
+                githubIssue: {
+                  number: 1_234,
+                  url: "https://github.com/freed-project/freed/issues/1234",
+                },
+              },
+            },
+          ],
+        },
+      }),
+    });
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+    });
+
+    await expect(bridge.inspect(report())).resolves.toMatchObject({
+      active: true,
+      task: { id: "github-issue-1234" },
+    });
+  });
+
+  it("fails closed when the matching task lacks the factory contract", async () => {
+    const runner = new RecordingRunner({
+      stderr: "",
+      stdout: JSON.stringify({
+        action: "task.list",
+        result: {
+          tasks: [
+            {
+              taskId: "github-issue-1234",
+              state: "triaged",
+              revision: 2,
+              observerAuthority: "merge-safe",
+              providerAuthority: "forbidden",
+              details: {
+                behavioral: false,
+                githubIssue: {
+                  number: 1_234,
+                  url: "https://github.com/freed-project/freed/issues/1234",
+                },
+              },
+            },
+          ],
+        },
+      }),
+    });
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+    });
+
+    await expect(bridge.inspect(report())).rejects.toThrow("estimatedMinutes");
+  });
+
   it("acquires one exact task-scoped claim through the reviewed broker", async () => {
     const runner = new HandlerRunner((request) => brokerResponse(request));
     const bridge = new FreedAuthorityBridge(runner, {

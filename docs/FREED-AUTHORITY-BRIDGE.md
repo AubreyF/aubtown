@@ -73,6 +73,8 @@ The installed broker must pass `npm run freed:broker-conformance -- <absolute-in
 
 Start from `config/repositories/freed-broker-conformance.example.json`. The runner generates fresh operation IDs and strictly ordered lifecycle timestamps on each invocation. The checked-in fixture contains no credential and grants no authority. The installed broker profile is responsible for mapping `conformance-freed-pilot` to isolated disposable state.
 
+On Linux, the conformance actor launchers live in the protected `/etc/freed/automation-actor-launchers-conformance` tree. The conformance service uses a private read-only bind mount to present that tree at Freed's standard launcher path inside only its mount namespace. The production launcher tree is never replaced, and every other process continues to see the canonical production bindings.
+
 The conformance command starts a new broker process for every operation and proves:
 
 - exact acquire and response-loss replay

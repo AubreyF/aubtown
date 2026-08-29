@@ -27,12 +27,16 @@ import {
   type FreedClaimReleaseRequest,
 } from "./claim-broker.js";
 
-const freedTaskSchema = z.object({
+const freedTaskProjectionSchema = z.object({
   taskId: z.string(),
   state: z.string(),
   revision: z.number().int().positive(),
   observerAuthority: z.string(),
   providerAuthority: z.string(),
+  details: z.object({}).passthrough(),
+}).passthrough();
+
+const freedTaskSchema = freedTaskProjectionSchema.extend({
   details: z.object({
     behavioral: z.boolean(),
     estimatedMinutes: z.number().int().positive(),
@@ -46,8 +50,13 @@ const freedTaskSchema = z.object({
 const taskListOutputSchema = z.object({
   action: z.literal("task.list"),
   result: z.object({
-    tasks: z.array(freedTaskSchema),
+    tasks: z.array(freedTaskProjectionSchema),
   }).passthrough(),
+});
+
+const githubIssueProjectionSchema = z.object({
+  number: z.number().int().positive(),
+  url: z.url(),
 });
 
 const releaseReasonSchema = z.enum([
@@ -113,17 +122,25 @@ export class FreedAuthorityBridge implements AuthorityBridge {
       env: {},
     });
     const parsed = taskListOutputSchema.parse(JSON.parse(output.stdout));
-    const task = parsed.result.tasks
-      .map(toAuthorityTask)
-      .find(
-        (candidate) =>
-          candidate.githubIssue.number === report.issue.number &&
-          candidate.githubIssue.url === report.issue.url &&
-          candidate.state !== "closed",
+    const projected = parsed.result.tasks.find((candidate) => {
+      if (candidate.state === "closed") return false;
+      const githubIssue = githubIssueProjectionSchema.safeParse(
+        candidate.details.githubIssue,
       );
-    if (task === undefined) {
+      return (
+        githubIssue.success &&
+        githubIssue.data.number === report.issue.number &&
+        githubIssue.data.url === report.issue.url
+      );
+    });
+    if (projected === undefined) {
       return { active: false, reason: "matching-active-task-not-found" };
     }
+    // Freed's canonical ledger contains historical tasks created before the
+    // factory fields existed. Those unrelated records must remain readable,
+    // while a matching candidate still has to satisfy the complete execution
+    // contract before it can grant authority.
+    const task = toAuthorityTask(freedTaskSchema.parse(projected));
     return { task, active: true, reason: "matching-active-task" };
   }
 

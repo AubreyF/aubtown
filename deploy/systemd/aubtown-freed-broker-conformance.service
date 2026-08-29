@@ -21,6 +21,7 @@ ProtectHostname=true
 ProtectKernelModules=true
 ProtectKernelTunables=true
 ProtectSystem=strict
+BindReadOnlyPaths=/etc/freed/automation-actor-launchers-conformance:/etc/freed/automation-actor-launchers
 ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed
 ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/aubtown/conformance
 RestrictAddressFamilies=AF_UNIX
