@@ -509,8 +509,10 @@ describe("native Linux deployment", () => {
     const unit = await fixture("deploy/systemd/aubtown-symphony.service");
     expect(unit).toContain("WorkingDirectory=/var/lib/aubtown/symphony");
     expect(unit).toContain(
-      "StateDirectory=aubtown/symphony aubtown/workspaces aubtown/admission",
+      "StateDirectory=aubtown/symphony aubtown/admission",
     );
+    expect(unit).not.toContain("StateDirectory=aubtown/workspaces");
+    expect(unit).not.toContain("ReadWritePaths=/var/lib/aubtown/workspaces");
     expect(unit).toContain("ReadOnlyPaths=/etc/aubtown");
     expect(unit).toContain(
       "/var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock /var/lib/freed/automation/control/.guards/events.lock/kernel.lock",
