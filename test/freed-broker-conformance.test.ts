@@ -120,6 +120,28 @@ describe("Freed broker conformance", () => {
     expect(report.checks.every((check) => check.passed)).toBe(true);
   }, 15_000);
 
+  it("refreshes operation timestamps when the real broker path is slow", async () => {
+    const root = await realpath(
+      await mkdtemp(path.join(tmpdir(), "aubtown-broker-conformance-slow-")),
+    );
+    disposableRoots.push(root);
+    const executable = await disposableBroker(root);
+    let nowMs = Date.parse("2026-08-13T20:04:00.000Z");
+    const report = await runFreedBrokerConformance({
+      runner: new ProcessCommandRunner(),
+      config: config(executable),
+      checkedAt: new Date(nowMs).toISOString(),
+      now: () => {
+        const value = new Date(nowMs);
+        nowMs += 6 * 60_000;
+        return value;
+      },
+    });
+
+    expect(report.passed, JSON.stringify(report)).toBe(true);
+    expect(report.checks.every((check) => check.passed)).toBe(true);
+  }, 15_000);
+
   it("refuses a production-looking broker profile", async () => {
     const root = await realpath(
       await mkdtemp(path.join(tmpdir(), "aubtown-broker-conformance-")),

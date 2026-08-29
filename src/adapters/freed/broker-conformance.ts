@@ -153,20 +153,18 @@ export async function runFreedBrokerConformance(input: {
   readonly runner: CommandRunner;
   readonly config: FreedBrokerConformanceInput;
   readonly checkedAt: string;
+  readonly now?: () => Date;
 }): Promise<FreedBrokerConformanceReport> {
   const config = parseFreedBrokerConformanceInput(input.config);
   const checkedAtMs = Date.parse(input.checkedAt);
   if (!Number.isFinite(checkedAtMs)) {
     throw new Error("Freed broker conformance timestamp is invalid.");
   }
-  const at = (millisecondsBeforeCheck: number): string =>
-    new Date(checkedAtMs - millisecondsBeforeCheck).toISOString();
-  const acquiredAt = at(4_000);
-  const changedReplayAt = at(3_500);
-  const heartbeatAt = at(3_000);
-  const changedHeartbeatAt = at(2_500);
-  const transferredAt = at(2_000);
-  const releasedAt = at(1_000);
+  const operationAt = (millisecondsBeforeNow: number): string =>
+    new Date(
+      (input.now?.() ?? new Date()).getTime() - millisecondsBeforeNow,
+    ).toISOString();
+  const acquiredAt = operationAt(4_000);
   const operationIds = {
     acquire: randomUUID(),
     duplicateAcquire: randomUUID(),
@@ -285,7 +283,7 @@ export async function runFreedBrokerConformance(input: {
   let rejected = await expectRejected(
     "changed-operation-replay",
     "operation_replay_conflict",
-    () => client.acquire({ ...acquire, requestedAt: changedReplayAt }),
+    () => client.acquire({ ...acquire, requestedAt: operationAt(3_500) }),
   );
   if (rejected !== undefined) return rejected;
 
@@ -324,14 +322,19 @@ export async function runFreedBrokerConformance(input: {
   rejected = await expectRejected(
     "duplicate-acquire",
     "claim_already_exists",
-    () =>
-      client.acquire({
+    () => {
+      const duplicateAt = operationAt(3_000);
+      return client.acquire({
         ...acquire,
         operationId: operationIds.duplicateAcquire,
-      }),
+        claim: { ...acquire.claim, claimedAt: duplicateAt },
+        requestedAt: duplicateAt,
+      });
+    },
   );
   if (rejected !== undefined) return rejected;
 
+  const heartbeatAt = operationAt(3_000);
   const heartbeat: FreedClaimHeartbeatRequest = {
     schemaVersion: 1,
     operationId: operationIds.heartbeat,
@@ -363,11 +366,12 @@ export async function runFreedBrokerConformance(input: {
     () =>
       client.heartbeat({
         ...heartbeat,
-        heartbeatAt: changedHeartbeatAt,
+        heartbeatAt: operationAt(2_500),
       }),
   );
   if (rejected !== undefined) return rejected;
 
+  const transferredAt = operationAt(2_000);
   const transfer: FreedClaimTransferRequest = {
     schemaVersion: 1,
     operationId: operationIds.transfer,
@@ -413,7 +417,7 @@ export async function runFreedBrokerConformance(input: {
       client.heartbeat({
         ...heartbeat,
         custodyEpoch: transfer.nextEpoch,
-        heartbeatAt: at(1_500),
+        heartbeatAt: operationAt(1_500),
       }),
   );
   if (rejected !== undefined) return rejected;
@@ -461,7 +465,7 @@ export async function runFreedBrokerConformance(input: {
     custodyEpoch: transfer.nextEpoch,
     expectedHeartbeatAt: transfer.transferredAt,
     reason: config.release.reason,
-    releasedAt,
+    releasedAt: operationAt(1_000),
   };
   try {
     const receipt = await client.release(release);
