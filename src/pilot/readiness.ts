@@ -450,10 +450,11 @@ export async function auditPilotReadiness(input: {
         maxBytes: 128,
       });
       const version = (await readFile(file, "utf8")).trim();
-      if (!/^[0-9]+\.[0-9]+\.[0-9]+$/u.test(version)) {
+      const parsed = /^v?([0-9]+\.[0-9]+\.[0-9]+)$/u.exec(version);
+      if (parsed === null) {
         throw new Error("AubTown Node version contract is invalid.");
       }
-      expectedNodeVersion = `v${version}`;
+      expectedNodeVersion = `v${parsed[1]}`;
       return expectedNodeVersion;
     }),
     check("runtime:executor-probe-client-executable", async () =>
