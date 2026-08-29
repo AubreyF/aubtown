@@ -79,7 +79,7 @@ async function fixture(): Promise<{
   );
 
   await protectedFile(patchFile, patchBytes.toString("utf8"));
-  await protectedFile(path.join(releaseRoot, ".nvmrc"), "24.14.1\n");
+  await protectedFile(path.join(releaseRoot, ".nvmrc"), "v24.14.1\n");
   await protectedFile(
     lockFile,
     `${JSON.stringify({
