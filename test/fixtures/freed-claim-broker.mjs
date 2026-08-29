@@ -51,7 +51,7 @@ async function persist() {
 }
 
 async function respond(action, result, operationId) {
-  const response = { action, result };
+  const response = { ok: true, schemaVersion: 1, action, result };
   if (operationId !== undefined) {
     state.operations[operationId] = { requestJson, response };
     await persist();

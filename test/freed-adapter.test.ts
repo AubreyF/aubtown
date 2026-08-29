@@ -70,6 +70,8 @@ function brokerResponse(request: CommandRequest): CommandResult {
   return {
     stderr: "",
     stdout: JSON.stringify({
+      ok: true,
+      schemaVersion: 1,
       action: "task.claim-acquire",
       result: {
         schemaVersion: 1,
@@ -212,6 +214,30 @@ describe("Freed adapter", () => {
     expect(runner.requests[0]).toEqual(runner.requests[1]);
   });
 
+  it("rejects a broker response without the standard Freed success envelope", async () => {
+    const runner = new HandlerRunner((request) => {
+      const response = JSON.parse(brokerResponse(request).stdout) as Record<
+        string,
+        unknown
+      >;
+      delete response.ok;
+      delete response.schemaVersion;
+      return { stdout: JSON.stringify(response), stderr: "" };
+    });
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+      claimBrokerExecutable: "/opt/freed/bin/factory-coordinator",
+    });
+    await expect(
+      bridge.acquire({
+        binding: binding(),
+        now: "2026-08-13T18:00:00.000Z",
+      }),
+    ).rejects.toThrow();
+  });
+
   it("rejects a broker response for another claim", async () => {
     const runner = new HandlerRunner((request) => {
       const response = JSON.parse(brokerResponse(request).stdout) as {
@@ -281,6 +307,8 @@ describe("Freed adapter", () => {
         return {
           stderr: "",
           stdout: JSON.stringify({
+            ok: true,
+            schemaVersion: 1,
             action: "task.claim-show",
             result: {
               schemaVersion: 1,
@@ -330,6 +358,8 @@ describe("Freed adapter", () => {
       return {
         stderr: "",
         stdout: JSON.stringify({
+          ok: true,
+          schemaVersion: 1,
           action: "task.claim-release",
           result: {
             schemaVersion: 1,
