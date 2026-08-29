@@ -341,6 +341,8 @@ describe("Freed broker planning authority reader", () => {
         return {
           stderr: "",
           stdout: JSON.stringify({
+            ok: true,
+            schemaVersion: 1,
             action: "task.claim-list",
             result: {
               schemaVersion: 1,

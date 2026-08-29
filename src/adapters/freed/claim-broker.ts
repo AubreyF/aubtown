@@ -19,6 +19,11 @@ const issueIdentitySchema = z.object({
   url: z.url(),
 }).strict();
 
+const successfulControlEnvelope = {
+  ok: z.literal(true),
+  schemaVersion: z.literal(1),
+} as const;
+
 const brokerClaimSchema = z.object({
   claimId: z.string().min(1),
   githubIssue: issueIdentitySchema,
@@ -70,6 +75,7 @@ const acquireRequestSchema = z.object({
 export type FreedClaimAcquireRequest = z.infer<typeof acquireRequestSchema>;
 
 const acquireOutputSchema = z.object({
+  ...successfulControlEnvelope,
   action: z.literal("task.claim-acquire"),
   result: z.object({
     schemaVersion: z.literal(1),
@@ -94,6 +100,7 @@ const showRequestSchema = z.object({
 export type FreedClaimShowRequest = z.infer<typeof showRequestSchema>;
 
 const showOutputSchema = z.object({
+  ...successfulControlEnvelope,
   action: z.literal("task.claim-show"),
   result: z.object({
     schemaVersion: z.literal(1),
@@ -113,6 +120,7 @@ const listRequestSchema = z.object({
 export type FreedClaimListRequest = z.infer<typeof listRequestSchema>;
 
 const listOutputSchema = z.object({
+  ...successfulControlEnvelope,
   action: z.literal("task.claim-list"),
   result: z.object({
     schemaVersion: z.literal(1),
@@ -142,6 +150,7 @@ const heartbeatRequestSchema = z.object({
 export type FreedClaimHeartbeatRequest = z.infer<typeof heartbeatRequestSchema>;
 
 const heartbeatOutputSchema = z.object({
+  ...successfulControlEnvelope,
   action: z.literal("task.claim-heartbeat"),
   result: heartbeatRequestSchema,
 }).strict();
@@ -169,6 +178,7 @@ const transferRequestSchema = z.object({
 export type FreedClaimTransferRequest = z.infer<typeof transferRequestSchema>;
 
 const transferOutputSchema = z.object({
+  ...successfulControlEnvelope,
   action: z.literal("task.claim-transfer"),
   result: transferRequestSchema,
 }).strict();
@@ -195,6 +205,7 @@ export type FreedClaimReleaseRequest = z.infer<
 >;
 
 const releaseOutputSchema = z.object({
+  ...successfulControlEnvelope,
   action: z.literal("task.claim-release"),
   result: z.object({
     schemaVersion: z.literal(1),
