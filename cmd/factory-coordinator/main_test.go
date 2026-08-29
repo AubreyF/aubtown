@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type queuedRunner struct {
@@ -17,11 +18,17 @@ type queuedRunner struct {
 	results  []commandResult
 	errors   []error
 	commands []command
+	timeouts []time.Duration
 }
 
-func (runner *queuedRunner) Run(_ context.Context, request command) (commandResult, error) {
+func (runner *queuedRunner) Run(ctx context.Context, request command) (commandResult, error) {
 	runner.testing.Helper()
 	runner.commands = append(runner.commands, request)
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		runner.testing.Fatal("child command has no bounded deadline")
+	}
+	runner.timeouts = append(runner.timeouts, time.Until(deadline))
 	if len(runner.results) == 0 {
 		runner.testing.Fatal("unexpected child command")
 	}
@@ -140,6 +147,14 @@ func TestMutationKeepsLeaseTokenOutOfArgumentsAndOutput(t *testing.T) {
 	}
 	if len(runner.commands) != 3 {
 		t.Fatalf("expected acquire, mutation, release, got %d calls", len(runner.commands))
+	}
+	if runner.timeouts[0] < 379*time.Second {
+		t.Fatalf("trusted launcher received only %s, below its 370 second lifecycle contract", runner.timeouts[0])
+	}
+	for index, timeout := range runner.timeouts[1:] {
+		if timeout > controlCommandTimeout || timeout < 89*time.Second {
+			t.Fatalf("control command %d received unexpected timeout %s", index+1, timeout)
+		}
 	}
 	for _, request := range runner.commands {
 		if strings.Contains(strings.Join(request.Args, "\n"), token) {

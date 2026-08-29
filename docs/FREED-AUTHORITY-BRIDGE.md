@@ -148,6 +148,14 @@ The broker allowlist is limited to:
 
 It exposes no generic shell, file, lease, or task-mutation endpoint. The Mac is an executor and keeps no replica of canonical authority files.
 
+The trusted actor launcher has a bounded lifecycle of up to 370 seconds. The
+broker gives that launcher a 380-second caller deadline so it can finish its
+own challenge, acquisition, and cleanup contract. Ordinary Freed task and
+lease control commands retain a separate 90-second deadline. A slow trusted
+acquisition therefore cannot silently widen every child-process boundary, and
+the broker does not kill a healthy launcher before its reviewed lifecycle
+expires.
+
 ## Current implementation gate
 
 `FreedAuthorityBridge.inspect`, the protected reconciler and candidate
