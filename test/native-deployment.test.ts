@@ -453,6 +453,9 @@ describe("native Linux deployment", () => {
     expect(conformance).toContain("dist/cli/verify-freed-broker.js");
     expect(conformance).toContain("/etc/aubtown/freed-broker-conformance.json");
     expect(conformance).toContain(
+      "BindReadOnlyPaths=/etc/freed/automation-actor-launchers-conformance:/etc/freed/automation-actor-launchers",
+    );
+    expect(conformance).toContain(
       "ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/aubtown/conformance",
     );
     expect(readiness).toContain("aubtown-freed-broker-conformance.service");
