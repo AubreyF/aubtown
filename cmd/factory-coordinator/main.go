@@ -22,7 +22,8 @@ import (
 
 const (
 	brokerSchemaVersion     = 1
-	childTimeout            = 90 * time.Second
+	trustedLauncherTimeout  = 380 * time.Second
+	controlCommandTimeout   = 90 * time.Second
 	maxChildOutput          = 1 * 1024 * 1024
 	maxRequestBytes         = 1 * 1024 * 1024
 	maxNodeExecutableBytes  = 256 * 1024 * 1024
@@ -321,7 +322,7 @@ func executeBroker(ctx context.Context, runner commandRunner, config brokerConfi
 	if readActions[invocation.Action] {
 		return runFreedTaskCommand(ctx, runner, config, invocation, ""), nil
 	}
-	acquireContext, cancelAcquire := context.WithTimeout(ctx, childTimeout)
+	acquireContext, cancelAcquire := context.WithTimeout(ctx, trustedLauncherTimeout)
 	acquired, err := runner.Run(acquireContext, command{
 		Path: config.NodeExecutable,
 		Args: []string{
@@ -364,7 +365,7 @@ func runFreedTaskCommand(ctx context.Context, runner commandRunner, config broke
 		args = append(args, "--actor", config.Actor, "--lease-name", config.LeaseName)
 		environment = []string{"FREED_AUTOMATION_LEASE_TOKEN=" + leaseToken}
 	}
-	commandContext, cancel := context.WithTimeout(ctx, childTimeout)
+	commandContext, cancel := context.WithTimeout(ctx, controlCommandTimeout)
 	defer cancel()
 	result, err := runner.Run(commandContext, command{
 		Path: config.NodeExecutable,
@@ -384,7 +385,7 @@ func releaseCoordinatorLease(ctx context.Context, runner commandRunner, config b
 		return err
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		releaseContext, cancel := context.WithTimeout(ctx, childTimeout)
+		releaseContext, cancel := context.WithTimeout(ctx, controlCommandTimeout)
 		result, runErr := runner.Run(releaseContext, command{
 			Path: config.NodeExecutable,
 			Args: []string{

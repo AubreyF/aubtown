@@ -77,6 +77,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Render exact private GitHub App registrations with disabled webhooks, disabled user OAuth, and selected-repository installation handoff.
 - [x] Review and merge the Freed task-claim commands from PR #1491.
 - [x] Build the host-neutral `factory-coordinator` broker with pinned runtime verification and bounded lease cleanup.
+- [x] Honor Freed's bounded 370-second trusted-launcher lifecycle while keeping ordinary control commands at 90 seconds.
 - [x] Build an idempotent Linux host installer that verifies one immutable release and leaves every service disabled.
 - [ ] Install the native Linux authority broker.
 - [x] Add hard-boundary active-turn interruption to the Symphony runner.
