@@ -151,10 +151,11 @@ func TestMutationKeepsLeaseTokenOutOfArgumentsAndOutput(t *testing.T) {
 	if runner.timeouts[0] < 379*time.Second {
 		t.Fatalf("trusted launcher received only %s, below its 370 second lifecycle contract", runner.timeouts[0])
 	}
-	for index, timeout := range runner.timeouts[1:] {
-		if timeout > controlCommandTimeout || timeout < 89*time.Second {
-			t.Fatalf("control command %d received unexpected timeout %s", index+1, timeout)
-		}
+	if runner.timeouts[1] < 179*time.Second || runner.timeouts[1] > controlCommandTimeout {
+		t.Fatalf("mutation received unexpected timeout %s", runner.timeouts[1])
+	}
+	if runner.timeouts[2] < 89*time.Second || runner.timeouts[2] > leaseReleaseTimeout {
+		t.Fatalf("lease release received unexpected timeout %s", runner.timeouts[2])
 	}
 	for _, request := range runner.commands {
 		if strings.Contains(strings.Join(request.Args, "\n"), token) {

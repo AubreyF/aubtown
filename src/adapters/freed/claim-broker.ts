@@ -7,7 +7,7 @@ import { canonicalJson } from "../../security/canonical-json.js";
 
 const digestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
 const DEFAULT_READ_BROKER_TIMEOUT_MS = 120_000;
-const DEFAULT_MUTATION_BROKER_TIMEOUT_MS = 12 * 60_000;
+const DEFAULT_MUTATION_BROKER_TIMEOUT_MS = 13 * 60_000;
 const releaseReasonSchema = z.enum([
   "prelaunch-denied",
   "worker-completed",

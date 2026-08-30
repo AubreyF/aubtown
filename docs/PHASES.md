@@ -59,7 +59,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Permit supported Symphony preflight reads to open only Freed's task and event kernel locks, refresh planning after broker conformance, preserve executor ownership of workspace custody, keep the outer mutation deadline longer than the broker's complete bounded authority lifecycle with a reviewed 15-minute schema ceiling, preserve validated Freed error envelopes from either output stream, and never retry a deterministic structured denial.
 - [x] Bind the broker's initial `requestedAt` to the reconciler's fresh `claimedAt` so delayed prelaunch remains valid and exactly replayable.
 - [x] Prepare the exact claim-bound Freed worktree on the selected SSH executor before Symphony launches a worker.
-- [x] Keep Symphony's admission deadline longer than the broker and remote workspace lifecycle so a valid claim cannot be orphaned by the scheduler timeout.
+- [x] Keep Symphony's 15-minute admission deadline longer than the broker's 13-minute outer mutation deadline, its three-minute control command, and the remote workspace lifecycle so a valid claim cannot be orphaned by a nested timeout.
 - [x] Preserve the executor-owned mode-0750 workspace root required by the separately enrolled Draft Publisher account during repeatable native host installation.
 - [x] Run Freed's worktree helper with the protected worker's pinned Node and a minimal fixed executable path.
 - [x] Require fresh SSH executor readiness that matches the selected host, repository, workspace root, and admitted base head.

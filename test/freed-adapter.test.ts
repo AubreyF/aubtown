@@ -251,7 +251,7 @@ describe("Freed adapter", () => {
       executable: "/opt/freed/bin/factory-coordinator",
       cwd: "/repo/freed",
       env: {},
-      timeoutMs: 12 * 60_000,
+      timeoutMs: 13 * 60_000,
     });
     expect(runner.requests[0]?.args.slice(0, -1)).toEqual([
       "--profile",
@@ -542,7 +542,7 @@ describe("Freed adapter", () => {
     expect(runner.requests).toHaveLength(3);
     expect(runner.requests[1]).toEqual(runner.requests[2]);
     expect(runner.requests[0]?.timeoutMs).toBe(120_000);
-    expect(runner.requests[1]?.timeoutMs).toBe(12 * 60_000);
+    expect(runner.requests[1]?.timeoutMs).toBe(13 * 60_000);
   });
 
   it("creates workspaces only through Freed's helper and fresh origin/dev", async () => {

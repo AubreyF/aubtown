@@ -25,7 +25,7 @@ admission:
   command:
     - /opt/aubtown/node/bin/node
     - /opt/aubtown/current/dist/cli/symphony-prelaunch.js
-  timeout_ms: 780000
+  timeout_ms: 900000
 active_guard:
   command:
     - /opt/aubtown/node/bin/node

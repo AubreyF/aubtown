@@ -73,6 +73,8 @@ Expected denials are machine-readable JSON errors on standard error. The conform
 
 The installed broker must pass `npm run freed:broker-conformance -- <absolute-input-file>` before pilot readiness can pass. The protected input may name only a profile beginning with `conformance-`. That profile must use disposable task and authority state. It must never point at Freed's canonical production state root.
 
+The broker gives the pinned Freed control command up to three minutes, retains a separate 90-second bounded lease-release attempt, and remains inside the client's 13-minute mutation deadline. Symphony's complete prelaunch deadline is 15 minutes so workspace preparation still has room after the worst-case governed authority lifecycle.
+
 Start from `config/repositories/freed-broker-conformance.example.json`. The runner generates fresh operation IDs and strictly ordered lifecycle timestamps on each invocation. The checked-in fixture contains no credential and grants no authority. The installed broker profile is responsible for mapping `conformance-freed-pilot` to isolated disposable state.
 
 On Linux, the conformance actor launchers live in the protected `/etc/freed/automation-actor-launchers-conformance` tree. The conformance service uses a private read-only bind mount to present that tree at Freed's standard launcher path inside only its mount namespace. The production launcher tree is never replaced, and every other process continues to see the canonical production bindings.

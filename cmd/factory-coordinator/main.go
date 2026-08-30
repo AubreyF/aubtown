@@ -23,7 +23,8 @@ import (
 const (
 	brokerSchemaVersion     = 1
 	trustedLauncherTimeout  = 380 * time.Second
-	controlCommandTimeout   = 90 * time.Second
+	controlCommandTimeout   = 180 * time.Second
+	leaseReleaseTimeout     = 90 * time.Second
 	maxChildOutput          = 1 * 1024 * 1024
 	maxRequestBytes         = 1 * 1024 * 1024
 	maxNodeExecutableBytes  = 256 * 1024 * 1024
@@ -404,7 +405,7 @@ func releaseCoordinatorLease(ctx context.Context, runner commandRunner, config b
 		return err
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		releaseContext, cancel := context.WithTimeout(ctx, controlCommandTimeout)
+		releaseContext, cancel := context.WithTimeout(ctx, leaseReleaseTimeout)
 		result, runErr := runner.Run(releaseContext, command{
 			Path: config.NodeExecutable,
 			Args: []string{
