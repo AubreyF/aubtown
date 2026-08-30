@@ -180,14 +180,33 @@ func main() {
 		os.Exit(1)
 	}
 	if result.ExitCode != 0 {
-		if len(result.Stderr) == 0 {
-			writeBrokerError("freed_command_failed", "Freed rejected the coordinator operation without structured error output.")
+		if output := structuredFreedErrorOutput(result); len(output) > 0 {
+			_, _ = os.Stderr.Write(output)
 		} else {
-			_, _ = os.Stderr.Write(result.Stderr)
+			writeBrokerError("freed_command_failed", "Freed rejected the coordinator operation without structured error output.")
 		}
 		os.Exit(1)
 	}
 	_, _ = os.Stdout.Write(result.Stdout)
+}
+
+func structuredFreedErrorOutput(result commandResult) []byte {
+	for _, output := range [][]byte{result.Stderr, result.Stdout} {
+		var envelope struct {
+			SchemaVersion int `json:"schemaVersion"`
+			Error         struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(output, &envelope) == nil &&
+			envelope.SchemaVersion == 1 &&
+			strings.TrimSpace(envelope.Error.Code) != "" &&
+			strings.TrimSpace(envelope.Error.Message) != "" {
+			return output
+		}
+	}
+	return nil
 }
 
 func parseInvocation(args []string) (invocation, error) {

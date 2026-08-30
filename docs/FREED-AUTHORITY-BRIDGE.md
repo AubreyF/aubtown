@@ -65,6 +65,8 @@ The acquire request binds the operation ID, task and expected revision, complete
 
 Retries with the same operation ID and byte-equivalent payload are idempotent. AubTown performs one exact local retry after an uncertain command failure using the same argv and operation ID. A machine-readable Freed denial is final and is never retried. A changed retry or mismatched broker response fails.
 
+The broker preserves a validated Freed error envelope whether the pinned control command writes it to stderr or stdout. It never substitutes the generic `freed_command_failed` result for a structured denial. Unstructured child output remains hidden at the trust boundary.
+
 Expected denials are machine-readable JSON errors on standard error. The conformance gate requires `operation_replay_conflict`, `claim_already_exists`, and `claim_epoch_mismatch` at the relevant boundaries. A crash, timeout, plain-text failure, or another error code does not count as successful fencing.
 
 ## Disposable broker conformance

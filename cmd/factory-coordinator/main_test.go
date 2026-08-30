@@ -197,6 +197,21 @@ func TestRejectedMutationStillReleasesLease(t *testing.T) {
 	}
 }
 
+func TestStructuredFreedErrorOutputAcceptsStdout(t *testing.T) {
+	output := []byte(`{"schemaVersion":1,"error":{"code":"operation_replay_conflict","message":"request changed"}}`)
+	result := commandResult{Stdout: output, ExitCode: 1}
+	if got := structuredFreedErrorOutput(result); string(got) != string(output) {
+		t.Fatalf("structured stdout error was lost: %q", got)
+	}
+}
+
+func TestStructuredFreedErrorOutputRejectsNonErrorStdout(t *testing.T) {
+	result := commandResult{Stdout: []byte(`{"schemaVersion":1,"ok":false}`), ExitCode: 1}
+	if got := structuredFreedErrorOutput(result); got != nil {
+		t.Fatalf("non-error stdout was exposed: %q", got)
+	}
+}
+
 func TestReleaseFailureMasksSuccessfulMutation(t *testing.T) {
 	token := "test-lease-token-test-lease-token-00"
 	runner := &queuedRunner{
