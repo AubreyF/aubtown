@@ -132,7 +132,7 @@ describe("host observation journal", () => {
       quota({
         sequence: 2,
         observedAt: "2026-08-13T18:01:00.000Z",
-        usedPercent: 45,
+        usedPercent: 55,
       }),
       "2026-08-13T18:01:01.000Z",
     );
@@ -141,7 +141,7 @@ describe("host observation journal", () => {
       decision: {
         action: "throttle",
         reason: "daily-throttle",
-        dailyUsedPercent: 15,
+        dailyUsedPercent: 25,
       },
     });
     await expect(journal.snapshot()).resolves.toMatchObject({

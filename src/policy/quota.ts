@@ -16,9 +16,9 @@ export const ROLLING_WEEKLY_WINDOW_MINUTES = 10_080;
 
 export const APPROVED_QUOTA_POLICY: QuotaPolicy = {
   autonomousWeeklyCeilingPercent: 80,
-  dailyThrottlePercent: 15,
-  dailyAdmissionStopPercent: 20,
-  dailyInterruptPercent: 25,
+  dailyThrottlePercent: 25,
+  dailyAdmissionStopPercent: 30,
+  dailyInterruptPercent: 35,
   telemetryMaxAgeSeconds: 120,
 };
 

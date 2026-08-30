@@ -129,7 +129,7 @@ describe("Symphony active-run guard", () => {
   });
 
   it("continues through headroom, throttling, and admission-stop bands", () => {
-    for (const weeklyUsedPercent of [40, 50, 55]) {
+    for (const weeklyUsedPercent of [40, 60, 65]) {
       const result = evaluateSymphonyActiveRunGuard({
         request,
         envelope: envelope(),
@@ -156,7 +156,7 @@ describe("Symphony active-run guard", () => {
         request,
         envelope: envelope(),
         observations: observations({
-          weeklyUsedPercent: 60,
+          weeklyUsedPercent: 70,
           dailyBaselinePercent: 35,
         }),
         enrollments,
