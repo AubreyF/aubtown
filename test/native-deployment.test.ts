@@ -302,6 +302,20 @@ describe("native Linux deployment", () => {
     expect(service).not.toMatch(/docker|compose|restate/iu);
   });
 
+  it("retains one successful broker conformance result for dependent readiness jobs", async () => {
+    const conformance = await fixture(
+      "deploy/systemd/aubtown-freed-broker-conformance.service",
+    );
+    const readiness = await fixture(
+      "deploy/systemd/aubtown-pilot-readiness.service",
+    );
+    expect(conformance).toContain("Type=oneshot");
+    expect(conformance).toContain("RemainAfterExit=yes");
+    expect(readiness).toContain(
+      "Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service aubtown-freed-broker-conformance.service",
+    );
+  });
+
   it("runs a loopback-only signed host observation gateway", async () => {
     const service = await fixture(
       "deploy/systemd/aubtown-host-gateway.service",
