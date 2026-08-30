@@ -8,7 +8,7 @@ tracker:
   active_states: [open]
   terminal_states: [closed]
 polling:
-  interval_ms: 60000
+  interval_ms: 10000
 workspace:
   root: $AUBTOWN_SYMPHONY_WORKSPACES
 worker:

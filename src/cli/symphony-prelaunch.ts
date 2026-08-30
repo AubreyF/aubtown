@@ -142,15 +142,7 @@ if (
       receiptStore: new SymphonyPrelaunchReceiptStore(receiptRoot),
       now,
     });
-  } catch (error) {
-    process.stderr.write(
-      `${JSON.stringify({
-        event: "symphony-prelaunch-state-invalid",
-        issueId: request.issueId,
-        workerHost: request.workerHost,
-        error: error instanceof Error ? error.message : String(error),
-      })}\n`,
-    );
+  } catch {
     response = denySymphonyPrelaunch(request, "prelaunch-state-invalid");
   }
 }
