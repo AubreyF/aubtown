@@ -254,6 +254,20 @@ func TestRunnerFailureDoesNotInventFreedOutput(t *testing.T) {
 	}
 }
 
+func TestLauncherDenialPreservesStructuredStdout(t *testing.T) {
+	output := []byte(`{"schemaVersion":1,"error":{"code":"lease_transaction_pending","message":"retry later"}}`)
+	runner := &queuedRunner{
+		testing: t,
+		results: []commandResult{{Stdout: output, ExitCode: 1}},
+	}
+	result, err := executeBroker(context.Background(), runner, testConfig(), invocation{
+		Profile: "freed-pilot", Action: "claim-acquire", Request: `{"schemaVersion":1}`,
+	})
+	if err != nil || result.ExitCode != 1 || string(structuredFreedErrorOutput(result)) != string(output) {
+		t.Fatalf("launcher denial lost structured output: %#v, %v", result, err)
+	}
+}
+
 func TestProtectedProfilePinsEveryRuntimeArtifact(t *testing.T) {
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

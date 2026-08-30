@@ -358,7 +358,7 @@ func executeBroker(ctx context.Context, runner commandRunner, config brokerConfi
 		return commandResult{}, fmt.Errorf("trusted launcher failed: %w", err)
 	}
 	if acquired.ExitCode != 0 {
-		return commandResult{Stderr: acquired.Stderr, ExitCode: 1}, nil
+		return commandResult{Stdout: acquired.Stdout, Stderr: acquired.Stderr, ExitCode: 1}, nil
 	}
 	handoff, err := parseLeaseHandoff(acquired.Stdout, config)
 	if err != nil {
