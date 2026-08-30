@@ -246,6 +246,28 @@ function assertAbsoluteExecutable(executable: string): void {
   }
 }
 
+function hasStructuredFreedError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("stderr" in error)) {
+    return false;
+  }
+  const stderr = (error as { readonly stderr?: unknown }).stderr;
+  if (typeof stderr !== "string") {
+    return false;
+  }
+  for (const line of stderr.trim().split("\n").reverse()) {
+    try {
+      z.object({
+        schemaVersion: z.literal(1),
+        error: z.object({ code: z.string().min(1) }).passthrough(),
+      }).passthrough().parse(JSON.parse(line));
+      return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
 export class FreedClaimBrokerClient {
   constructor(
     private readonly runner: CommandRunner,
@@ -363,7 +385,7 @@ export class FreedClaimBrokerClient {
     try {
       return (await this.runner.run(command)).stdout;
     } catch (error) {
-      if (!retry) {
+      if (!retry || hasStructuredFreedError(error)) {
         throw error;
       }
       return (await this.runner.run(command)).stdout;

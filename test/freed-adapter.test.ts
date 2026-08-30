@@ -4,6 +4,7 @@ import type {
   CommandResult,
   CommandRunner,
 } from "../src/adapters/command-runner.js";
+import { FreedClaimBrokerClient } from "../src/adapters/freed/claim-broker.js";
 import { FreedAuthorityBridge } from "../src/adapters/freed/authority-bridge.js";
 import { createFreedWorkspace } from "../src/adapters/freed/workspace.js";
 import { authorityTask, claim, report } from "./helpers.js";
@@ -295,6 +296,42 @@ describe("Freed adapter", () => {
     ).resolves.toMatchObject({ authorityClaimId: "claim-1234-epoch-1" });
     expect(runner.requests).toHaveLength(2);
     expect(runner.requests[0]).toEqual(runner.requests[1]);
+  });
+
+  it("does not retry a deterministic structured Freed denial", async () => {
+    const denial = Object.assign(new Error("broker rejected the claim"), {
+      stdout: "",
+      stderr: JSON.stringify({
+        ok: false,
+        schemaVersion: 1,
+        error: {
+          code: "claim_epoch_mismatch",
+          message: "claim custody epoch is stale",
+        },
+      }),
+    });
+    const runner = new HandlerRunner(() => {
+      throw denial;
+    });
+    const client = new FreedClaimBrokerClient(runner, {
+      executable: "/opt/freed/bin/factory-coordinator",
+      cwd: "/repo/freed",
+    });
+
+    await expect(
+      client.heartbeat({
+        schemaVersion: 1,
+        operationId: "5809e845-0e11-4809-aae1-81ae66a469ed",
+        taskId: "github-issue-1234",
+        taskRevision: 1,
+        authorityClaimId: "claim-1234-epoch-1",
+        custodyEpoch: 1,
+        bindingDigest: "a".repeat(64),
+        heartbeatAt: "2026-08-13T18:03:30.000Z",
+        executionStage: "running",
+      }),
+    ).rejects.toBe(denial);
+    expect(runner.requests).toHaveLength(1);
   });
 
   it("rejects a broker response without the standard Freed success envelope", async () => {
