@@ -6,6 +6,8 @@ import { executionAdmissionSchema } from "../execution-admission.js";
 import { canonicalJson } from "../../security/canonical-json.js";
 
 const digestSchema = z.string().regex(/^[0-9a-f]{64}$/u);
+const DEFAULT_READ_BROKER_TIMEOUT_MS = 120_000;
+const DEFAULT_MUTATION_BROKER_TIMEOUT_MS = 12 * 60_000;
 const releaseReasonSchema = z.enum([
   "prelaunch-denied",
   "worker-completed",
@@ -351,7 +353,11 @@ export class FreedClaimBrokerClient {
       ],
       cwd: this.options.cwd,
       env: {},
-      timeoutMs: this.options.timeoutMs ?? 120_000,
+      timeoutMs:
+        this.options.timeoutMs ??
+        (retry
+          ? DEFAULT_MUTATION_BROKER_TIMEOUT_MS
+          : DEFAULT_READ_BROKER_TIMEOUT_MS),
       maxBufferBytes: 1024 * 1024,
     } as const;
     try {

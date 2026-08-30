@@ -156,6 +156,13 @@ acquisition therefore cannot silently widen every child-process boundary, and
 the broker does not kill a healthy launcher before its reviewed lifecycle
 expires.
 
+AubTown gives each complete mutating broker invocation a 12-minute outer
+deadline. That covers the broker's bounded worst case of trusted acquisition,
+one task mutation, and two exact lease-release attempts without killing the
+broker while its protected child is still cleaning up. Read-only claim
+operations retain a two-minute outer deadline. An explicitly configured test
+deadline may override both, but production uses the operation-specific bounds.
+
 ## Current implementation gate
 
 `FreedAuthorityBridge.inspect`, the protected reconciler and candidate

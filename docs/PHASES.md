@@ -55,7 +55,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Isolate disposable and production actor bindings with a service-private read-only launcher mount.
 - [x] Add complete broker-backed active-claim and work-lane reconciliation for conflict planning.
 - [x] Add active-turn claim stages, heartbeats, and race-safe unlaunched-claim recovery before startup and every minute.
-- [x] Permit supported Symphony preflight reads to open only Freed's task and event kernel locks, refresh planning after broker conformance, and preserve executor ownership of workspace custody.
+- [x] Permit supported Symphony preflight reads to open only Freed's task and event kernel locks, refresh planning after broker conformance, preserve executor ownership of workspace custody, and keep the outer mutation deadline longer than the broker's complete bounded authority lifecycle.
 - [x] Prepare the exact claim-bound Freed worktree on the selected SSH executor before Symphony launches a worker.
 - [x] Require fresh SSH executor readiness that matches the selected host, repository, workspace root, and admitted base head.
 - [x] Enforce the root-owned pinned-host SSH policy before readiness probes and worktree creation.
