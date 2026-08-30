@@ -162,6 +162,20 @@ async function fixture(): Promise<{
       { mode: 0o644 },
     );
   }
+  await mkdir(path.join(releaseRoot, "config", "hosts"), {
+    recursive: true,
+    mode: 0o755,
+  });
+  await writeFile(
+    path.join(
+      releaseRoot,
+      "config",
+      "hosts",
+      "symphony_ssh_config.example",
+    ),
+    "Include /etc/aubtown/ssh/config\n",
+    { mode: 0o644 },
+  );
   const manifest = await createReleaseManifest({
     root: releaseRoot,
     commit,
@@ -241,6 +255,16 @@ describe("native Linux host installer", () => {
     expect(
       (await lstat(path.join(value.paths.stateRoot, "workspaces"))).mode & 0o777,
     ).toBe(0o750);
+    const symphonySshConfig = path.join(
+      value.paths.stateRoot,
+      "symphony",
+      ".ssh",
+      "config",
+    );
+    expect(await readFile(symphonySshConfig, "utf8")).toBe(
+      "Include /etc/aubtown/ssh/config\n",
+    );
+    expect((await lstat(symphonySshConfig)).mode & 0o777).toBe(0o600);
 
     const second = await installLinuxHost(value.input);
     expect(second.actions).toEqual([]);
@@ -328,6 +352,23 @@ describe("native Linux host installer", () => {
     );
     const replaced = await installLinuxHost({ ...value.input, replace: true });
     expect(replaced.actions).toContain(`replace-unit:${unitPath}`);
+  });
+
+  it("requires explicit replacement for the Symphony SSH client contract", async () => {
+    const value = await fixture();
+    await installLinuxHost(value.input);
+    const configPath = path.join(
+      value.paths.stateRoot,
+      "symphony",
+      ".ssh",
+      "config",
+    );
+    await writeFile(configPath, "Host *\n", { mode: 0o600 });
+    await expect(installLinuxHost(value.input)).rejects.toThrow(
+      "private host file differs",
+    );
+    const replaced = await installLinuxHost({ ...value.input, replace: true });
+    expect(replaced.actions).toContain(`replace-private-file:${configPath}`);
   });
 
   it("refuses to replace an active installed unit", async () => {

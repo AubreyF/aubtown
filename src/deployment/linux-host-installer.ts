@@ -234,6 +234,51 @@ async function installUnit(input: {
   }
 }
 
+async function installPrivateFile(input: {
+  readonly source: string;
+  readonly destination: string;
+  readonly uid: number;
+  readonly gid: number;
+  readonly mode: "plan" | "apply";
+  readonly replace: boolean;
+  readonly actions: string[];
+}): Promise<void> {
+  const sourceBytes = await readFile(input.source);
+  if (await pathExists(input.destination)) {
+    const stats = await lstat(input.destination);
+    const destinationBytes = stats.isFile()
+      ? await readFile(input.destination)
+      : Buffer.alloc(0);
+    const exact =
+      stats.isFile() &&
+      !stats.isSymbolicLink() &&
+      stats.uid === input.uid &&
+      stats.gid === input.gid &&
+      modeOf(stats.mode) === 0o600 &&
+      destinationBytes.equals(sourceBytes);
+    if (exact) return;
+    if (!input.replace) {
+      throw new Error(
+        `Installed private host file differs from the reviewed release: ${input.destination}`,
+      );
+    }
+    input.actions.push(`replace-private-file:${input.destination}`);
+  } else {
+    input.actions.push(`install-private-file:${input.destination}`);
+  }
+  if (input.mode === "plan") return;
+  const temporary = `${input.destination}.aubtown-installing`;
+  await rm(temporary, { force: true });
+  try {
+    await copyFile(input.source, temporary);
+    await chown(temporary, input.uid, input.gid);
+    await chmod(temporary, 0o600);
+    await rename(temporary, input.destination);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+
 async function activateRelease(input: {
   readonly releaseRoot: string;
   readonly activeLink: string;
@@ -446,6 +491,12 @@ export async function installLinuxHost(input: {
       gid: symphony.gid,
       mode: 0o700,
     });
+    directoryContracts.push({
+      path: path.join(input.paths.stateRoot, "symphony", ".ssh"),
+      uid: symphony.uid,
+      gid: symphony.gid,
+      mode: 0o700,
+    });
   }
   if (executor !== undefined) {
     directoryContracts.push({
@@ -473,6 +524,27 @@ export async function installLinuxHost(input: {
   }
   for (const contract of directoryContracts) {
     await ensureDirectory(contract, input.mode, actions);
+  }
+  if (symphony !== undefined) {
+    await installPrivateFile({
+      source: path.join(
+        input.paths.releaseRoot,
+        "config",
+        "hosts",
+        "symphony_ssh_config.example",
+      ),
+      destination: path.join(
+        input.paths.stateRoot,
+        "symphony",
+        ".ssh",
+        "config",
+      ),
+      uid: symphony.uid,
+      gid: symphony.gid,
+      mode: input.mode,
+      replace: input.replace ?? false,
+      actions,
+    });
   }
   for (const unit of linuxSystemdUnits) {
     await installUnit({

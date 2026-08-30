@@ -35,11 +35,7 @@ active_guard:
   interrupt_grace_ms: 5000
 codex:
   command: /opt/aubtown/bin/codex-app-server
-  approval_policy:
-    reject:
-      sandbox_approval: true
-      rules: true
-      mcp_elicitations: true
+  approval_policy: never
   thread_sandbox: workspace-write
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000

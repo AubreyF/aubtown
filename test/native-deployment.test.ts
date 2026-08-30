@@ -69,6 +69,7 @@ describe("native Linux deployment", () => {
     expect(workflow).toContain("complete-symphony-workspace.js");
     expect(workflow).toContain("linux-control-1");
     expect(workflow).toContain("macos-executor-1");
+    expect(workflow).toContain("approval_policy: never");
     expect(workflow).not.toMatch(/docker|compose|restate/iu);
   });
 
@@ -208,6 +209,9 @@ describe("native Linux deployment", () => {
 
   it("ships a noninteractive pinned-host SSH worker profile", async () => {
     const config = await fixture("config/hosts/ssh_config.example");
+    const symphonyConfig = await fixture(
+      "config/hosts/symphony_ssh_config.example",
+    );
     const linuxPublisherKey = await fixture(
       "config/hosts/publisher_authorized_keys.example",
     );
@@ -240,6 +244,13 @@ describe("native Linux deployment", () => {
     ]) {
       expect(config).toContain(required);
     }
+    expect(symphonyConfig).toContain("Host linux-control-1 macos-executor-1");
+    expect(symphonyConfig).toContain("ControlMaster auto");
+    expect(symphonyConfig).toContain(
+      "ControlPath /var/lib/aubtown/symphony/.ssh/control-%C",
+    );
+    expect(symphonyConfig).toContain("ControlPersist 60");
+    expect(symphonyConfig).toContain("Include /etc/aubtown/ssh/config");
     for (const authorizedKey of [linuxPublisherKey, macPublisherKey]) {
       expect(authorizedKey).toContain("restrict,command=");
       expect(authorizedKey).toContain("publisher-ssh-gateway.js");

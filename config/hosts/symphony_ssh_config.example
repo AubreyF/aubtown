@@ -1,0 +1,6 @@
+Host linux-control-1 macos-executor-1
+    ControlMaster auto
+    ControlPath /var/lib/aubtown/symphony/.ssh/control-%C
+    ControlPersist 60
+
+Include /etc/aubtown/ssh/config
