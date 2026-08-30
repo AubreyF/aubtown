@@ -98,8 +98,22 @@ describe("HostWorkspaceSupervisor", () => {
       requiredAt: "2026-08-13T18:00:01.000Z",
     };
     const reports: unknown[] = [];
+    const commandRequests: Parameters<typeof runner.run>[0][] = [];
+    const recordingRunner = {
+      run: async (request: Parameters<typeof runner.run>[0]) => {
+        commandRequests.push(request);
+        return await runner.run(request);
+      },
+    };
     const supervisor = new HostWorkspaceSupervisor(
-      new FreedWorkspaceManager(repository, worktreeRoot, helper, runner),
+      new FreedWorkspaceManager(
+        repository,
+        worktreeRoot,
+        helper,
+        recordingRunner,
+        "git",
+        process.execPath,
+      ),
       {
         pollWorkspace: async () => ({
           kind: "workspace-poll" as const,
@@ -139,6 +153,13 @@ describe("HostWorkspaceSupervisor", () => {
         baseHead,
       }),
     ]);
+    expect(
+      commandRequests.find((request) => request.args.includes("--swarm"))?.env,
+    ).toEqual({
+      LANG: "C.UTF-8",
+      NODE_BIN: process.execPath,
+      PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin`,
+    });
 
     await writeFile(path.join(destination, "unexpected.txt"), "dirty\n");
     await expect(supervisor.reconcile()).rejects.toThrow(

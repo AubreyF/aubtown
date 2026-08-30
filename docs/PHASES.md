@@ -58,6 +58,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Permit supported Symphony preflight reads to open only Freed's task and event kernel locks, refresh planning after broker conformance, preserve executor ownership of workspace custody, keep the outer mutation deadline longer than the broker's complete bounded authority lifecycle, preserve validated Freed error envelopes from either output stream, and never retry a deterministic structured denial.
 - [x] Bind the broker's initial `requestedAt` to the reconciler's fresh `claimedAt` so delayed prelaunch remains valid and exactly replayable.
 - [x] Prepare the exact claim-bound Freed worktree on the selected SSH executor before Symphony launches a worker.
+- [x] Run Freed's worktree helper with the protected worker's pinned Node and a minimal fixed executable path.
 - [x] Require fresh SSH executor readiness that matches the selected host, repository, workspace root, and admitted base head.
 - [x] Enforce the root-owned pinned-host SSH policy before readiness probes and worktree creation.
 - [x] Persist one protected content-addressed executor handoff and active-workspace pointer after exact worktree preparation.
@@ -74,6 +75,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Persist publication, projection, and exact claim-release stages as restart-safe immutable transactions.
 - [x] Project blocked adjudication and release its exact running claim without publishing a draft.
 - [x] Require fresh dedicated publisher-account readiness evidence in the pilot launch audit.
+- [x] Refresh the planning snapshot after executor and publisher probes so the final readiness audit sees one coherent evidence set.
 - [x] Restrict the publisher SSH identity to a root-owned two-operation forced-command gateway.
 - [x] Build clean host-specific releases with locked production dependencies and tamper-evident installation manifests.
 - [x] Render exact private GitHub App registrations with disabled webhooks, disabled user OAuth, and selected-repository installation handoff.

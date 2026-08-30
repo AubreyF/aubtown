@@ -17,6 +17,7 @@ export class FreedWorkspaceManager {
     private readonly worktreeHelper: string,
     private readonly runner: CommandRunner,
     private readonly gitExecutable = "git",
+    private readonly nodeExecutable = process.execPath,
   ) {
     if (
       !path.isAbsolute(repositoryRoot) ||
@@ -92,6 +93,20 @@ export class FreedWorkspaceManager {
         input.target,
       ],
       cwd: physicalRepository,
+      env: {
+        LANG: "C.UTF-8",
+        NODE_BIN: this.nodeExecutable,
+        PATH: [
+          path.dirname(this.nodeExecutable),
+          ...(path.isAbsolute(this.gitExecutable)
+            ? [path.dirname(this.gitExecutable)]
+            : []),
+          "/usr/bin",
+          "/bin",
+        ]
+          .filter((entry, index, entries) => entries.indexOf(entry) === index)
+          .join(":"),
+      },
       timeoutMs: 120_000,
       maxBufferBytes: 16 * 1_024 * 1_024,
     });

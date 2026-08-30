@@ -424,6 +424,10 @@ describe("native Linux deployment", () => {
     expect(service).toContain("dist/cli/audit-pilot-readiness.js");
     expect(service).toContain("dist/cli/probe-executor-readiness.js");
     expect(service).toContain("dist/cli/probe-publisher-readiness.js");
+    expect(service).toContain("dist/cli/collect-planning-snapshot.js");
+    expect(service.indexOf("dist/cli/collect-planning-snapshot.js")).toBeLessThan(
+      service.indexOf("dist/cli/audit-pilot-readiness.js"),
+    );
     expect(service).toContain(
       "Requires=aubtown-github-token.service aubtown-host-gateway.service aubtown-planning-snapshot.service",
     );

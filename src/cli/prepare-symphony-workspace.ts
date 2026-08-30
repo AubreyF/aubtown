@@ -41,6 +41,7 @@ await new FreedWorkspaceManager(
   runtime.worktreeHelper,
   new ProcessCommandRunner(),
   runtime.gitExecutable,
+  runtime.nodeExecutable,
 ).prepare({
   worktree: requirement.worktree,
   branch: requirement.branch,

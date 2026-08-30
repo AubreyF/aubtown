@@ -147,6 +147,7 @@ const workspaceManager = new FreedWorkspaceManager(
   requiredAbsoluteEnvironment("AUBTOWN_WORKTREE_HELPER"),
   commandRunner,
   gitExecutable,
+  process.execPath,
 );
 const restore = new HostRestoreSupervisor(
   workspaceManager,
