@@ -452,7 +452,7 @@ export async function installLinuxHost(input: {
       path: path.join(input.paths.stateRoot, "workspaces"),
       uid: executor.uid,
       gid: executor.gid,
-      mode: 0o700,
+      mode: 0o750,
     });
   }
   for (const relative of ["keys", "ssh"]) {

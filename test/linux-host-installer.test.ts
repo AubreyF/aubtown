@@ -238,6 +238,9 @@ describe("native Linux host installer", () => {
     ]) {
       expect((await lstat(directory)).mode & 0o777).toBe(0o755);
     }
+    expect(
+      (await lstat(path.join(value.paths.stateRoot, "workspaces"))).mode & 0o777,
+    ).toBe(0o750);
 
     const second = await installLinuxHost(value.input);
     expect(second.actions).toEqual([]);

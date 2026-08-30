@@ -134,7 +134,7 @@ scoped receipts, not authority tokens or direct state-root access.
 - `/var/lib/aubtown/admission/claim-reconciliation.json`: latest stale-claim reconciliation result
 - `/var/lib/aubtown/admission/completions`: immutable completion reconciliation records
 - `/var/lib/aubtown/admission/adjudications`: immutable coordinator copies of trusted validation and review results
-- `/var/lib/aubtown/workspaces`: per-issue worktrees
+- `/var/lib/aubtown/workspaces`: per-issue worktrees, mode 0750 and owned by the executor group so only the separately enrolled publisher can inspect admitted work
 - `/var/lib/aubtown/executor/handoffs`: mode-0700 content-addressed executor custody manifests and active-workspace pointers
 - `/var/lib/aubtown/checkpoints`: encrypted unpublished-work objects
 - `/var/lib/aubtown/logs/symphony`: protected structured logs. Journald remains the system log surface.
