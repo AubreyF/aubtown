@@ -255,7 +255,7 @@ describe("Symphony final admission envelope", () => {
         workspacePreparer(),
       ).resolve({
         candidate: candidate(),
-        now: "2026-08-13T18:03:00.001Z",
+        now: "2026-08-13T18:05:20.001Z",
       }),
     ).rejects.toThrow("time-invalid");
     expect(acquisitions).toBe(0);

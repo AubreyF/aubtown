@@ -2,7 +2,11 @@ import type { ExecutionAdmissionBinding } from "../adapters/execution-admission.
 import { executionAdmissionBindingSchema } from "../adapters/execution-admission.js";
 import { canonicalJson } from "../security/canonical-json.js";
 
-const CLAIM_MAX_AGE_SECONDS = 120;
+// Freed issues a five minute admission for the exact claim. Keep the planning
+// claim valid for that same bounded window. The real broker can take more than
+// two minutes to complete its governed lease transaction on a cold host, so a
+// shorter local clock can reject authority that Freed has just granted.
+const CLAIM_MAX_AGE_SECONDS = 5 * 60;
 
 export type RuntimeNeutralPilotBindingDecision =
   | "eligible"
