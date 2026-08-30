@@ -434,7 +434,9 @@ describe("native Linux deployment", () => {
     expect(service).toContain(
       "ReadOnlyPaths=/etc/aubtown /opt/aubtown /opt/freed /srv/freed /var/lib/freed/automation",
     );
-    expect(service).toContain("ReadWritePaths=/var/lib/aubtown/coordinator");
+    expect(service).toContain(
+      "ReadWritePaths=/var/lib/aubtown/coordinator /var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock /var/lib/freed/automation/control/.guards/events.lock/kernel.lock",
+    );
     expect(service).toContain(
       "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
     );
