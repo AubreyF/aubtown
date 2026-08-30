@@ -47,6 +47,9 @@ describe("native Linux deployment", () => {
     expect(unit).toContain("/etc/aubtown/WORKFLOW.md");
     expect(unit).toContain("--port 7080");
     expect(unit).toContain("--logs-root /var/lib/aubtown/logs/symphony");
+    expect(unit).toContain(
+      "PATH=/opt/aubtown/beam/.elixir-install/installs/otp/28.5.0.5/bin",
+    );
     expect(unit).not.toContain("/var/log/aubtown");
     expect(unit).toContain("Requires=aubtown-github-token.service");
     expect(unit).not.toMatch(/docker|compose|restate/iu);
@@ -90,6 +93,9 @@ describe("native Linux deployment", () => {
       await fixture("config/hosts/publisher-runtime.macos.example.json"),
     ) as Record<string, unknown>;
     expect(environment).toContain("AUBTOWN_SSH_EXECUTABLE=/usr/bin/ssh");
+    expect(environment).toContain(
+      "PATH=/opt/aubtown/beam/.elixir-install/installs/otp/28.5.0.5/bin",
+    );
     expect(environment).toContain("prepare-symphony-workspace.js");
     expect(environment).toContain("complete-symphony-workspace.js");
     expect(environment).toContain("read-symphony-completion.js");

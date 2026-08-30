@@ -180,7 +180,10 @@ export class FreedAuthorityBridge implements AuthorityBridge {
         workLane: binding.qualification.workLane,
         publicationCeiling: "draft-pr" as const,
       },
-      requestedAt: input.now,
+      // Freed's claim contract treats the planned claim time as the operation's
+      // authoritative request time. Prelaunch may happen seconds later, but the
+      // two fields must remain identical for replay and freshness checks.
+      requestedAt: binding.claim.claimedAt,
     };
     const result = await this.#brokerClient(broker).acquire(request);
     if (

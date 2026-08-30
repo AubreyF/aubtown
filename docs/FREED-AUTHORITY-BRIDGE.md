@@ -61,7 +61,7 @@ AubTown calls the root-owned broker with one no-shell command:
 /opt/freed/bin/factory-coordinator task claim-release --request-json <canonical-json>
 ```
 
-The acquire request binds the operation ID, task and expected revision, complete AubTown binding digest, issue, claim and custody epoch, host, worker, branch, worktree, conflict domains and digest, base head, account, driver, target, draft-only ceiling, and request time. Release binds the original admission, operation ID, exact claim, binding digest, reason, and release time. The JSON contains no credential or lease token. The broker supplies its pinned state root, actor, and short-lived coordinator lease internally.
+The acquire request binds the operation ID, task and expected revision, complete AubTown binding digest, issue, claim and custody epoch, host, worker, branch, worktree, conflict domains and digest, base head, account, driver, target, draft-only ceiling, and request time. The request time is the reconciler's fresh `claimedAt` value, not the later wall-clock instant when Symphony reaches prelaunch. Freed requires those fields to match for replay-safe initial claims. Release binds the original admission, operation ID, exact claim, binding digest, reason, and release time. The JSON contains no credential or lease token. The broker supplies its pinned state root, actor, and short-lived coordinator lease internally.
 
 Retries with the same operation ID and byte-equivalent payload are idempotent. AubTown performs one exact local retry after an uncertain command failure using the same argv and operation ID. A machine-readable Freed denial is final and is never retried. A changed retry or mismatched broker response fails.
 

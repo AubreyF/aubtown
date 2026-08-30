@@ -265,7 +265,9 @@ describe("Freed adapter", () => {
       schemaVersion: 1,
       taskId: "github-issue-1234",
       expectedTaskRevision: 1,
+      requestedAt: "2026-08-13T18:00:00.000Z",
       claim: {
+        claimedAt: "2026-08-13T18:00:00.000Z",
         claimId: "claim-1234-epoch-1",
         publicationCeiling: "draft-pr",
         accountId: "codex-pro-1",
@@ -273,6 +275,25 @@ describe("Freed adapter", () => {
         workLane: "runtime-neutral",
       },
     });
+  });
+
+  it("preserves the planned claim time when prelaunch starts later", async () => {
+    const runner = new HandlerRunner((request) => brokerResponse(request));
+    const bridge = new FreedAuthorityBridge(runner, {
+      repositoryRoot: "/repo/freed",
+      stateRoot: "/state/freed",
+      nodeExecutable: "/node/bin/node",
+      claimBrokerExecutable: "/opt/freed/bin/factory-coordinator",
+    });
+    await bridge.acquire({
+      binding: binding(),
+      now: "2026-08-13T18:01:00.000Z",
+    });
+    const payload = JSON.parse(
+      runner.requests[0]?.args.at(-1) ?? "null",
+    ) as { requestedAt: string; claim: { claimedAt: string } };
+    expect(payload.requestedAt).toBe("2026-08-13T18:00:00.000Z");
+    expect(payload.claim.claimedAt).toBe(payload.requestedAt);
   });
 
   it("retries response loss with the identical claim operation", async () => {
