@@ -62,6 +62,7 @@ describe("native Linux deployment", () => {
     expect(workflow).toContain("max_concurrent_agents: 1");
     expect(workflow).toContain("symphony-prelaunch.js");
     expect(workflow).toContain("timeout_ms: 900000");
+    expect(workflow).toContain("timeout_ms: 300000");
     expect(workflow).toContain("symphony-active-run-guard.js");
     expect(workflow).toContain("interrupt_grace_ms: 5000");
     expect(workflow).toContain("reject-unprepared-symphony-workspace.js");

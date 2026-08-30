@@ -31,7 +31,7 @@ active_guard:
     - /opt/aubtown/node/bin/node
     - /opt/aubtown/current/dist/cli/symphony-active-run-guard.js
   interval_ms: 30000
-  timeout_ms: 5000
+  timeout_ms: 300000
   interrupt_grace_ms: 5000
 codex:
   command: /opt/aubtown/bin/codex-app-server

@@ -707,7 +707,7 @@ index 5b7607e..c2ce38b 100644
 +      schema
 +      |> cast(attrs, [:command, :interval_ms, :timeout_ms, :interrupt_grace_ms], empty_values: [])
 +      |> validate_number(:interval_ms, greater_than: 0, less_than_or_equal_to: 60_000)
-+      |> validate_number(:timeout_ms, greater_than: 0, less_than_or_equal_to: 60_000)
++      |> validate_number(:timeout_ms, greater_than: 0, less_than_or_equal_to: 900_000)
 +      |> validate_number(:interrupt_grace_ms, greater_than: 0, less_than_or_equal_to: 60_000)
 +      |> validate_change(:command, fn :command, command ->
 +        cond do
@@ -868,6 +868,10 @@ index 0000000..eaee3a6
 +    write_workflow_file!(Workflow.workflow_file_path(), active_guard_interval_ms: 60_001)
 +    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
 +    assert message =~ "active_guard.interval_ms"
++
++    write_workflow_file!(Workflow.workflow_file_path(), active_guard_timeout_ms: 900_001)
++    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
++    assert message =~ "active_guard.timeout_ms"
 +  end
 +
 +  defp decision_script!(root, decision, reason) do
@@ -1017,4 +1021,3 @@ index 4b23aed..1455482 100644
  end
 -- 
 2.55.0
-
