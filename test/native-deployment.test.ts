@@ -401,6 +401,9 @@ describe("native Linux deployment", () => {
     expect(symphony).toContain(
       "dist/cli/reconcile-freed-claims.js --require-clear",
     );
+    expect(symphony).toContain(
+      "ReadWritePaths=/var/lib/aubtown/symphony /var/lib/aubtown/admission /var/lib/aubtown/logs/symphony /var/lib/freed/automation/control",
+    );
     expect(service).toContain("User=aubtown-symphony");
     expect(service).toContain("dist/cli/reconcile-freed-claims.js");
     expect(service).toContain("RestrictAddressFamilies=AF_UNIX");
@@ -527,7 +530,7 @@ describe("native Linux deployment", () => {
     expect(unit).not.toContain("ReadWritePaths=/var/lib/aubtown/workspaces");
     expect(unit).toContain("ReadOnlyPaths=/etc/aubtown");
     expect(unit).toContain(
-      "/var/lib/freed/automation/control/.guards/tasks.lock/kernel.lock /var/lib/freed/automation/control/.guards/events.lock/kernel.lock",
+      "/var/lib/freed/automation/control",
     );
     expect(unit).toContain("UMask=0077");
     expect(unit).not.toContain("ReadWritePaths=/opt/aubtown");

@@ -43,6 +43,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 
 - [x] Approve one factory coordinator plus task-scoped execution claims.
 - [x] Implement AubTown's native protected candidate publisher, exact broker caller, and prelaunch envelope handoff.
+- [x] Give the trusted coordinator identity the canonical control-state access its pinned broker requires while keeping workers isolated from authority state.
 - [x] Implement a native protected reconciler CLI for pilot conflict, host, account, route, quota, and claim state.
 - [x] Implement a native signed host gateway with durable heartbeat, quota, replay, and restart state.
 - [x] Deploy lightweight host telemetry without enabling a second execution scheduler.
