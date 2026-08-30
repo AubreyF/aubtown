@@ -153,9 +153,20 @@ describe("HostWorkspaceSupervisor", () => {
         baseHead,
       }),
     ]);
-    expect(
-      commandRequests.find((request) => request.args.includes("--swarm"))?.env,
-    ).toEqual({
+    const preparation = commandRequests.find((request) =>
+      request.args.includes("--install"),
+    );
+    expect(preparation?.args).toEqual([
+      destination,
+      "-b",
+      requirement.branch,
+      baseHead,
+      "--install",
+      "full",
+      "--target",
+      requirement.target,
+    ]);
+    expect(preparation?.env).toEqual({
       LANG: "C.UTF-8",
       NODE_BIN: process.execPath,
       PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin`,

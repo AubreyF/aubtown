@@ -2,7 +2,7 @@
 Description=Reconcile stale Freed claims every minute
 
 [Timer]
-OnBootSec=1min
+OnActiveSec=1min
 OnUnitActiveSec=1min
 AccuracySec=5s
 RandomizedDelaySec=5s

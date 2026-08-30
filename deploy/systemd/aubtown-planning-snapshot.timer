@@ -2,7 +2,7 @@
 Description=Refresh FreedTown read-only planning state every minute
 
 [Timer]
-OnBootSec=30s
+OnActiveSec=30s
 OnUnitActiveSec=1min
 RandomizedDelaySec=5s
 AccuracySec=1s

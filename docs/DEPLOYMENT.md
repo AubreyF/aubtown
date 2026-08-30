@@ -198,7 +198,7 @@ Symphony names workspaces by GitHub issue identifier. Before admitting launch, A
 - a hygienic branch name with no authorship giveaway
 - fresh `origin/dev`
 - the qualified target
-- `--swarm` during deferred bootstrap
+- `--install full` after claim admission so the worker receives an execution-ready workspace
 
 After the worktree passes exact verification, the command writes an immutable custody manifest and an atomic active-workspace pointer under the configured `handoffRoot`. The handoff binds the exact qualification, task revision, claim, account, driver, branch, base head, owned paths, and draft-only publication ceiling. The request time is excluded from the content digest, so an exact retry remains idempotent. Admission returns only after that command reports the exact claim, host, worktree, branch, and base head. Symphony then finds the prepared directory at its normal `GH-<issue>` path. Its `before_run` guard verifies that the directory is a clean worktree belonging to the enrolled Freed repository and that the branch obeys publication naming policy. No AubTown worker daemon or workspace polling loop is involved.
 
