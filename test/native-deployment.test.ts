@@ -61,7 +61,7 @@ describe("native Linux deployment", () => {
     expect(workflow).toContain('required_labels: [debt, "factory:ready"]');
     expect(workflow).toContain("max_concurrent_agents: 1");
     expect(workflow).toContain("symphony-prelaunch.js");
-    expect(workflow).toContain("timeout_ms: 60000");
+    expect(workflow).toContain("timeout_ms: 780000");
     expect(workflow).toContain("symphony-active-run-guard.js");
     expect(workflow).toContain("interrupt_grace_ms: 5000");
     expect(workflow).toContain("reject-unprepared-symphony-workspace.js");
@@ -406,6 +406,9 @@ describe("native Linux deployment", () => {
     );
     expect(service).toContain("User=aubtown-symphony");
     expect(service).toContain("dist/cli/reconcile-freed-claims.js");
+    expect(service).toContain(
+      "ReadWritePaths=/var/lib/aubtown/admission /var/lib/freed/automation/control",
+    );
     expect(service).toContain("RestrictAddressFamilies=AF_UNIX");
     expect(timer).toContain("OnUnitActiveSec=1min");
     expect(environment).toContain(
