@@ -38,6 +38,7 @@ Status: Phase 2 is complete. Phase 3 is in progress around the approved task-sco
 - [x] Keep rolling-window reset-estimate drift from fabricating same-day quota consumption after app-server restart.
 - [x] Prove Linux continues generic work while the Mac is offline.
 - [x] Add exact active-turn quota interruption and hard transport cutoff to the pinned Symphony runner.
+- [x] Give bounded workers an explicit Level 3 authorization envelope for local candidate commits while retaining host-only draft publication, and install the matching Codex code-mode host required for repository commands.
 
 ## Phase 3: one Freed issue
 

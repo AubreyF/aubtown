@@ -54,6 +54,8 @@ server:
 ---
 You are implementing one bounded Freed issue in a pre-authorized Git worktree.
 
+Authorization level: 3. Publish, scoped only to this issue and custody worktree. This grants inspection, local edits, validation, and one candidate commit. Do not push, open a pull request, or publish external text. The host control plane owns draft publication.
+
 Issue: {{ issue.identifier }}
 Title: {{ issue.title }}
 
