@@ -557,6 +557,7 @@ describe("native Linux deployment", () => {
     expect(unit).not.toContain("StateDirectory=aubtown/workspaces");
     expect(unit).not.toContain("ReadWritePaths=/var/lib/aubtown/workspaces");
     expect(unit).toContain("ReadOnlyPaths=/etc/aubtown");
+    expect(unit).toContain("TimeoutStartSec=300");
     expect(unit).toContain(
       "/var/lib/freed/automation/control",
     );

@@ -15,6 +15,7 @@ ExecStartPre=/opt/aubtown/node/bin/node /opt/aubtown/current/dist/cli/reconcile-
 ExecStart=/opt/aubtown/symphony/298a877e/8001b52e3062495a16e520e4ceaf8f9de868c4d0/symphony --i-understand-that-this-will-be-running-without-the-usual-guardrails --logs-root /var/lib/aubtown/logs/symphony --port 7080 /etc/aubtown/WORKFLOW.md
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=300
 TimeoutStopSec=60
 StateDirectory=aubtown/symphony aubtown/admission
 StateDirectoryMode=0700
