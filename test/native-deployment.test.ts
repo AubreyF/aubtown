@@ -42,7 +42,7 @@ describe("native Linux deployment", () => {
   it("runs one pinned Symphony coordinator without containers or Restate", async () => {
     const unit = await fixture("deploy/systemd/aubtown-symphony.service");
     expect(unit).toContain(
-      "/opt/aubtown/symphony/8001b52e3062495a16e520e4ceaf8f9de868c4d0/symphony",
+      "/opt/aubtown/symphony/298a877e/8001b52e3062495a16e520e4ceaf8f9de868c4d0/symphony",
     );
     expect(unit).toContain("/etc/aubtown/WORKFLOW.md");
     expect(unit).toContain("--port 7080");

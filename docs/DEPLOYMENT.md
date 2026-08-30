@@ -7,7 +7,7 @@ FreedTown is the Freed-specific deployment of the reusable AubTown platform. Ope
 ## Pilot topology
 
 - One always-on Ubuntu 24.04 or Debian 13 Linux host
-- One pinned Symphony executable under `/opt/aubtown/symphony/<commit>`
+- One pinned Symphony executable under `/opt/aubtown/symphony/<patch-digest>/<commit>`
 - One immutable AubTown build under `/opt/aubtown/releases/<revision>`
 - One Linux SSH worker alias and one optional Mac SSH worker alias
 - systemd on Linux
@@ -104,7 +104,7 @@ scoped receipts, not authority tokens or direct state-root access.
 
 ## Filesystem ownership
 
-- `/opt/aubtown/symphony/<commit>`: immutable pinned Symphony executable
+- `/opt/aubtown/symphony/<patch-digest>/<commit>`: immutable pinned Symphony executable
 - `/opt/aubtown/releases/<revision>`: immutable AubTown build and hooks
 - `/etc/aubtown/WORKFLOW.md`: root-owned reviewed workflow
 - `/etc/aubtown/symphony.env`: mode-restricted non-secret paths and secret references

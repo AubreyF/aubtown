@@ -22,12 +22,13 @@
   "patches": [
     {
       "path": "upstream/patches/0001-aubtown-runtime-compatibility.patch",
-      "sha256": "6da8661a216e671d3026e3adf989ced7d77dff40796fe3594542d22098615622",
+      "sha256": "298a877efe594d46c06fb364f77b90380be48bab39fb734615b1619b16711f25",
       "verifiedAgainst": "8001b52e3062495a16e520e4ceaf8f9de868c4d0",
       "purpose": [
         "mode-restricted-refreshable-github-token-file",
         "capability-aware-ssh-worker-routing",
         "fail-closed-prelaunch-admission-command",
+        "bounded-long-running-prelaunch-admission",
         "security-advisory-free-compatible-dependency-lock"
       ]
     },
@@ -75,6 +76,7 @@
     "refreshable-github-app-token-file",
     "capability-aware-ssh-worker-routing",
     "fail-closed-prelaunch-admission-command",
+    "bounded-long-running-prelaunch-admission",
     "fail-closed-active-turn-guard",
     "fail-closed-trusted-completion-hook",
     "security-audited-compatible-dependencies"

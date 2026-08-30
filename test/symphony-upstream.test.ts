@@ -63,6 +63,9 @@ describe("Symphony upstream contract", () => {
     expect(runtimePatch.toString("utf8")).toContain(
       "Prelaunch admission failed closed",
     );
+    expect(runtimePatch.toString("utf8")).toContain(
+      "less_than_or_equal_to: 900_000",
+    );
     expect(runtimePatch.toString("utf8")).toContain("GITHUB_TOKEN_FILE");
     expect(runtimePatch.toString("utf8")).not.toContain(
       "No retired or security advisory packages found",

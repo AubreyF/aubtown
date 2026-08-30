@@ -196,7 +196,7 @@ index 6ebb278faca9e9e112058fb0817e6a7aa1201214..5b7607efc739f2ec5e4d8e44fc86fc58
 +    def changeset(schema, attrs) do
 +      schema
 +      |> cast(attrs, [:command, :timeout_ms], empty_values: [])
-+      |> validate_number(:timeout_ms, greater_than: 0, less_than_or_equal_to: 60_000)
++      |> validate_number(:timeout_ms, greater_than: 0, less_than_or_equal_to: 900_000)
 +      |> validate_change(:command, fn :command, command ->
 +        cond do
 +          command == [] ->
@@ -729,7 +729,7 @@ index 0000000000000000000000000000000000000000..fe321c68a11857ad26560405c82474bb
 +    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
 +    assert message =~ "executable must use an absolute path"
 +
-+    write_workflow_file!(Workflow.workflow_file_path(), admission_timeout_ms: 60_001)
++    write_workflow_file!(Workflow.workflow_file_path(), admission_timeout_ms: 900_001)
 +    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
 +    assert message =~ "admission.timeout_ms"
 +  end
