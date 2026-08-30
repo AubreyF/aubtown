@@ -9,6 +9,66 @@ async function fixture(relative: string): Promise<string> {
 }
 
 describe("native Linux deployment", () => {
+  it("ships structurally complete reviewed Symphony patches", async () => {
+    const lock = JSON.parse(
+      await fixture("upstream/symphony.lock.json"),
+    ) as { patches: Array<{ path: string }> };
+
+    for (const entry of lock.patches) {
+      const lines = (await fixture(entry.path)).split("\n");
+      let expectedOld: number | undefined;
+      let expectedNew: number | undefined;
+      let actualOld = 0;
+      let actualNew = 0;
+
+      const verifyHunk = (): void => {
+        if (expectedOld === undefined || expectedNew === undefined) return;
+        expect(
+          { actualOld, actualNew },
+          `malformed unified-diff hunk in ${entry.path}`,
+        ).toEqual({ actualOld: expectedOld, actualNew: expectedNew });
+      };
+
+      for (const line of lines) {
+        const header = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/u.exec(
+          line,
+        );
+        if (header) {
+          verifyHunk();
+          expectedOld = header[1] === undefined ? 1 : Number(header[1]);
+          expectedNew = header[2] === undefined ? 1 : Number(header[2]);
+          actualOld = 0;
+          actualNew = 0;
+          continue;
+        }
+        if (expectedOld === undefined || expectedNew === undefined) continue;
+        if (line.startsWith("diff --git ") || line === "-- ") {
+          verifyHunk();
+          expectedOld = undefined;
+          expectedNew = undefined;
+          continue;
+        }
+        if (line.startsWith("\\ No newline at end of file")) continue;
+        if (line.startsWith(" ")) {
+          actualOld += 1;
+          actualNew += 1;
+        } else if (
+          line === "" &&
+          (actualOld < expectedOld || actualNew < expectedNew)
+        ) {
+          // GNU patch accepts an omitted context marker on an empty line.
+          actualOld += 1;
+          actualNew += 1;
+        } else if (line.startsWith("-")) {
+          actualOld += 1;
+        } else if (line.startsWith("+")) {
+          actualNew += 1;
+        }
+      }
+      verifyHunk();
+    }
+  });
+
   it("builds one clean manifest-bound host release", async () => {
     const packageJson = await fixture("package.json");
     const cleaner = await fixture("scripts/clean-dist.mjs");
