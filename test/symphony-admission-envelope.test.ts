@@ -450,8 +450,8 @@ describe("Symphony final admission envelope", () => {
 
   it.each([
     [80, 35, "quota-weekly-ceiling"],
-    [44, 35, "quota-daily-admission-stop"],
-    [45, 35, "quota-daily-interrupt"],
+    [55, 35, "quota-daily-admission-stop"],
+    [60, 35, "quota-daily-interrupt"],
   ] as const)(
     "blocks quota state %s before writing a launch receipt",
     async (usagePercent, dailyBaselinePercent, reason) => {

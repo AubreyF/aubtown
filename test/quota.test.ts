@@ -77,9 +77,9 @@ describe("quota governance", () => {
   });
 
   it.each([
-    [7, "throttle", "daily-throttle"],
-    [9, "stop-admission", "daily-admission-stop"],
-    [10, "interrupt", "daily-interrupt"],
+    [15, "throttle", "daily-throttle"],
+    [20, "stop-admission", "daily-admission-stop"],
+    [25, "interrupt", "daily-interrupt"],
   ] as const)("applies the approved daily threshold at %s", (delta, action, reason) => {
     const decision = decideQuota({
       snapshot: usage({
