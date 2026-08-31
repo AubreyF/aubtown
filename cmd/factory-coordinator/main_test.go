@@ -154,7 +154,7 @@ func TestMutationKeepsLeaseTokenOutOfArgumentsAndOutput(t *testing.T) {
 	if runner.timeouts[1] < 179*time.Second || runner.timeouts[1] > controlCommandTimeout {
 		t.Fatalf("mutation received unexpected timeout %s", runner.timeouts[1])
 	}
-	if runner.timeouts[2] < 89*time.Second || runner.timeouts[2] > leaseReleaseTimeout {
+	if runner.timeouts[2] < 299*time.Second || runner.timeouts[2] > leaseReleaseTimeout {
 		t.Fatalf("lease release received unexpected timeout %s", runner.timeouts[2])
 	}
 	for _, request := range runner.commands {
@@ -266,6 +266,36 @@ func TestLauncherDenialPreservesStructuredStdout(t *testing.T) {
 	})
 	if err != nil || result.ExitCode != 1 || string(structuredFreedErrorOutput(result)) != string(output) {
 		t.Fatalf("launcher denial lost structured output: %#v, %v", result, err)
+	}
+}
+
+func TestLauncherDenialNormalizesActorError(t *testing.T) {
+	actorOutput := []byte(`{"ok":false,"code":"lease_transaction_pending","message":"retry after cleanup","details":{"leaseName":"nightly-writer"}}`)
+	runner := &queuedRunner{
+		testing: t,
+		results: []commandResult{{Stderr: actorOutput, ExitCode: 1}},
+	}
+	result, err := executeBroker(context.Background(), runner, testConfig(), invocation{
+		Profile: "freed-pilot", Action: "claim-acquire", Request: `{"schemaVersion":1}`,
+	})
+	if err != nil || result.ExitCode != 1 {
+		t.Fatalf("launcher actor denial was not preserved: %#v, %v", result, err)
+	}
+	var envelope struct {
+		SchemaVersion int `json:"schemaVersion"`
+		Error         struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(structuredFreedErrorOutput(result), &envelope) != nil ||
+		envelope.SchemaVersion != 1 ||
+		envelope.Error.Code != "lease_transaction_pending" ||
+		envelope.Error.Message != "retry after cleanup" {
+		t.Fatalf("launcher actor denial was not normalized: %s", result.Stderr)
+	}
+	if strings.Contains(string(result.Stderr), "leaseName") {
+		t.Fatalf("launcher details crossed the broker boundary: %s", result.Stderr)
 	}
 }
 

@@ -21,10 +21,15 @@ import (
 )
 
 const (
-	brokerSchemaVersion     = 1
-	trustedLauncherTimeout  = 380 * time.Second
-	controlCommandTimeout   = 180 * time.Second
-	leaseReleaseTimeout     = 90 * time.Second
+	brokerSchemaVersion    = 1
+	trustedLauncherTimeout = 380 * time.Second
+	controlCommandTimeout  = 180 * time.Second
+	// Freed verifies and archives the complete lease transaction lineage before
+	// returning a release receipt. A populated authority root can legitimately
+	// take more than 90 seconds, and killing the parent early can leave its
+	// bounded archive helper finishing after the broker exits. Keep the release
+	// bounded, but give the supported cleanup path enough time to finish.
+	leaseReleaseTimeout     = 300 * time.Second
 	maxChildOutput          = 1 * 1024 * 1024
 	maxRequestBytes         = 1 * 1024 * 1024
 	maxNodeExecutableBytes  = 256 * 1024 * 1024
@@ -210,6 +215,36 @@ func structuredFreedErrorOutput(result commandResult) []byte {
 	return nil
 }
 
+func normalizedTrustedLauncherError(result commandResult) []byte {
+	for _, output := range [][]byte{result.Stderr, result.Stdout} {
+		var launcher struct {
+			OK      *bool  `json:"ok"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(output, &launcher) != nil ||
+			launcher.OK == nil || *launcher.OK ||
+			strings.TrimSpace(launcher.Code) == "" ||
+			strings.TrimSpace(launcher.Message) == "" {
+			continue
+		}
+		envelope := struct {
+			SchemaVersion int `json:"schemaVersion"`
+			Error         struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}{SchemaVersion: brokerSchemaVersion}
+		envelope.Error.Code = launcher.Code
+		envelope.Error.Message = launcher.Message
+		normalized, err := json.Marshal(envelope)
+		if err == nil {
+			return append(normalized, '\n')
+		}
+	}
+	return nil
+}
+
 func parseInvocation(args []string) (invocation, error) {
 	var value invocation
 	switch {
@@ -359,6 +394,9 @@ func executeBroker(ctx context.Context, runner commandRunner, config brokerConfi
 		return commandResult{}, fmt.Errorf("trusted launcher failed: %w", err)
 	}
 	if acquired.ExitCode != 0 {
+		if normalized := normalizedTrustedLauncherError(acquired); len(normalized) > 0 {
+			return commandResult{Stderr: normalized, ExitCode: 1}, nil
+		}
 		return commandResult{Stdout: acquired.Stdout, Stderr: acquired.Stderr, ExitCode: 1}, nil
 	}
 	handoff, err := parseLeaseHandoff(acquired.Stdout, config)
