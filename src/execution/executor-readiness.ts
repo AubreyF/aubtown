@@ -229,10 +229,21 @@ export async function probeExecutorReadiness(input: {
       "Browser cache root",
     );
     const requireFromPackage = createRequire(path.join(packageRoot, "package.json"));
-    const playwright = requireFromPackage("playwright") as {
-      readonly chromium?: { executablePath(): string };
-    };
-    const executablePath = playwright.chromium?.executablePath();
+    const previousBrowserPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+    process.env.PLAYWRIGHT_BROWSERS_PATH = cacheRoot;
+    let executablePath: string | undefined;
+    try {
+      const playwright = requireFromPackage("playwright") as {
+        readonly chromium?: { executablePath(): string };
+      };
+      executablePath = playwright.chromium?.executablePath();
+    } finally {
+      if (previousBrowserPath === undefined) {
+        delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+      } else {
+        process.env.PLAYWRIGHT_BROWSERS_PATH = previousBrowserPath;
+      }
+    }
     if (executablePath === undefined || !path.isAbsolute(executablePath)) {
       throw new Error("Playwright Chromium did not resolve one executable.");
     }

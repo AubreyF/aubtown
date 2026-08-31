@@ -83,7 +83,7 @@ async function fixture(): Promise<{
   );
   await writeFile(
     path.join(browserModuleRoot, "index.cjs"),
-    `exports.chromium = { executablePath: () => ${JSON.stringify(browserExecutable)} };\n`,
+    `const path = require("node:path");\nexports.chromium = { executablePath: () => path.join(process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/missing-browser-cache", "chromium-test", "chrome") };\n`,
   );
   await writeFile(browserExecutable, "#!/bin/sh\necho Chromium 123\n", {
     mode: 0o700,
