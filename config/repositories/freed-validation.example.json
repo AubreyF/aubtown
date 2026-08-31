@@ -7,7 +7,25 @@
   },
   "requirements": [
     {
-      "text": "Run npm run validate:feature.",
+      "text": "cd packages/desktop && npm run test:e2e -- theme-switching.spec.ts --grep \"friends graph controls align and its sidebar menu follows shared nav behavior\" --repeat-each=5",
+      "command": {
+        "executable": "/opt/aubtown/node/bin/npm",
+        "args": [
+          "--prefix",
+          "packages/desktop",
+          "run",
+          "test:e2e",
+          "--",
+          "theme-switching.spec.ts",
+          "--grep",
+          "friends graph controls align and its sidebar menu follows shared nav behavior",
+          "--repeat-each=5"
+        ],
+        "timeoutMs": 1200000
+      }
+    },
+    {
+      "text": "npm run validate:feature",
       "command": {
         "executable": "/opt/aubtown/node/bin/npm",
         "args": ["run", "validate:feature"],
