@@ -133,14 +133,6 @@ export class SymphonyCompletionReconciler {
     if (usage.accountId !== envelope.binding.accountId) {
       throw new Error("Completion reconciliation received another quota account.");
     }
-    const quota = decideQuota({ snapshot: usage, now });
-    if (quota.action !== "admit" && quota.action !== "throttle") {
-      throw new Error(`Completion adjudication is blocked by quota: ${quota.reason}.`);
-    }
-    assertIssueEligibleForCompletion(
-      envelope.binding.qualification.issue,
-      input.currentIssue,
-    );
     const expectedManifest = executorHandoffManifestFromRequirement(
       symphonyWorkspaceRequirementFromBinding({
         binding: envelope.binding,
@@ -155,6 +147,14 @@ export class SymphonyCompletionReconciler {
     if (bundle === null) {
       return null;
     }
+    const quota = decideQuota({ snapshot: usage, now });
+    if (quota.action !== "admit" && quota.action !== "throttle") {
+      throw new Error(`Completion adjudication is blocked by quota: ${quota.reason}.`);
+    }
+    assertIssueEligibleForCompletion(
+      envelope.binding.qualification.issue,
+      input.currentIssue,
+    );
     if (!canonicalJsonEqual(bundle.manifest, expectedManifest)) {
       throw new Error("Trusted completion does not match the admitted manifest.");
     }

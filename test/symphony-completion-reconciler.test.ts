@@ -241,7 +241,7 @@ describe("Symphony completion reconciliation", () => {
     await expect(store.publish(second!)).resolves.toEqual(published);
   });
 
-  it("returns pending without touching authority when no completion exists", async () => {
+  it("returns pending without touching authority when no completion exists, even when quota is closed", async () => {
     const fixture = await readyFixture();
     let inspected = false;
     const result = await new SymphonyCompletionReconciler(
@@ -257,11 +257,54 @@ describe("Symphony completion reconciliation", () => {
     ).reconcile({
       envelope: fixture.prepared,
       currentIssue: issue(),
-      usage: usage({ observedAt: "2026-08-13T18:10:00.000Z" }),
+      usage: usage({
+        observedAt: "2026-08-13T18:10:00.000Z",
+        dailyConsumption: {
+          day: "2026-08-13",
+          baselineLifetimeTokens: 1_000_000,
+          observedLifetimeTokens: 1_300_000,
+          grossUsedPercent: 30,
+          meterState: "coherent",
+        },
+      }),
       validationProfile: validationProfile(),
       now: "2026-08-13T18:10:05.000Z",
     });
     expect(result).toBeNull();
+    expect(inspected).toBe(false);
+  });
+
+  it("blocks a real completion when quota is closed without touching authority", async () => {
+    const fixture = await readyFixture();
+    let inspected = false;
+    await expect(
+      new SymphonyCompletionReconciler(
+        { read: async () => fixture.bundle },
+        {
+          inspect: async () => {
+            inspected = true;
+            throw new Error("must not inspect");
+          },
+        },
+        { show: async () => { throw new Error("must not show"); } },
+        fixture.activeTurns,
+      ).reconcile({
+        envelope: fixture.prepared,
+        currentIssue: issue(),
+        usage: usage({
+          observedAt: "2026-08-13T18:10:00.000Z",
+          dailyConsumption: {
+            day: "2026-08-13",
+            baselineLifetimeTokens: 1_000_000,
+            observedLifetimeTokens: 1_300_000,
+            grossUsedPercent: 30,
+            meterState: "coherent",
+          },
+        }),
+        validationProfile: validationProfile(),
+        now: "2026-08-13T18:10:05.000Z",
+      }),
+    ).rejects.toThrow("Completion adjudication is blocked by quota");
     expect(inspected).toBe(false);
   });
 
