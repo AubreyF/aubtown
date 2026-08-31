@@ -83,10 +83,26 @@ export interface BlockedHandoffTransaction {
 
 function deterministicUuid(value: unknown): string {
   const digest = createHash("sha256").update(canonicalJson(value)).digest();
-  digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x80;
+  digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x40;
   digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
   const hex = digest.subarray(0, 16).toString("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function brokerCompatibleReleaseCommand(
+  command: FreedClaimReleaseRequest,
+): FreedClaimReleaseRequest {
+  const version = command.operationId[14];
+  if (version === "4") {
+    return command;
+  }
+  if (version !== "8") {
+    throw new Error("Blocked handoff release operation uses an unsupported UUID version.");
+  }
+  return freedClaimReleaseRequestSchema.parse({
+    ...command,
+    operationId: `${command.operationId.slice(0, 14)}4${command.operationId.slice(15)}`,
+  });
 }
 
 function isMissing(error: unknown): boolean {
@@ -251,7 +267,8 @@ export class BlockedHandoffTransactionStore {
       throw new Error("Blocked claim cleanup requires lifecycle projection.");
     }
     const receipt = freedClaimReleaseReceiptSchema.parse(rawReceipt);
-    if (!canonicalJsonEqual(receipt, expectedReleaseReceipt(current.plan.releaseCommand))) {
+    const command = brokerCompatibleReleaseCommand(current.plan.releaseCommand);
+    if (!canonicalJsonEqual(receipt, expectedReleaseReceipt(command))) {
       throw new Error("Blocked claim cleanup changed its durable command.");
     }
     await writeImmutableProtectedJsonFile({
@@ -307,7 +324,9 @@ export class BlockedHandoffTransactionStore {
         projection === undefined ||
         !canonicalJsonEqual(
           release,
-          expectedReleaseReceipt(planRecord.plan.releaseCommand),
+          expectedReleaseReceipt(
+            brokerCompatibleReleaseCommand(planRecord.plan.releaseCommand),
+          ),
         )
       ) {
         throw new Error("Blocked handoff release changed its plan.");
@@ -389,7 +408,10 @@ export class BlockedHandoffCoordinator {
       );
     }
     if (transaction.release === undefined) {
-      const receipt = await this.claims.release(transaction.plan.releaseCommand);
+      const command = brokerCompatibleReleaseCommand(
+        transaction.plan.releaseCommand,
+      );
+      const receipt = await this.claims.release(command);
       transaction = await this.transactions.recordRelease(
         transaction.plan.workProduct.checkpointReference,
         receipt,

@@ -90,6 +90,7 @@ const plan = planBlockedHandoff({
 describe("blocked handoff", () => {
   it("records whether validation or independent review blocked handoff", () => {
     expect(plan.adjudication.blockedStage).toBe("validation");
+    expect(plan.releaseCommand.operationId[14]).toBe("4");
     const reviewBlocked = planBlockedHandoff({
       adjudication: {
         ...blocked,
@@ -187,6 +188,53 @@ describe("blocked handoff", () => {
     expect(projectionCalls).toBe(1);
     expect(releaseCommands).toHaveLength(2);
     expect(releaseCommands[1]).toEqual(releaseCommands[0]);
+  });
+
+  it("replays a broker-compatible UUID for a durable legacy plan", async () => {
+    const transactions = await store();
+    const legacyPlan = {
+      ...plan,
+      releaseCommand: {
+        ...plan.releaseCommand,
+        operationId: `${plan.releaseCommand.operationId.slice(0, 14)}8${plan.releaseCommand.operationId.slice(15)}`,
+      },
+    };
+    let released: FreedClaimReleaseRequest | undefined;
+    const coordinator = new BlockedHandoffCoordinator(
+      transactions,
+      {
+        write: async () => ({
+          repository: "freed-project/freed",
+          issueNumber: activeClaim.issueNumber,
+          labelsChanged: false,
+          commentAction: "update",
+          tokenExpiresAt: "2026-08-14T13:00:00.000Z",
+        }),
+      },
+      {
+        release: async (command) => {
+          released = command;
+          return {
+            schemaVersion: 1,
+            operationId: command.operationId,
+            taskId: command.taskId,
+            taskRevision: command.expectedTaskRevision,
+            authorityClaimId: command.authorityClaimId,
+            bindingDigest: command.bindingDigest,
+            custodyEpoch: command.custodyEpoch,
+            expectedHeartbeatAt: command.expectedHeartbeatAt,
+            reason: command.reason,
+            releasedAt: command.releasedAt,
+          };
+        },
+      },
+    );
+
+    await expect(
+      coordinator.run({ plan: legacyPlan, projectionApproved: true }),
+    ).resolves.toMatchObject({ stage: "released" });
+    expect(legacyPlan.releaseCommand.operationId[14]).toBe("8");
+    expect(released?.operationId[14]).toBe("4");
   });
 
   it("cannot project while the pilot write gate is disabled", async () => {

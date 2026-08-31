@@ -164,6 +164,7 @@ describe("durable publication coordinator", () => {
     expect(projectionCalls).toBe(1);
     expect(releaseCommands).toHaveLength(2);
     expect(releaseCommands[1]).toEqual(releaseCommands[0]);
+    expect(releaseCommands[0]?.operationId[14]).toBe("4");
   });
 
   it("rejects a projection bound to another draft", () => {
