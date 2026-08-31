@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { access, lstat, readFile, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
@@ -50,6 +51,16 @@ export const executorReadinessReportSchema = z.object({
     effort: z.enum(["low", "medium", "high", "xhigh"]),
     quotaSampleIntervalMs: z.number().int().min(5_000).max(120_000),
   }),
+  browserRuntime: z
+    .object({
+      browser: z.literal("chromium"),
+      packageRoot: z.string().startsWith("/"),
+      cacheRoot: z.string().startsWith("/"),
+      executable: z.string().startsWith("/"),
+      sha256: digest,
+      version: z.string().min(1),
+    })
+    .optional(),
 });
 
 export type ExecutorReadinessReport = z.infer<
@@ -79,6 +90,15 @@ async function protectedDirectory(file: string, label: string): Promise<string> 
   const stats = await lstat(physical);
   if ((stats.mode & 0o077) !== 0) {
     throw new Error(`${label} must not be accessible to another OS user.`);
+  }
+  return physical;
+}
+
+async function nonWritableDirectory(file: string, label: string): Promise<string> {
+  const physical = await physicalDirectory(file, label);
+  const stats = await lstat(physical);
+  if ((stats.mode & 0o022) !== 0) {
+    throw new Error(`${label} cannot be group or other writable.`);
   }
   return physical;
 }
@@ -186,6 +206,73 @@ export async function probeExecutorReadiness(input: {
   if (runningNode !== node.path || runningVersion !== input.runtime.nodeVersion) {
     throw new Error("Executor probe is not running under the configured Node runtime.");
   }
+  let browserRuntime:
+    | {
+        readonly browser: "chromium";
+        readonly packageRoot: string;
+        readonly cacheRoot: string;
+        readonly executable: string;
+        readonly sha256: string;
+        readonly version: string;
+      }
+    | undefined;
+  if (input.runtime.browserRuntime !== undefined) {
+    const packageRoot = await physicalDirectory(
+      input.runtime.browserRuntime.packageRoot,
+      "Browser package root",
+    );
+    if (!packageRoot.startsWith(`${repositoryRoot}${path.sep}`)) {
+      throw new Error("Browser package root escapes the repository root.");
+    }
+    const cacheRoot = await nonWritableDirectory(
+      input.runtime.browserRuntime.cacheRoot,
+      "Browser cache root",
+    );
+    const requireFromPackage = createRequire(path.join(packageRoot, "package.json"));
+    const playwright = requireFromPackage("playwright") as {
+      readonly chromium?: { executablePath(): string };
+    };
+    const executablePath = playwright.chromium?.executablePath();
+    if (executablePath === undefined || !path.isAbsolute(executablePath)) {
+      throw new Error("Playwright Chromium did not resolve one executable.");
+    }
+    let executable: { readonly path: string; readonly sha256: string };
+    try {
+      executable = await physicalFile({
+        file: executablePath,
+        label: "Playwright Chromium executable",
+        executable: true,
+        maxBytes: 512 * 1_024 * 1_024,
+      });
+    } catch (error) {
+      throw new Error(
+        "Playwright Chromium executable is missing or unprotected.",
+        { cause: error },
+      );
+    }
+    if (!executable.path.startsWith(`${cacheRoot}${path.sep}`)) {
+      throw new Error("Playwright Chromium executable escapes the enrolled cache root.");
+    }
+    const version = (
+      await input.runner.run({
+        executable: executable.path,
+        args: ["--version"],
+        cwd: packageRoot,
+        env: { HOME: reviewerRuntime.homeDirectory },
+      })
+    ).stdout.trim();
+    if (version.length === 0) {
+      throw new Error("Playwright Chromium returned no version.");
+    }
+    browserRuntime = {
+      browser: input.runtime.browserRuntime.browser,
+      packageRoot,
+      cacheRoot,
+      executable: executable.path,
+      sha256: executable.sha256,
+      version,
+    };
+  }
   const git = await physicalFile({
     file: input.runtime.gitExecutable,
     label: "Git executable",
@@ -249,5 +336,6 @@ export async function probeExecutorReadiness(input: {
       effort: reviewerRuntime.effort,
       quotaSampleIntervalMs: reviewerRuntime.quotaSampleIntervalMs,
     },
+    ...(browserRuntime === undefined ? {} : { browserRuntime }),
   });
 }

@@ -12,5 +12,10 @@
   "worktreeHelper": "/Users/aubtown/freed/scripts/worktree-add.sh",
   "gitExecutable": "/usr/bin/git",
   "nodeExecutable": "/opt/aubtown/node/bin/node",
-  "nodeVersion": "v24.14.1"
+  "nodeVersion": "v24.14.1",
+  "browserRuntime": {
+    "browser": "chromium",
+    "packageRoot": "/Users/aubtown/freed/packages/desktop",
+    "cacheRoot": "/Users/aubtown/Library/Caches/ms-playwright"
+  }
 }

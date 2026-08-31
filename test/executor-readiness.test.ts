@@ -30,6 +30,7 @@ async function fixture(): Promise<{
   readonly completionReader: string;
   readonly adjudicator: string;
   readonly reviewerRuntime: string;
+  readonly browserExecutable: string;
   readonly baseHead: string;
 }> {
   const root = await realpath(
@@ -47,13 +48,46 @@ async function fixture(): Promise<{
   const reviewerRuntime = path.join(root, "reviewer-runtime.json");
   const reviewerHome = path.join(root, "reviewer");
   const reviewerCodexHome = path.join(reviewerHome, "codex");
+  const browserPackageRoot = path.join(repository, "packages", "desktop");
+  const browserModuleRoot = path.join(
+    browserPackageRoot,
+    "node_modules",
+    "playwright",
+  );
+  const browserCacheRoot = path.join(
+    reviewerHome,
+    ".cache",
+    "ms-playwright",
+  );
+  const browserExecutable = path.join(
+    browserCacheRoot,
+    "chromium-test",
+    "chrome",
+  );
   await mkdir(path.dirname(helper), { recursive: true });
   await mkdir(worktreeRoot);
   await mkdir(handoffRoot, { mode: 0o700 });
   await mkdir(path.dirname(preparer), { recursive: true });
   await mkdir(reviewerCodexHome, { recursive: true, mode: 0o700 });
+  await mkdir(browserModuleRoot, { recursive: true });
+  await mkdir(path.dirname(browserExecutable), { recursive: true });
   await chmod(reviewerHome, 0o700);
   await chmod(reviewerCodexHome, 0o700);
+  await writeFile(
+    path.join(browserPackageRoot, "package.json"),
+    `${JSON.stringify({ private: true })}\n`,
+  );
+  await writeFile(
+    path.join(browserModuleRoot, "package.json"),
+    `${JSON.stringify({ name: "playwright", main: "index.cjs" })}\n`,
+  );
+  await writeFile(
+    path.join(browserModuleRoot, "index.cjs"),
+    `exports.chromium = { executablePath: () => ${JSON.stringify(browserExecutable)} };\n`,
+  );
+  await writeFile(browserExecutable, "#!/bin/sh\necho Chromium 123\n", {
+    mode: 0o700,
+  });
   await runner.run({
     executable: gitExecutable,
     args: ["init", "-b", "dev", repository],
@@ -120,6 +154,7 @@ async function fixture(): Promise<{
     completionReader,
     adjudicator,
     reviewerRuntime,
+    browserExecutable,
     baseHead,
     runtime: {
       schemaVersion: 1,
@@ -136,6 +171,11 @@ async function fixture(): Promise<{
       gitExecutable: await realpath(gitExecutable),
       nodeExecutable,
       nodeVersion: process.version,
+      browserRuntime: {
+        browser: "chromium",
+        packageRoot: browserPackageRoot,
+        cacheRoot: browserCacheRoot,
+      },
     },
   };
 }
@@ -168,6 +208,11 @@ describe("executor readiness", () => {
       completionReader: { path: prepared.completionReader },
       adjudicator: { path: prepared.adjudicator },
       reviewer: { accountId: "codex-pro-1", model: "test-model" },
+      browserRuntime: {
+        browser: "chromium",
+        executable: prepared.browserExecutable,
+        version: "Chromium 123",
+      },
     });
   });
 
@@ -230,5 +275,24 @@ describe("executor readiness", () => {
         runningNodeVersion: "v24.14.0",
       }),
     ).rejects.toThrow("configured Node runtime");
+  });
+
+  it("rejects a missing browser required by the enrolled worker runtime", async () => {
+    const prepared = await fixture();
+    await rm(prepared.browserExecutable);
+    await expect(
+      probeExecutorReadiness({
+        runtime: prepared.runtime,
+        preparerFile: prepared.preparer,
+        completionFile: prepared.completer,
+        completionReaderFile: prepared.completionReader,
+        adjudicatorFile: prepared.adjudicator,
+        reviewerRuntimeFile: prepared.reviewerRuntime,
+        runner,
+        checkedAt: "2026-08-13T22:00:00.000Z",
+        runningNodeExecutable: prepared.runtime.nodeExecutable,
+        runningNodeVersion: prepared.runtime.nodeVersion,
+      }),
+    ).rejects.toThrow("Playwright Chromium executable");
   });
 });

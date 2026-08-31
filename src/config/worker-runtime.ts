@@ -17,6 +17,11 @@ export interface WorkerRuntimeConfig {
   readonly gitExecutable: string;
   readonly nodeExecutable: string;
   readonly nodeVersion: string;
+  readonly browserRuntime?: {
+    readonly browser: "chromium";
+    readonly packageRoot: string;
+    readonly cacheRoot: string;
+  } | undefined;
 }
 
 const absolutePath = z.string().refine((value) => path.isAbsolute(value), {
@@ -38,6 +43,13 @@ const configSchema: z.ZodType<WorkerRuntimeConfig> = z.object({
   gitExecutable: absolutePath,
   nodeExecutable: absolutePath,
   nodeVersion: z.string().regex(/^v[0-9]+\.[0-9]+\.[0-9]+$/u),
+  browserRuntime: z
+    .object({
+      browser: z.literal("chromium"),
+      packageRoot: absolutePath,
+      cacheRoot: absolutePath,
+    })
+    .optional(),
 });
 
 export async function loadWorkerRuntimeConfig(
