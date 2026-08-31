@@ -5,6 +5,12 @@ import {
   type WorkProductIdentity,
 } from "./receipts.js";
 
+// Trusted finalization may be retried after a bounded host-side Git failure.
+// The exact manifest, claim, custody, head, patch digest, and receipt remain
+// independently bound below, so this window governs freshness rather than
+// identity. Five minutes matches the existing active-claim transaction bound.
+const MAX_TRUSTED_FINALIZATION_GAP_MS = 5 * 60_000;
+
 export function workProductFromSymphonyCompletion(input: {
   readonly bundle: TrustedCompletionBundle;
   readonly implementation: SymphonyActiveTurnRecord;
@@ -36,7 +42,7 @@ export function workProductFromSymphonyCompletion(input: {
   if (
     !Number.isFinite(completionGapMs) ||
     completionGapMs < 0 ||
-    completionGapMs > 120_000
+    completionGapMs > MAX_TRUSTED_FINALIZATION_GAP_MS
   ) {
     throw new Error(
       "Symphony implementation identity is not temporally adjacent to completion.",

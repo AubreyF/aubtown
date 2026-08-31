@@ -160,7 +160,9 @@ function validationProfile(): ReviewedValidationProfile {
   };
 }
 
-async function readyFixture() {
+async function readyFixture(
+  implementationObservedAt = "2026-08-13T18:09:50.000Z",
+) {
   const root = await temporaryRoot();
   const prepared = envelope();
   const bundle = completion(prepared);
@@ -179,12 +181,62 @@ async function readyFixture() {
     driverId: prepared.binding.driverId,
     threadId: "implementation-thread",
     turnId: "implementation-turn",
-    observedAt: "2026-08-13T18:09:50.000Z",
+    observedAt: implementationObservedAt,
   });
   return { root, prepared, bundle, activeTurns };
 }
 
 describe("Symphony completion reconciliation", () => {
+  it("accepts a bounded trusted-finalization retry", async () => {
+    const fixture = await readyFixture("2026-08-13T18:05:01.000Z");
+    const result = await new SymphonyCompletionReconciler(
+      { read: async () => fixture.bundle },
+      {
+        inspect: async () => ({
+          active: true,
+          reason: "matching-active-task",
+          task: fixture.prepared.binding.authorityTask,
+        }),
+      },
+      { show: async () => currentClaim(fixture.prepared) },
+      fixture.activeTurns,
+    ).reconcile({
+      envelope: fixture.prepared,
+      currentIssue: issue(),
+      usage: usage({ observedAt: "2026-08-13T18:10:00.000Z" }),
+      validationProfile: validationProfile(),
+      now: "2026-08-13T18:10:05.000Z",
+    });
+    expect(result?.command.workProduct.implementation).toEqual({
+      driverId: "codex-app-server-v1",
+      threadId: "implementation-thread",
+      turnId: "implementation-turn",
+    });
+  });
+
+  it("rejects a finalization retry outside the bounded freshness window", async () => {
+    const fixture = await readyFixture("2026-08-13T18:04:59.000Z");
+    const reconciliation = new SymphonyCompletionReconciler(
+      { read: async () => fixture.bundle },
+      {
+        inspect: async () => ({
+          active: true,
+          reason: "matching-active-task",
+          task: fixture.prepared.binding.authorityTask,
+        }),
+      },
+      { show: async () => currentClaim(fixture.prepared) },
+      fixture.activeTurns,
+    ).reconcile({
+      envelope: fixture.prepared,
+      currentIssue: issue(),
+      usage: usage({ observedAt: "2026-08-13T18:10:00.000Z" }),
+      validationProfile: validationProfile(),
+      now: "2026-08-13T18:10:05.000Z",
+    });
+    await expect(reconciliation).rejects.toThrow("not temporally adjacent");
+  });
+
   it("rechecks live authority and emits one restart-stable adjudication command", async () => {
     const fixture = await readyFixture();
     const reconciler = new SymphonyCompletionReconciler(
