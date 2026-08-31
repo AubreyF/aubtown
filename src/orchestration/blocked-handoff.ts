@@ -89,7 +89,7 @@ function deterministicUuid(value: unknown): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
-function brokerCompatibleReleaseCommand(
+export function brokerCompatibleBlockedHandoffReleaseCommand(
   command: FreedClaimReleaseRequest,
 ): FreedClaimReleaseRequest {
   const version = command.operationId[14];
@@ -267,7 +267,9 @@ export class BlockedHandoffTransactionStore {
       throw new Error("Blocked claim cleanup requires lifecycle projection.");
     }
     const receipt = freedClaimReleaseReceiptSchema.parse(rawReceipt);
-    const command = brokerCompatibleReleaseCommand(current.plan.releaseCommand);
+    const command = brokerCompatibleBlockedHandoffReleaseCommand(
+      current.plan.releaseCommand,
+    );
     if (!canonicalJsonEqual(receipt, expectedReleaseReceipt(command))) {
       throw new Error("Blocked claim cleanup changed its durable command.");
     }
@@ -325,7 +327,9 @@ export class BlockedHandoffTransactionStore {
         !canonicalJsonEqual(
           release,
           expectedReleaseReceipt(
-            brokerCompatibleReleaseCommand(planRecord.plan.releaseCommand),
+            brokerCompatibleBlockedHandoffReleaseCommand(
+              planRecord.plan.releaseCommand,
+            ),
           ),
         )
       ) {
@@ -408,7 +412,7 @@ export class BlockedHandoffCoordinator {
       );
     }
     if (transaction.release === undefined) {
-      const command = brokerCompatibleReleaseCommand(
+      const command = brokerCompatibleBlockedHandoffReleaseCommand(
         transaction.plan.releaseCommand,
       );
       const receipt = await this.claims.release(command);

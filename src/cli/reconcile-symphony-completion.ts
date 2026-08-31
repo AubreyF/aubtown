@@ -27,6 +27,7 @@ import {
 import {
   BlockedHandoffCoordinator,
   BlockedHandoffTransactionStore,
+  brokerCompatibleBlockedHandoffReleaseCommand,
   planBlockedHandoff,
 } from "../orchestration/blocked-handoff.js";
 import { DurablePublicationCoordinator } from "../orchestration/publication-coordinator.js";
@@ -194,7 +195,9 @@ if (priorCompletion !== null) {
         cwd: absolute("AUBTOWN_FREED_REPOSITORY_ROOT"),
       });
       const releaseReceipt = await earlyClaims.release(
-        priorBlockedHandoff.plan.releaseCommand,
+        brokerCompatibleBlockedHandoffReleaseCommand(
+          priorBlockedHandoff.plan.releaseCommand,
+        ),
       );
       priorBlockedHandoff = await blockedHandoffStore.recordRelease(
         priorBlockedHandoff.plan.workProduct.checkpointReference,
