@@ -2,10 +2,8 @@
 Description=Reconcile stale Freed claims every minute
 
 [Timer]
-OnActiveSec=1min
-OnUnitActiveSec=1min
-AccuracySec=5s
-RandomizedDelaySec=5s
+OnCalendar=*-*-* *:*:05
+AccuracySec=1s
 Persistent=true
 Unit=aubtown-claim-reconciliation.service
 

@@ -234,8 +234,7 @@ describe("native Linux deployment", () => {
     expect(service).toContain("User=aubtown-symphony");
     expect(service).toContain("dist/cli/reconcile-symphony-completion.js");
     expect(service).toContain("ReadWritePaths=/var/lib/aubtown/admission");
-    expect(timer).toContain("OnUnitActiveSec=1min");
-    expect(timer).toContain("OnActiveSec=1min");
+    expect(timer).toContain("OnCalendar=*-*-* *:*:45");
     expect(environment).toContain("AUBTOWN_ACTIVE_TURN_ROOT=");
     expect(environment).toContain("AUBTOWN_COMPLETION_RECONCILIATION_ROOT=");
     expect(environment).toContain("AUBTOWN_VALIDATION_PROFILE_FILE=");
@@ -458,8 +457,7 @@ describe("native Linux deployment", () => {
     expect(service).toContain(
       "After=aubtown-github-token.service aubtown-host-gateway.service aubtown-freed-broker-conformance.service",
     );
-    expect(timer).toContain("OnUnitActiveSec=1min");
-    expect(timer).toContain("OnActiveSec=30s");
+    expect(timer).toContain("OnCalendar=*-*-* *:*:25");
     expect(environment).toContain(
       "AUBTOWN_PLANNING_SNAPSHOT_FILE=/var/lib/aubtown/coordinator/planning-snapshot.json",
     );
@@ -498,8 +496,7 @@ describe("native Linux deployment", () => {
       "ReadWritePaths=/var/lib/aubtown/admission /var/lib/freed/automation/control",
     );
     expect(service).toContain("RestrictAddressFamilies=AF_UNIX");
-    expect(timer).toContain("OnUnitActiveSec=1min");
-    expect(timer).toContain("OnActiveSec=1min");
+    expect(timer).toContain("OnCalendar=*-*-* *:*:05");
     expect(environment).toContain(
       "AUBTOWN_CLAIM_RECONCILIATION_FILE=/var/lib/aubtown/admission/claim-reconciliation.json",
     );
