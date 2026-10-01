@@ -1,5 +1,7 @@
 # AubTown
 
+**AubTown is being deprecated in favor of [Vorton Factory](https://github.com/AubreyF/vorton/blob/main/docs/VISION.md#vorton-factory). The implementation below describes AubTown's existing pilot; it has not been migrated into Vorton.**
+
 AubTown is the reusable software-factory platform. FreedTown is its first concrete deployment for Freed. GitHub Issues are the canonical queue, Freed remains the execution authority, and a reviewed OpenAI Symphony build runs the scheduling and Codex sessions.
 
 ## Pilot contract
